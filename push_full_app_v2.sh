@@ -4,7 +4,7 @@ REMOTE_SSH=git@github.com:mrkilvo/Fire-Track-Pro.git
 cd "$APP_DIR"
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || git init
 git config user.name "Steve Kilvington"
-git config user.email "${GIT_USER_EMAIL:-steve@example.com}"
+git config user.email "${GIT_USER_EMAIL:-freefallkilvo@yahoo.com.au}"
 
 # Fix common Ruff RUF013 cases before committing
 sed -E -i 's/: *str *= *None/: str | None = None/g' firtrackpro/api/property.py firtrackpro/api/zone.py || true
