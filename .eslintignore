@@ -1,0 +1,5 @@
+firtrackpro/public/js/vendor/**
+**/*.min.js
+node_modules/**
+assets/**
+sites/**
