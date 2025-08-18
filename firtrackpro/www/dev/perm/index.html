@@ -1,0 +1,58 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • Permissions{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-4">
+  <div class="flex items-center justify-between">
+    <div class="text-2xl font-bold">Permission Matrix</div>
+    <input id="q" type="search" placeholder="Filter doctypes…" class="px-3 py-2 border rounded-lg w-72">
+  </div>
+  <div class="overflow-auto rounded-lg border bg-white">
+    <table class="w-full text-sm">
+      <thead class="border-b">
+        <tr>
+          <th class="text-left p-2">Doctype</th>
+          <th class="text-left p-2">Role</th>
+          <th class="text-left p-2">Lvl</th>
+          <th class="text-left p-2">R</th>
+          <th class="text-left p-2">W</th>
+          <th class="text-left p-2">C</th>
+          <th class="text-left p-2">D</th>
+          <th class="text-left p-2">Sub</th>
+          <th class="text-left p-2">Can</th>
+          <th class="text-left p-2">Print</th>
+          <th class="text-left p-2">Email</th>
+          <th class="text-left p-2">Export</th>
+          <th class="text-left p-2">Share</th>
+          <th class="text-left p-2">If Owner</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        {% for p in perms %}
+        <tr class="border-b">
+          <td class="p-2">{{ p.parent }}</td>
+          <td class="p-2">{{ p.role }}</td>
+          <td class="p-2">{{ p.permlevel }}</td>
+          <td class="p-2">{{ p.read }}</td>
+          <td class="p-2">{{ p.write }}</td>
+          <td class="p-2">{{ p.create }}</td>
+          <td class="p-2">{{ p.delete }}</td>
+          <td class="p-2">{{ p.submit }}</td>
+          <td class="p-2">{{ p.cancel }}</td>
+          <td class="p-2">{{ p.print }}</td>
+          <td class="p-2">{{ p.email }}</td>
+          <td class="p-2">{{ p.export }}</td>
+          <td class="p-2">{{ p.share }}</td>
+          <td class="p-2">{{ p.if_owner }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  const q=document.getElementById('q'),rows=[...document.querySelectorAll('#rows tr')].map(tr=>({tr,txt:tr.innerText.toLowerCase()}));
+  q.addEventListener('input',()=>{const s=q.value.toLowerCase();rows.forEach(r=>r.tr.style.display=r.txt.includes(s)?'':'none')});
+});
+</script>
+{% endblock %}

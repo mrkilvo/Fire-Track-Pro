@@ -1,0 +1,37 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • Jobs{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-4">
+  <div class="text-2xl font-bold">RQ Jobs</div>
+  <div class="overflow-auto rounded-lg border bg-white">
+    <table class="w-full text-sm">
+      <thead class="border-b">
+        <tr>
+          <th class="text-left p-2">Created</th>
+          <th class="text-left p-2">Status</th>
+          <th class="text-left p-2">Queue</th>
+          <th class="text-left p-2">Job</th>
+          <th class="text-left p-2">Started</th>
+          <th class="text-left p-2">Scheduled</th>
+          <th class="text-left p-2">Ended</th>
+          <th class="text-left p-2">Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr class="border-b align-top">
+          <td class="p-2 whitespace-nowrap">{{ j.creation }}</td>
+          <td class="p-2">{{ j.status }}</td>
+          <td class="p-2">{{ j.queue }}</td>
+          <td class="p-2">{{ j.job_name }}</td>
+          <td class="p-2 whitespace-nowrap">{{ j.started_at }}</td>
+          <td class="p-2 whitespace-nowrap">{{ j.scheduled_at }}</td>
+          <td class="p-2 whitespace-nowrap">{{ j.ended_at }}</td>
+          <td class="p-2"><pre class="text-xs whitespace-pre-wrap">{{ j.exc_info }}</pre></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

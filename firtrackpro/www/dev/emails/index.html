@@ -1,0 +1,35 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • Email Queue{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-4">
+  <div class="text-2xl font-bold">Email Queue</div>
+  <div class="overflow-auto rounded-lg border bg-white">
+    <table class="w-full text-sm">
+      <thead class="border-b">
+        <tr>
+          <th class="text-left p-2">Created</th>
+          <th class="text-left p-2">Status</th>
+          <th class="text-left p-2">Subject</th>
+          <th class="text-left p-2">Sender</th>
+          <th class="text-left p-2">Recipients</th>
+          <th class="text-left p-2">Retry</th>
+          <th class="text-left p-2">Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in emails %}
+        <tr class="border-b align-top">
+          <td class="p-2 whitespace-nowrap">{{ m.creation }}</td>
+          <td class="p-2">{{ m.status }}</td>
+          <td class="p-2">{{ m.subject }}</td>
+          <td class="p-2">{{ m.sender }}</td>
+          <td class="p-2">{{ m.recipients }}</td>
+          <td class="p-2">{{ m.retry }}</td>
+          <td class="p-2"><pre class="text-xs whitespace-pre-wrap">{{ m.error }}</pre></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

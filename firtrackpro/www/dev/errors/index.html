@@ -1,0 +1,16 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • Errors{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-6xl mx-auto px-4 py-6 space-y-4">
+  <div class="text-2xl font-bold">Recent Error Logs</div>
+  <ul class="space-y-3">
+    {% for e in logs %}
+    <li class="p-4 rounded-lg border bg-white">
+      <div class="text-sm text-gray-500">{{ e.creation }}</div>
+      <div class="font-semibold">{{ e.method or e.name }}</div>
+      <pre class="text-xs overflow-auto mt-2">{{ e.error }}</pre>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

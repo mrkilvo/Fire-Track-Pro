@@ -1,0 +1,35 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • Doctype Audit{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-6xl mx-auto px-4 py-6 space-y-4">
+  <div class="text-2xl font-bold">Doctype Audit</div>
+  <div class="text-sm text-gray-600">Audited {{ total }} doctypes. Issues: {{ issues }}</div>
+  {% if audits and audits|length %}
+    <ul class="space-y-3">
+      {% for a in audits %}
+        <li class="p-4 rounded-lg border bg-white">
+          <div class="font-semibold mb-2">{{ a.doctype }}</div>
+          {% if a.bad_fields and a.bad_fields|length %}
+            <div class="text-sm font-medium mb-1">Fieldname Prefix Violations</div>
+            <ul class="text-sm list-disc ml-5">
+              {% for f in a.bad_fields %}
+                <li><span class="font-mono">{{ f.fieldname }}</span>{% if f.label %} — {{ f.label }}{% endif %}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if a.bad_links and a.bad_links|length %}
+            <div class="text-sm font-medium mt-3 mb-1">Invalid Link/Table Targets</div>
+            <ul class="text-sm list-disc ml-5">
+              {% for f in a.bad_links %}
+                <li><span class="font-mono">{{ f.fieldname }}</span>{% if f.label %} — {{ f.label }}{% endif %} → <span class="font-mono">{{ f.target }}</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="p-3 rounded-md bg-green-50 border border-green-200 text-green-800 text-sm">No issues found.</div>
+  {% endif %}
+</div>
+{% endblock %}

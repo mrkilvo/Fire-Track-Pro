@@ -1,0 +1,199 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Dev • API Tester{% endblock %}
+{% block page_content %}
+<div class="w-full max-w-7xl mx-auto px-4 py-6 space-y-6">
+  <div class="text-2xl font-bold">API Tester</div>
+
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+    <div class="md:col-span-9 space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
+        <div class="md:col-span-8">
+          <label class="text-sm text-gray-600">Path or URL</label>
+          <input id="path" class="w-full px-3 py-2 border rounded-lg" placeholder="/api/method/app.module.fn">
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-sm text-gray-600">Method</label>
+          <select id="verb" class="w-full px-3 py-2 border rounded-lg">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-sm text-gray-600">Preset</label>
+          <div class="flex gap-2">
+            <select id="preset" class="w-full px-3 py-2 border rounded-lg"></select>
+            <button id="btn_del_preset" class="px-3 py-2 border rounded-lg">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600">Headers (JSON)</label>
+            <div class="text-[11px] text-gray-500">X-Frappe-CSRF-Token added automatically</div>
+          </div>
+          <textarea id="headers" class="w-full h-40 px-3 py-2 border rounded-lg font-mono text-xs">{}</textarea>
+        </div>
+        <div>
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600">Params/Body (JSON)</label>
+            <div class="text-[11px] text-gray-500">Query for GET/DELETE, JSON body for others</div>
+          </div>
+          <textarea id="params" class="w-full h-40 px-3 py-2 border rounded-lg font-mono text-xs">{}</textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="send" class="px-4 py-2 rounded-lg bg-blue-600 text-white">Send</button>
+        <button id="save" class="px-4 py-2 rounded-lg border">Save Preset</button>
+        <span id="status" class="text-sm text-gray-600"></span>
+      </div>
+
+      <div class="p-4 rounded-lg border bg-white space-y-3">
+        <div class="text-sm font-semibold">cURL</div>
+        <pre id="curl" class="text-xs overflow-auto"></pre>
+      </div>
+
+      <div class="p-4 rounded-lg border bg-white space-y-3">
+        <div class="text-sm font-semibold">Response Headers</div>
+        <pre id="resp_headers" class="text-xs overflow-auto"></pre>
+      </div>
+
+      <div class="p-4 rounded-lg border bg-white space-y-3">
+        <div class="text-sm font-semibold">Response Body</div>
+        <pre id="resp_body" class="text-xs overflow-auto"></pre>
+      </div>
+    </div>
+
+    <div class="md:col-span-3 space-y-3">
+      <div class="p-4 rounded-lg border bg-white space-y-2">
+        <div class="text-sm font-semibold">Quick Presets</div>
+        <button data-q="/api/method/frappe.auth.get_logged_user" data-v="GET" class="w-full px-3 py-2 rounded-lg border text-left">Who Am I</button>
+        <button data-q="/api/method/ping" data-v="GET" class="w-full px-3 py-2 rounded-lg border text-left">Ping</button>
+        <button data-q="/api/method/frappe.client.get_list" data-v="POST" data-p='{"doctype":"User","fields":["name","full_name"],"limit_page_length":5}' class="w-full px-3 py-2 rounded-lg border text-left">List Users</button>
+      </div>
+      <div class="p-4 rounded-lg border bg-white space-y-2 text-sm">
+        <div class="font-semibold">Tips</div>
+        <div>Use absolute URLs for cross-site tests.</div>
+        <div>For file uploads, call your upload endpoint and send FormData via browser devtools.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const csrf="{{ csrf_token }}";
+  const $=s=>document.querySelector(s);
+  const path=$("#path"),verb=$("#verb"),headers=$("#headers"),params=$("#params"),status=$("#status");
+  const curl=$("#curl"),respH=$("#resp_headers"),respB=$("#resp_body"),preset=$("#preset"),delPreset=$("#btn_del_preset");
+  const sendBtn=$("#send"),saveBtn=$("#save");
+  function jparse(s, fallback){try{return s?JSON.parse(s):fallback}catch(e){throw new Error("Invalid JSON")}}
+  function jpretty(o){try{return JSON.stringify(o,null,2)}catch(e){return String(o)}}
+  function qs(obj){return Object.entries(obj||{}).map(([k,v])=>encodeURIComponent(k)+"="+encodeURIComponent(v)).join("&")}
+  function buildUrl(p, m, q){
+    if(/^https?:\/\//i.test(p)) return m==="GET"||m==="DELETE"?p+(p.includes("?")?"&":"?")+qs(q||{}):p
+    if(!p.startsWith("/")) p="/"+p
+    return (m==="GET"||m==="DELETE") ? p+(p.includes("?")?"&":"?")+qs(q||{}) : p
+  }
+  function buildCurl(u, m, h, body){
+    const lines=[`curl -s -i -X ${m} "${u}"`];
+    const hdr=Object.assign({},h);
+    if(m!=="GET"&&m!=="DELETE"){hdr["Content-Type"]=hdr["Content-Type"]||"application/json"}
+    Object.entries(hdr).forEach(([k,v])=>lines.push(`-H "${k}: ${v}"`));
+    if(m!=="GET"&&m!=="DELETE"&&body!=null){lines.push("--data-raw '"+JSON.stringify(body).replace(/'/g,"'\\''")+"'")}
+    return lines.join(" \\\n  ");
+  }
+  function loadPresets(){
+    const arr=jparse(localStorage.getItem("ftp_api_presets")||"[]",[]);
+    preset.innerHTML=""
+    const opt=document.createElement("option");opt.value="";opt.textContent="—";
+    preset.appendChild(opt);
+    arr.forEach((p,i)=>{const o=document.createElement("option");o.value=i;o.textContent=p.name;preset.appendChild(o)});
+  }
+  function savePreset(){
+    const name=prompt("Preset name");
+    if(!name) return;
+    const arr=jparse(localStorage.getItem("ftp_api_presets")||"[]",[]);
+    arr.push({name, path:path.value.trim(), verb:verb.value, headers:headers.value, params:params.value});
+    localStorage.setItem("ftp_api_presets", JSON.stringify(arr));
+    loadPresets();
+  }
+  function deletePreset(){
+    const idx=preset.value;
+    if(idx==="") return;
+    const arr=jparse(localStorage.getItem("ftp_api_presets")||"[]",[]);
+    arr.splice(Number(idx),1);
+    localStorage.setItem("ftp_api_presets", JSON.stringify(arr));
+    loadPresets();
+  }
+  preset.addEventListener("change",()=>{
+    const idx=preset.value;
+    if(idx==="") return;
+    const arr=jparse(localStorage.getItem("ftp_api_presets")||"[]",[]);
+    const p=arr[Number(idx)];
+    if(!p) return;
+    path.value=p.path||"";
+    verb.value=p.verb||"GET";
+    headers.value=p.headers||"{}";
+    params.value=p.params||"{}";
+  });
+  saveBtn.addEventListener("click",savePreset);
+  delPreset.addEventListener("click",deletePreset);
+  document.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{
+    path.value=b.getAttribute("data-q")||"";
+    verb.value=b.getAttribute("data-v")||"GET";
+    params.value=b.getAttribute("data-p")||"{}";
+    headers.value="{}";
+  }));
+  async function send(){
+    status.textContent="Sending…";
+    respH.textContent=""; respB.textContent=""; curl.textContent="";
+    let H,B,U,M=verb.value.toUpperCase();
+    try{
+      H=jparse(headers.value||"{}",{});
+    }catch(e){status.textContent="Headers JSON invalid";return}
+    try{
+      B=jparse(params.value||"{}",{});
+    }catch(e){status.textContent="Params/Body JSON invalid";return}
+    U=buildUrl(path.value.trim(), M, B);
+    const hdr=Object.assign({"Accept":"application/json"},H);
+    if(M!=="GET"&&M!=="DELETE"){hdr["Content-Type"]=hdr["Content-Type"]||"application/json";hdr["X-Frappe-CSRF-Token"]=csrf}
+    const init={method:M, headers:hdr, credentials:"same-origin"};
+    if(M!=="GET"&&M!=="DELETE"){init.body=(hdr["Content-Type"]||"").includes("application/json")?JSON.stringify(B):B}
+    const t0=performance.now();
+    let res, txt, body, hdrs={};
+    try{
+      res=await fetch(U, init);
+      res.headers.forEach((v,k)=>hdrs[k]=v);
+      const ct=res.headers.get("content-type")||"";
+      txt=await res.text();
+      body=ct.includes("application/json")?JSON.parse(txt):txt;
+      const ms=Math.round(performance.now()-t0);
+      status.textContent=`${res.status} ${res.statusText} • ${ms}ms`;
+      respH.textContent=jpretty(hdrs);
+      respB.textContent=typeof body==="string"?body:jpretty(body);
+      curl.textContent=buildCurl(U,M,hdr,B);
+    }catch(e){
+      const ms=Math.round(performance.now()-t0);
+      status.textContent="Request failed • "+ms+"ms";
+      respB.textContent=String(e);
+      curl.textContent=buildCurl(U,M,hdr,B);
+    }
+  }
+  sendBtn.addEventListener("click",send);
+  if(!localStorage.getItem("ftp_api_presets")){
+    localStorage.setItem("ftp_api_presets", JSON.stringify([
+      {name:"Who Am I", path:"/api/method/frappe.auth.get_logged_user", verb:"GET", headers:"{}", params:"{}"},
+      {name:"Ping", path:"/api/method/ping", verb:"GET", headers:"{}", params:"{}"},
+      {name:"List Users", path:"/api/method/frappe.client.get_list", verb:"POST", headers:"{}", params:'{"doctype":"User","fields":["name","full_name"],"limit_page_length":5}'}
+    ]));
+  }
+  loadPresets();
+})();
+</script>
+{% endblock %}
