@@ -33,8 +33,8 @@ git add -f firtrackpro/**/*.json || true
 git add -f **/doctype/**/*.json || true
 git add -f firtrackpro/public/** || true
 
-git diff --cached --quiet || git commit -m "chore: push full app (doctypes, public, hooks, manifest)" || \
-git commit -m "chore: push full app (doctypes, public, hooks, manifest) [skip hooks]" --no-verify
+git diff --cached --quiet || git commit -m "PRE git Development" || \
+git commit -m "PRE git Development" --no-verify
 
 git branch -M main
 git pull --rebase origin main 2>/dev/null || true
