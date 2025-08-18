@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFireRoutineInspection(IntegrationTestCase):
-    """
-    Integration tests for FireRoutineInspection.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FireRoutineInspection.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass

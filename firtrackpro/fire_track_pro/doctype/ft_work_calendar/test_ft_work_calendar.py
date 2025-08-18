@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFTWorkCalendar(IntegrationTestCase):
-    """
-    Integration tests for FTWorkCalendar.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FTWorkCalendar.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass

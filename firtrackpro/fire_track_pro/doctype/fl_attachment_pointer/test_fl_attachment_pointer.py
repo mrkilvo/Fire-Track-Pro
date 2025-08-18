@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFLAttachmentPointer(IntegrationTestCase):
-    """
-    Integration tests for FLAttachmentPointer.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FLAttachmentPointer.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass

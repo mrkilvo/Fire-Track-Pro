@@ -6,11 +6,11 @@ app_email = "noreply@example.com"
 app_license = "MIT"
 app_version = "0.1.0"
 fixtures = [
-    {"doctype": "Custom Field"},
-    {"doctype": "Property Setter"},
-    {"doctype": "Client Script"},
-    {"doctype": "Server Script"},
-    {"doctype": "Print Format"},
-    {"doctype": "Workspace"},
-    {"doctype": "Role"},
+	{"doctype": "Custom Field"},
+	{"doctype": "Property Setter"},
+	{"doctype": "Client Script"},
+	{"doctype": "Server Script"},
+	{"doctype": "Print Format"},
+	{"doctype": "Workspace"},
+	{"doctype": "Role"},
 ]

@@ -6,4 +6,4 @@ from frappe.model.document import Document
 
 
 class as1851scheduleitem(Document):
-    pass
+	pass

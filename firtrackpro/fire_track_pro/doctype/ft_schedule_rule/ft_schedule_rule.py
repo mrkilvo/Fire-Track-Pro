@@ -6,4 +6,4 @@ from frappe.model.document import Document
 
 
 class FTScheduleRule(Document):
-    pass
+	pass

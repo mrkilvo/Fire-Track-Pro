@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFTPropertyZone(IntegrationTestCase):
-    """
-    Integration tests for FTPropertyZone.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FTPropertyZone.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass

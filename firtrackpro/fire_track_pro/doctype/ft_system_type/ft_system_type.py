@@ -6,4 +6,4 @@ from frappe.model.document import Document
 
 
 class FTSystemType(Document):
-    pass
+	pass

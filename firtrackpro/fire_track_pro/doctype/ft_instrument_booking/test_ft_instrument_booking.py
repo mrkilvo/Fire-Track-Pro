@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFTInstrumentBooking(IntegrationTestCase):
-    """
-    Integration tests for FTInstrumentBooking.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FTInstrumentBooking.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass

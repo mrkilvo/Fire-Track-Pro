@@ -12,9 +12,9 @@ IGNORE_TEST_RECORD_DEPENDENCIES = []  # eg. ["User"]
 
 
 class IntegrationTestFLClientQuote(IntegrationTestCase):
-    """
-    Integration tests for FLClientQuote.
-    Use this class for testing interactions between multiple components.
-    """
+	"""
+	Integration tests for FLClientQuote.
+	Use this class for testing interactions between multiple components.
+	"""
 
-    pass
+	pass
