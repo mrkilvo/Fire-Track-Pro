@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 21:37:59.980843",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "job_event_job",
+  "job_event_property",
+  "job_event_technician",
+  "job_event_type",
+  "job_event_ts",
+  "job_event_lat",
+  "job_event_lng",
+  "job_event_accuracy_m",
+  "job_event_device_id",
+  "job_event_override_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "job_event_job",
+   "fieldtype": "Link",
+   "label": "Job",
+   "options": "FT Job"
+  },
+  {
+   "fieldname": "job_event_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "job_event_technician",
+   "fieldtype": "Link",
+   "label": "Technician",
+   "options": "User"
+  },
+  {
+   "fieldname": "job_event_type",
+   "fieldtype": "Select",
+   "label": "Type",
+   "options": "Travel Start\nArrive on  Site\nPause\nResume\nDepart Site\nTravel End\nJob Complete"
+  },
+  {
+   "fieldname": "job_event_ts",
+   "fieldtype": "Datetime",
+   "label": "Timestamp"
+  },
+  {
+   "fieldname": "job_event_lat",
+   "fieldtype": "Float",
+   "label": "Latitude"
+  },
+  {
+   "fieldname": "job_event_lng",
+   "fieldtype": "Float",
+   "label": "Longitude"
+  },
+  {
+   "fieldname": "job_event_accuracy_m",
+   "fieldtype": "Float",
+   "label": "Accuracy (m)"
+  },
+  {
+   "fieldname": "job_event_device_id",
+   "fieldtype": "Data",
+   "label": "Device ID"
+  },
+  {
+   "fieldname": "job_event_override_reason",
+   "fieldtype": "Small Text",
+   "label": "Override Reason"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 21:41:46.430662",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job Event",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

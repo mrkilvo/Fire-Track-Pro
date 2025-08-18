@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:08:53.199680",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "test_item_code",
+  "test_item_description",
+  "test_item_requires_reading",
+  "test_item_uom",
+  "test_item_min",
+  "test_item_max",
+  "test_item_pass_required",
+  "test_item_defect_on_fail"
+ ],
+ "fields": [
+  {
+   "fieldname": "test_item_code",
+   "fieldtype": "Data",
+   "label": "Step Code"
+  },
+  {
+   "fieldname": "test_item_description",
+   "fieldtype": "Data",
+   "label": "Description"
+  },
+  {
+   "default": "0",
+   "fieldname": "test_item_requires_reading",
+   "fieldtype": "Check",
+   "label": "Requires Reading"
+  },
+  {
+   "fieldname": "test_item_uom",
+   "fieldtype": "Data",
+   "label": "UOM"
+  },
+  {
+   "fieldname": "test_item_min",
+   "fieldtype": "Float",
+   "label": "Min"
+  },
+  {
+   "fieldname": "test_item_max",
+   "fieldtype": "Float",
+   "label": "Max"
+  },
+  {
+   "default": "0",
+   "fieldname": "test_item_pass_required",
+   "fieldtype": "Check",
+   "label": "Pass Required"
+  },
+  {
+   "default": "0",
+   "fieldname": "test_item_defect_on_fail",
+   "fieldtype": "Check",
+   "label": "Create Defect on Fail"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-11 19:11:43.401168",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Test Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

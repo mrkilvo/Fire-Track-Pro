@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:24:20.000385",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "property_induction_template",
+  "property_induction_required",
+  "property_induction_blocking",
+  "property_induction_reinduct_days",
+  "property_induction_link"
+ ],
+ "fields": [
+  {
+   "fieldname": "property_induction_template",
+   "fieldtype": "Data",
+   "label": "Induction Template"
+  },
+  {
+   "default": "0",
+   "fieldname": "property_induction_required",
+   "fieldtype": "Check",
+   "label": "Required"
+  },
+  {
+   "default": "0",
+   "fieldname": "property_induction_blocking",
+   "fieldtype": "Check",
+   "label": "Blocks Scheduling"
+  },
+  {
+   "fieldname": "property_induction_reinduct_days",
+   "fieldtype": "Int",
+   "label": "Reinduct Interval (days)"
+  },
+  {
+   "fieldname": "property_induction_link",
+   "fieldtype": "Data",
+   "label": "Info Link"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-11 19:26:17.466751",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Property Induction Requirement",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

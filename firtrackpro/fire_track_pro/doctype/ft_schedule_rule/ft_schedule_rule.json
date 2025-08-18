@@ -1,0 +1,100 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:45:45.697126",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "schedule_rule_anchor_date",
+  "contract",
+  "schedule_rule_property",
+  "schedule_rule_frequency",
+  "anchor_date",
+  "schedule_rule_rrule",
+  "schedule_rule_timezone",
+  "schedule_rule_next_occurrence",
+  "schedule_rule_last_occurrence",
+  "schedule_rule_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "schedule_rule_anchor_date",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contract",
+   "fieldtype": "Link",
+   "label": "Contract",
+   "options": "FT Contract"
+  },
+  {
+   "fieldname": "schedule_rule_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "schedule_rule_frequency",
+   "fieldtype": "Link",
+   "label": "Frequency",
+   "options": "FT Frequency"
+  },
+  {
+   "fieldname": "anchor_date",
+   "fieldtype": "Date",
+   "label": "Anchor Date"
+  },
+  {
+   "fieldname": "schedule_rule_rrule",
+   "fieldtype": "Data",
+   "label": "RRULE (iCal)"
+  },
+  {
+   "fieldname": "schedule_rule_timezone",
+   "fieldtype": "Data",
+   "label": "Timezone"
+  },
+  {
+   "fieldname": "schedule_rule_next_occurrence",
+   "fieldtype": "Datetime",
+   "label": "Next Occurrence"
+  },
+  {
+   "fieldname": "schedule_rule_last_occurrence",
+   "fieldtype": "Datetime",
+   "label": "Last Occurrence"
+  },
+  {
+   "default": "0",
+   "fieldname": "schedule_rule_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 20:08:03.083972",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Schedule Rule",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

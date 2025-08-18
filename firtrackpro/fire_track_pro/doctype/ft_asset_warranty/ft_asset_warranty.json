@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 14:52:38.588211",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "asset_warranty_asset",
+  "asset_warranty_supplier",
+  "asset_warranty_start",
+  "asset_warranty_end",
+  "asset_warranty_terms",
+  "asset_warranty_docs"
+ ],
+ "fields": [
+  {
+   "fieldname": "asset_warranty_asset",
+   "fieldtype": "Link",
+   "label": "Asset",
+   "options": "FT Asset"
+  },
+  {
+   "fieldname": "asset_warranty_supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "asset_warranty_start",
+   "fieldtype": "Date",
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "asset_warranty_end",
+   "fieldtype": "Date",
+   "label": "End Date"
+  },
+  {
+   "fieldname": "asset_warranty_terms",
+   "fieldtype": "Small Text",
+   "label": "Terms"
+  },
+  {
+   "fieldname": "asset_warranty_docs",
+   "fieldtype": "Attach",
+   "label": "Documents"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 14:54:24.803874",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Asset Warranty",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,62 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:04:34.318467",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "technician_licence_type",
+  "technician_licence_state",
+  "technician_licence_number",
+  "technician_licence_issued_on",
+  "technician_licence_expirs_on",
+  "technician_licence_document"
+ ],
+ "fields": [
+  {
+   "fieldname": "technician_licence_type",
+   "fieldtype": "Data",
+   "label": "Licence Type"
+  },
+  {
+   "fieldname": "technician_licence_state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "technician_licence_number",
+   "fieldtype": "Data",
+   "label": "Number"
+  },
+  {
+   "fieldname": "technician_licence_issued_on",
+   "fieldtype": "Data",
+   "label": "Issued On"
+  },
+  {
+   "fieldname": "technician_licence_expirs_on",
+   "fieldtype": "Data",
+   "label": "Expires On"
+  },
+  {
+   "fieldname": "technician_licence_document",
+   "fieldtype": "Attach",
+   "label": "Document"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:07:12.763052",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Technician Licence",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

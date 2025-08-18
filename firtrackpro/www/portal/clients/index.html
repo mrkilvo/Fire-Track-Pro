@@ -1,0 +1,134 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+
+{% block page_content %}
+  <div class="w-full px-2 sm:px-4 mt-16">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-4">
+      <h1 class="text-2xl font-semibold">Clients</h1>
+      <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
+        <div class="flex flex-row gap-2 w-full">
+          <input type="text" placeholder="Name, Email, Group..." id="search-input"
+            class="border px-3 py-2 rounded-md shadow-sm w-full sm:w-64" />
+          <select id="client-type" name="type" class="border px-3 py-2 rounded-md shadow-sm w-full sm:w-40">
+            <option value="">All Types</option>
+            <option value="Company" {% if frappe.form_dict.type == 'Company' %}selected{% endif %}>Company</option>
+            <option value="Individual" {% if frappe.form_dict.type == 'Individual' %}selected{% endif %}>Individual</option>
+          </select>
+          <select id="client-group" name="group" class="border px-3 py-2 rounded-md shadow-sm w-full sm:w-40">
+            <option value="">All Groups</option>
+            {% for group in client_groups %}
+            <option value="{{ group.name }}" {% if frappe.form_dict.group == group.name %}selected{% endif %}>{{ group.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <a href="/portal/clients/new"
+          class="bg-blue-600 text-white rounded px-4 py-2 shadow hover:bg-blue-700 text-center sm:ml-2 whitespace-nowrap">New Client</a>
+      </div>
+    </div>
+    <!-- Client Table -->
+    <div class="overflow-x-auto w-full px-4 md:px-8">
+      <table class="draggable-columns min-w-full bg-white rounded-lg shadow">
+        <thead>
+          <tr class="bg-gray-100 text-gray-700 text-left">
+            <th class="py-2 px-4">Name</th>
+            <th class="py-2 px-4">Type</th>
+            <th class="py-2 px-4">Group</th>
+            <th class="py-2 px-4">Territory</th>
+            <th class="py-2 px-4">Primary Address</th>
+            <th class="py-2 px-4">Primary Contact</th>
+            <th class="py-2 px-4">Credit Limit</th>
+            <th class="py-2 px-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="clients-list">
+          {% for client in clients %}
+          <tr class="border-b hover:bg-gray-50">
+            <td class="py-2 px-4 font-semibold">{{ client.customer_name or client.name }}</td>
+            <td class="py-2 px-4">{{ client.customer_type }}</td>
+            <td class="py-2 px-4">{{ client.customer_group }}</td>
+            <td class="py-2 px-4">{{ client.territory }}</td>
+            <td class="py-2 px-4">{{ client.primary_address or '-' }}</td>
+            <td class="py-2 px-4">{{ client.primary_contact or '-' }}</td>
+            <td class="py-2 px-4">{{ client.credit_limit or '-' }}</td>
+            <td class="py-2 px-4 flex gap-2">
+              <a href="/portal/clients/view?name={{ client.name }}" class="text-blue-600 hover:underline px-2 py-1 rounded bg-gray-50">View</a>
+              <a href="/portal/clients/edit?name={{ client.name }}" class="text-green-700 hover:underline px-2 py-1 rounded bg-gray-50">Edit</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="py-4 text-center text-gray-400">No clients found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    // Simple client-side search and filter for clients table
+    document.addEventListener('DOMContentLoaded', function() {
+      var searchInput = document.getElementById('search-input');
+      var clientsList = document.getElementById('clients-list');
+      var typeSelect = document.getElementById('client-type');
+      var groupSelect = document.getElementById('client-group');
+      function filterClients() {
+        const filter = searchInput.value.toLowerCase();
+        const type = typeSelect.value;
+        const group = groupSelect.value;
+        clientsList.querySelectorAll('tr').forEach(row => {
+          const rowText = row.innerText.toLowerCase();
+          const typeMatch = !type || rowText.includes(type.toLowerCase());
+          const groupMatch = !group || rowText.includes(group.toLowerCase());
+          const searchMatch = !filter || rowText.includes(filter);
+          row.style.display = (typeMatch && groupMatch && searchMatch) ? '' : 'none';
+        });
+      }
+      if (searchInput && clientsList) {
+        searchInput.addEventListener('keyup', filterClients);
+        typeSelect.addEventListener('change', filterClients);
+        groupSelect.addEventListener('change', filterClients);
+      }
+
+      // --- Draggable table columns using SortableJS ---
+      var table = document.querySelector('table.draggable-columns');
+      if (table && window.Sortable) {
+        const theadRow = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+        const storageKey = 'colOrder_' + (table.id || table.className);
+        // Restore order from localStorage
+        let savedOrder = localStorage.getItem(storageKey);
+        if (savedOrder) {
+          savedOrder = JSON.parse(savedOrder);
+          reorderColumns(theadRow, tbody, savedOrder);
+        }
+        // Make headers draggable
+        Sortable.create(theadRow, {
+          animation: 150,
+          onEnd: function (evt) {
+            moveColumn(theadRow, tbody, evt.oldIndex, evt.newIndex);
+            // Save new order
+            const order = Array.from(theadRow.children).map(th => th.textContent.trim());
+            localStorage.setItem(storageKey, JSON.stringify(order));
+          }
+        });
+        function moveColumn(thead, tbody, from, to) {
+          // Move header
+          const ths = Array.from(thead.children);
+          thead.insertBefore(ths[from], ths[to > from ? to + 1 : to]);
+          // Move each row cell
+          Array.from(tbody.children).forEach(row => {
+            const cells = Array.from(row.children);
+            row.insertBefore(cells[from], cells[to > from ? to + 1 : to]);
+          });
+        }
+        function reorderColumns(thead, tbody, order) {
+          const ths = Array.from(thead.children);
+          const idxMap = order.map(label => ths.findIndex(th => th.textContent.trim() === label));
+          idxMap.forEach((fromIdx, toIdx) => {
+            if (fromIdx !== toIdx && fromIdx !== -1) moveColumn(thead, tbody, fromIdx, toIdx);
+          });
+        }
+      }
+      // --- End draggable columns ---
+    });
+  </script>
+{% endblock %}

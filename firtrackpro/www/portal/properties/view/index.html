@@ -1,0 +1,1451 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  /* Toasts */
+  #toastHost { position: fixed; inset: auto 0 16px 0; display:flex; justify-content:center; z-index: 9999; pointer-events:none; }
+  .toast { pointer-events:auto; min-width: 240px; max-width: 96vw; padding:10px 14px; border-radius:12px; box-shadow: 0 10px 25px rgba(0,0,0,.15); color:#0b2a13; background:#dcfce7; border:1px solid #86efac; font-size:14px; }
+  .toast.error { background:#fee2e2; color:#450a0a; border-color:#fca5a5; }
+
+  /* Client search results */
+  #mc_results li { padding: 8px 12px; cursor: pointer; }
+  #mc_results li:hover, #mc_results li.active { background: #f3f4f6; }
+  #mc_results .muted { font-size: 11px; color: #6b7280; }
+
+  /* ensure Leaflet marker icons don't get squished by global img rules */
+  .leaflet-marker-icon,
+  .leaflet-marker-shadow { max-width: none !important; }
+</style>
+{% endblock %}
+
+{% set prop = (property if property and not (property is string) else {}) %}
+
+{% set _addr = prop.get('address') %}
+{% set _addr_is_map = _addr is mapping %}
+{% set addr_line1 = (_addr.get('line1') if _addr_is_map else (_addr or '')) %}
+{% set addr_line2 = (_addr.get('line2') if _addr_is_map else '') %}
+{% set addr_suburb = (_addr.get('suburb') if _addr_is_map else '') %}
+{% set addr_state = (_addr.get('state') if _addr_is_map else (prop.get('region') or '')) %}
+{% set addr_postcode = (_addr.get('postcode') if _addr_is_map else '') %}
+{% set addr_country = (_addr.get('country') if _addr_is_map else 'Australia') %}
+
+{% set assets_list = assets if assets is defined and assets else [] %}
+{% set tasks_list = (tasks if tasks is defined and tasks else (jobs if jobs is defined and jobs else [])) %}
+{% set defect_quotes_list = defect_quotes if defect_quotes is defined and defect_quotes else [] %}
+{% set service_quotes_list = service_quotes if service_quotes is defined and service_quotes else [] %}
+{% set documents_list = documents if documents is defined and documents else [] %}
+{% set timeline_list = timeline if timeline is defined and timeline else [] %}
+
+{% set page_title = "Property • " ~ (prop.get('display_name') or prop.get('property_name') or prop.get('name') or name or "PROP-XXXX") %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block page_content %}
+<div class="px-4 md:px-6 py-4 space-y-4">
+  <!-- Toast host -->
+  <div id="toastHost"></div>
+
+  <div class="flex flex-wrap items-center gap-3">
+    <div>
+      <div class="text-2xl font-bold" id="propTitle">{{ (prop.get('display_name') or prop.get('property_name') or prop.get('name') or name or 'PROP-XXXX') }}</div>
+      <div class="text-sm text-gray-500">Property ID: {{ prop.get('name') or name or '—' }}</div>
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <button id="btnAddressCheck" class="px-3 py-2 rounded border bg-white hover:bg-gray-50"><i data-feather="map-pin" class="inline w-4 h-4"></i> Address Check</button>
+      <button id="btnAddContract" class="px-3 py-2 rounded border bg-white hover:bg-gray-50">+ Add Contract</button>
+      <button id="btnSaveMain" class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+    </div>
+  </div>
+
+  <div class="border-b">
+    <nav class="flex flex-wrap gap-2">
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-white border border-b-0 font-semibold" data-tab="property">Property</button>
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-gray-100 hover:bg-gray-200" data-tab="assets">Assets</button>
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-gray-100 hover:bg-gray-200" data-tab="tasks">Jobs</button>
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-gray-100 hover:bg-gray-200" data-tab="defect-quotes">Defect Quotes</button>
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-gray-100 hover:bg-gray-200" data-tab="service-quotes">Service Quotes</button>
+      <button class="tab-btn px-3 py-2 text-sm rounded-t bg-gray-100 hover:bg-gray-200" data-tab="documents">Documents</button>
+    </nav>
+  </div>
+
+  <section class="tab-panel" data-tab-panel="property">
+    <div class="grid lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 space-y-4">
+        <div class="bg-white border rounded-xl shadow-sm p-4">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="space-y-2 md:col-span-2">
+              <label class="text-sm font-medium">Client</label>
+              <div class="flex items-center gap-2">
+                <input id="client_label" type="text" class="w-full border rounded px-3 py-2" value="{{ (prop.get('client') or {}).get('name','') or prop.get('client_name','') }}" readonly>
+                <button id="btnChangeClient" class="px-2 py-2 rounded border bg-white hover:bg-gray-50 text-xs">Change</button>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Address Line 1</label>
+              <input id="addr_line1" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_line1 }}">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Address Line 2</label>
+              <input id="addr_line2" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_line2 }}">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Suburb</label>
+              <input id="addr_suburb" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_suburb }}">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">State</label>
+              <input id="addr_state" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_state }}">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Postcode</label>
+              <input id="addr_postcode" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_postcode }}">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Country</label>
+              <input id="addr_country" type="text" class="w-full border rounded px-3 py-2" value="{{ addr_country }}">
+            </div>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-2">
+            <div class="flex items-center">
+              <div class="font-semibold">Notes</div>
+            </div>
+            <textarea id="notes_text" class="w-full border rounded px-3 py-2" rows="4">{{ prop.get('notes','') }}</textarea>
+          </div>
+
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-2">
+            <div class="flex items-center w-full">
+              <div class="font-semibold">Building</div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <div class="text-xs text-gray-500">Type</div>
+                <div class="font-medium">{{ (prop.get('building') or {}).get('type','') }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Levels</div>
+                <div class="font-medium">{{ (prop.get('building') or {}).get('levels') or (prop.get('building') or {}).get('floors') or '' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Year Built</div>
+                <div class="font-medium">{{ (prop.get('building') or {}).get('year_built','') }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-3">
+            <div class="flex items-center w-full">
+              <div class="font-semibold">Contacts</div>
+              <button id="btnAddContact" class="ml-auto px-2 py-1 rounded bg-blue-600 text-white text-xs">+ Add Contact</button>
+            </div>
+            <ul class="space-y-2" id="contacts_list">
+              {% for c in (prop.get('contacts') or []) %}
+                <li class="flex items-center justify-between">
+                  <div>
+                    <div class="font-medium">{{ c.get('name') or c.get('person') or '' }}</div>
+                    <div class="text-xs text-gray-500">{{ c.get('role') or c.get('name') or '' }}</div>
+                  </div>
+                  <div class="text-xs text-right">
+                    <div>{{ c.get('phone','') }}</div>
+                    <div class="text-gray-500">{{ c.get('email','') }}</div>
+                  </div>
+                </li>
+              {% else %}
+                <li class="text-sm text-gray-500 italic">No contacts yet.</li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-3">
+            <div class="flex items-center w-full">
+              <div class="font-semibold">Schedules</div>
+              <button id="btnAddSchedule" class="ml-auto px-2 py-1 rounded bg-blue-600 text-white text-xs">+ Add Schedule</button>
+            </div>
+            <ul class="space-y-2" id="schedules_list">
+              {% for s in (prop.get('schedules') or []) %}
+                <li class="flex items-center justify-between">
+                  <div class="font-medium">{{ s.get('name') or s.get('type') or s.get('name_or_freq') or '' }}</div>
+                  <div class="text-xs text-gray-500">{{ s.get('frequency') or s.get('next') or '' }}</div>
+                </li>
+              {% else %}
+                <li class="text-sm text-gray-500 italic">No schedules configured.</li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-3 md:col-span-2">
+            <div class="flex items-center w-full">
+              <div class="font-semibold">Special Site Requirements</div>
+              <button id="btnAddCredential" class="ml-auto px-2 py-1 rounded bg-blue-600 text-white text-xs">+ Add</button>
+            </div>
+            <div class="flex flex-wrap gap-2" id="cred_list">
+              {% for a in (prop.get('accreditations') or []) %}
+                <span class="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">
+                  {{ a.get('name') or a.get('type') or '' }}{% if a.get('expires') or a.get('valid_to') %} {{ a.get('expires') or a.get('valid_to') }}{% endif %}
+                </span>
+              {% else %}
+                <span class="text-sm text-gray-500 italic">None.</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-2">
+            <div class="flex items-center">
+              <div class="font-semibold">Access</div>
+              <button id="btnEditAccess" class="ml-auto px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs">Edit Access</button>
+            </div>
+            <div class="text-sm">{{ (prop.get('access') or {}).get('instructions','') }}</div>
+            <div class="text-xs text-gray-500">After hours: {{ (prop.get('access') or {}).get('after_hours','') }}</div>
+          </div>
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-2">
+            <div class="font-semibold">Client</div>
+            <div class="text-sm">{{ (prop.get('client') or {}).get('name','') or prop.get('client_name','') }}</div>
+            <div class="text-xs text-gray-500">ID: {{ (prop.get('client') or {}).get('id','') }}</div>
+          </div>
+          <div class="bg-white border rounded-xl shadow-sm p-4 space-y-2">
+            <div class="font-semibold">Billing</div>
+            <div class="text-sm">—</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="space-y-4">
+        <div class="bg-white border rounded-xl shadow-sm p-4">
+          <div class="font-semibold mb-2">Timeline</div>
+          <ol class="space-y-3">
+            {% for item in timeline_list %}
+              <li>
+                <div class="text-xs text-gray-500">{{ item.ts or item.when }}</div>
+                <div class="text-sm">{{ item.text }}</div>
+              </li>
+            {% else %}
+              <li class="text-sm text-gray-500 italic">No recent activity.</li>
+            {% endfor %}
+          </ol>
+        </div>
+
+        <div class="bg-white border rounded-xl shadow-sm p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-semibold">Location</div>
+            <button id="btnRecenter" class="text-sm px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">Recenter</button>
+          </div>
+          <div id="siteMap" class="w-full rounded" style="height: 260px;"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="tab-panel hidden" data-tab-panel="assets">
+    <div class="bg-white border rounded-xl shadow-sm">
+      <div class="p-4 flex items-center gap-2">
+        <div class="font-semibold">Assets</div>
+        <button id="btnAddAsset" class="ml-auto px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">+ Add Asset</button>
+      </div>
+      <div class="border-t divide-y" id="assets_list">
+        {% for a in assets_list %}
+          <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 asset-row"
+               data-asset-id="{{ a.get('id') or a.get('code') or a.get('name') }}">
+            <div>
+              <div class="font-medium">{{ a.get('name') or '—' }}</div>
+              <div class="text-xs text-gray-500">
+                {{ a.get('type','') }}{% if a.get('identifier') %} • {{ a.get('identifier') }}{% endif %}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs px-2 py-1 rounded bg-gray-100">{{ a.get('status','') }}</span>
+              <button class="ml-2 text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50 asset-edit-btn"
+                      data-asset-id="{{ a.get('id') or a.get('code') or a.get('name') }}">View / Edit</button>
+            </div>
+          </div>
+        {% else %}
+          <div class="p-6 text-gray-500 italic empty-assets">No assets yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel hidden" data-tab-panel="tasks">
+    <div class="bg-white border rounded-xl shadow-sm">
+      <div class="p-4 flex items-center gap-2">
+        <div class="font-semibold">Jobs</div>
+        <button id="btnAddJob" class="ml-auto px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">+ Create Job</button>
+      </div>
+      <div class="border-t divide-y" id="jobs_list">
+        {% for t in tasks_list %}
+          <div class="p-4 flex items-center justify-between">
+            <div>
+              <div class="font-medium">{{ t.get('id') or t.get('code') or '' }} — {{ t.get('title','') }}</div>
+              <div class="text-xs text-gray-500">{{ t.get('when') or t.get('date') or '' }}</div>
+            </div>
+            <span class="text-xs px-2 py-1 rounded bg-gray-100">{{ t.get('status','') }}</span>
+          </div>
+        {% else %}
+          <div class="p-6 text-gray-500 italic empty-jobs">No jobs yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel hidden" data-tab-panel="documents">
+    <div class="bg-white border rounded-xl shadow-sm">
+      <div class="p-4 flex items-center gap-2">
+        <div class="font-semibold">Documents</div>
+        <button id="btnAddDoc" class="ml-auto px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">+ Upload</button>
+      </div>
+      <div class="border-t divide-y" id="docs_list">
+        {% for d in documents_list %}
+          <div class="p-4 flex items-center justify-between">
+            <div class="font-medium">
+              {% if d.get('url') %}<a href="{{ d.get('url') }}" class="underline">{{ d.get('name','') }}</a>{% else %}{{ d.get('name','') }}{% endif %}
+            </div>
+            <div class="text-xs text-gray-500">{{ d.get('size','') or '—' }}</div>
+          </div>
+        {% else %}
+          <div class="p-6 text-gray-500 italic empty-docs">No documents yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Change Client Modal (with inline search) -->
+<div id="modalClient" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-md">
+    <div class="font-semibold mb-2">Change Client</div>
+    <div class="relative">
+      <input id="mc_customer" type="text" class="w-full border rounded px-3 py-2" placeholder="Search customer by name…">
+      <ul id="mc_results" class="absolute left-0 right-0 mt-1 max-h-64 overflow-auto border rounded bg-white shadow hidden z-10"></ul>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="mc_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Access Modal -->
+<div id="modalAccess" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Access Notes</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <div>
+        <label class="text-sm">Alarm Panel Notes</label>
+        <textarea id="ma_alarm" class="w-full border rounded px-3 py-2" rows="3"></textarea>
+      </div>
+      <div>
+        <label class="text-sm">Parking Notes</label>
+        <textarea id="ma_parking" class="w-full border rounded px-3 py-2" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="ma_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Contact Modal -->
+<div id="modalContact" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Add Contact</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <input id="mc_first" class="border rounded px-3 py-2" placeholder="First Name">
+      <input id="mc_last" class="border rounded px-3 py-2" placeholder="Last Name">
+      <input id="mc_email" class="border rounded px-3 py-2 md:col-span-2" placeholder="Email">
+      <input id="mc_phone" class="border rounded px-3 py-2 md:col-span-2" placeholder="Phone">
+      <select id="mc_role" class="border rounded px-3 py-2 md:col-span-2">
+        <option value="">Role (optional)</option>
+        <option value="building_manager">Building Manager</option>
+        <option value="security">Security</option>
+        <option value="after_hours">After Hours</option>
+        <option value="reception">Reception</option>
+        <option value="tenant_rep">Tenant Rep</option>
+        <option value="other">Other</option>
+      </select>
+      <label class="inline-flex items-center gap-2 md:col-span-2 text-sm">
+        <input id="mc_primary" type="checkbox"> Primary contact
+      </label>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="mco_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Schedule Modal -->
+<div id="modalSchedule" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Add Schedule</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <select id="ms_frequency" class="border rounded px-3 py-2">
+        <option value="monthly">Monthly</option>
+        <option value="quarterly">Quarterly</option>
+        <option value="six_monthly">Six Monthly</option>
+        <option value="annual">Annual</option>
+        <option value="one_off">One-off</option>
+      </select>
+      <input id="ms_anchor" type="date" class="border rounded px-3 py-2">
+      <input id="ms_contract" class="border rounded px-3 py-2 md:col-span-2" placeholder="Contract (optional exact name)">
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="ms_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Contract Modal -->
+<div id="modalContract" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Create Contract</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <input id="ct_title" class="border rounded px-3 py-2 md:col-span-2" placeholder="Title">
+      <input id="ct_customer" class="border rounded px-3 py-2 md:col-span-2" placeholder="Customer (leave blank to use current)">
+      <input id="ct_start" type="date" class="border rounded px-3 py-2">
+      <input id="ct_end" type="date" class="border rounded px-3 py-2">
+      <select id="ct_active" class="border rounded px-3 py-2">
+        <option value="1">Active</option>
+        <option value="0">Inactive</option>
+      </select>
+      <select id="ct_freq" class="border rounded px-3 py-2">
+        <option value="monthly">Monthly</option>
+        <option value="quarterly">Quarterly</option>
+        <option value="six_monthly">Six Monthly</option>
+        <option value="annual">Annual</option>
+        <option value="per_visit">Per Visit</option>
+      </select>
+      <input id="ct_day" type="number" min="1" max="28" class="border rounded px-3 py-2" placeholder="Invoice Day">
+      <input id="ct_price" type="number" step="0.01" class="border rounded px-3 py-2" placeholder="Price (ex GST)">
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="ct_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Credential Modal -->
+<div id="modalCredential" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Add Credential Requirement</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <select id="cr_type" class="border rounded px-3 py-2">
+        <option value="Police Check">Police Check</option>
+        <option value="WWCC">WWCC</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <input id="cr_validity" type="number" class="border rounded px-3 py-2" placeholder="Validity (days)">
+      <label class="inline-flex items-center gap-2 md:col-span-2 text-sm">
+        <input id="cr_blocking" type="checkbox"> Blocks Scheduling
+      </label>
+      <input id="cr_notes" class="border rounded px-3 py-2 md:col-span-2" placeholder="Notes">
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="cr_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Asset Modal -->
+<div id="modalAsset" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-3xl">
+    <div class="font-semibold mb-2">Add Asset</div>
+
+    <!-- Basic -->
+    <div class="grid md:grid-cols-3 gap-3">
+      <input id="as_label" class="border rounded px-3 py-2 md:col-span-2" placeholder="Label (e.g., TI-4100ES)" />
+      <input id="as_type" class="border rounded px-3 py-2" placeholder="Asset Type (e.g., Fire Indicator Panel)" />
+    </div>
+
+    <!-- Make/Model/Serial/UID -->
+    <div class="grid md:grid-cols-4 gap-3 mt-3">
+      <input id="as_make" class="border rounded px-3 py-2" placeholder="Make" />
+      <input id="as_model" class="border rounded px-3 py-2" placeholder="Model" />
+      <input id="as_serial" class="border rounded px-3 py-2" placeholder="Serial Number" />
+      <input id="as_identifier" class="border rounded px-3 py-2" placeholder="Barcode / UID" />
+    </div>
+
+    <!-- Dates/Status -->
+    <div class="grid md:grid-cols-3 gap-3 mt-3">
+      <input id="as_install" type="date" class="border rounded px-3 py-2" />
+      <select id="as_status" class="border rounded px-3 py-2">
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+        <option value="Decommissioned">Decommissioned</option>
+      </select>
+      <input id="as_standard" class="border rounded px-3 py-2" placeholder="Standard (optional exact name)" />
+    </div>
+
+    <!-- Zone (search) -->
+    <div class="mt-3">
+      <label class="text-sm font-medium">Zone</label>
+      <div class="relative">
+        <input id="as_zone" class="w-full border rounded px-3 py-2" placeholder="Search zone by title…" autocomplete="off" />
+        <ul id="as_zone_results" class="absolute left-0 right-0 mt-1 max-h-56 overflow-auto border rounded bg-white shadow hidden z-10"></ul>
+      </div>
+      <input type="hidden" id="as_zone_name" />
+    </div>
+
+    <!-- Location -->
+    <div class="grid md:grid-cols-5 gap-3 mt-3">
+      <input id="as_level" class="border rounded px-3 py-2" placeholder="Level" />
+      <input id="as_area" class="border rounded px-3 py-2" placeholder="Area" />
+      <input id="as_riser" class="border rounded px-3 py-2" placeholder="Riser" />
+      <input id="as_cupboard" class="border rounded px-3 py-2" placeholder="Cupboard" />
+      <input id="as_room" class="border rounded px-3 py-2" placeholder="Room" />
+    </div>
+    <div class="mt-3">
+      <input id="as_locnotes" class="w-full border rounded px-3 py-2" placeholder="Location Notes" />
+    </div>
+
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="as_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- View/Edit Asset Modal -->
+<div id="modalAssetView" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-3xl">
+    <div class="flex items-center">
+      <div class="font-semibold">Asset</div>
+      <button data-close class="ml-auto px-2 py-1 rounded border bg-white hover:bg-gray-50">Close</button>
+    </div>
+
+    <input type="hidden" id="av_id" />
+
+    <!-- Basic -->
+    <div class="grid md:grid-cols-3 gap-3 mt-3">
+      <div class="md:col-span-2">
+        <label class="text-xs text-gray-600">Label</label>
+        <input id="av_label" class="border rounded px-3 py-2 w-full" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Asset Type</label>
+        <input id="av_type" class="border rounded px-3 py-2 w-full" placeholder="Fire Indicator Panel, Sprinkler Pump…" />
+      </div>
+    </div>
+
+    <!-- Make/Model/Serial/UID -->
+    <div class="grid md:grid-cols-4 gap-3 mt-3">
+      <div>
+        <label class="text-xs text-gray-600">Make</label>
+        <input id="av_make" class="border rounded px-3 py-2 w-full" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Model</label>
+        <input id="av_model" class="border rounded px-3 py-2 w-full" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Serial</label>
+        <input id="av_serial" class="border rounded px-3 py-2 w-full" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Identifier (UID)</label>
+        <input id="av_identifier" class="border rounded px-3 py-2 w-full" />
+      </div>
+    </div>
+
+    <!-- Dates/Status/Standard -->
+    <div class="grid md:grid-cols-3 gap-3 mt-3">
+      <div>
+        <label class="text-xs text-gray-600">Install Date</label>
+        <input id="av_install" type="date" class="border rounded px-3 py-2 w-full" />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Status</label>
+        <select id="av_status" class="border rounded px-3 py-2 w-full">
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Decommissioned">Decommissioned</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Standard (exact)</label>
+        <input id="av_standard" class="border rounded px-3 py-2 w-full" />
+      </div>
+    </div>
+
+    <!-- Zone (live search) -->
+    <div class="mt-3">
+      <label class="text-xs text-gray-600">Zone</label>
+      <div class="relative">
+        <input id="av_zone" class="w-full border rounded px-3 py-2" placeholder="Search zone by title…" autocomplete="off" />
+        <ul id="av_zone_results" class="absolute left-0 right-0 mt-1 max-h-56 overflow-auto border rounded bg-white shadow hidden z-10"></ul>
+      </div>
+      <input type="hidden" id="av_zone_name" />
+      <div class="text-xs text-gray-500 mt-1" id="av_zone_path"></div>
+    </div>
+
+    <!-- Location -->
+    <div class="grid md:grid-cols-5 gap-3 mt-3">
+      <div><label class="text-xs text-gray-600">Level</label><input id="av_level" class="border rounded px-3 py-2 w-full" /></div>
+      <div><label class="text-xs text-gray-600">Area</label><input id="av_area" class="border rounded px-3 py-2 w-full" /></div>
+      <div><label class="text-xs text-gray-600">Riser</label><input id="av_riser" class="border rounded px-3 py-2 w-full" /></div>
+      <div><label class="text-xs text-gray-600">Cupboard</label><input id="av_cupboard" class="border rounded px-3 py-2 w-full" /></div>
+      <div><label class="text-xs text-gray-600">Room</label><input id="av_room" class="border rounded px-3 py-2 w-full" /></div>
+    </div>
+    <div class="mt-3">
+      <label class="text-xs text-gray-600">Location Notes</label>
+      <input id="av_locnotes" class="w-full border rounded px-3 py-2" />
+    </div>
+
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="av_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Job Modal -->
+<div id="modalJob" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Create Job</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <input id="jb_title" class="border rounded px-3 py-2 md:col-span-2" placeholder="Title">
+      <input id="jb_when" type="datetime-local" class="border rounded px-3 py-2">
+      <select id="jb_status" class="border rounded px-3 py-2">
+        <option>Scheduled</option>
+        <option>Ready</option>
+        <option>Pending</option>
+        <option>Completed</option>
+      </select>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="jb_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Document Modal -->
+<div id="modalDoc" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-4 w-full max-w-xl">
+    <div class="font-semibold mb-2">Upload Document</div>
+    <div class="grid md:grid-cols-2 gap-3">
+      <input id="dc_title" class="border rounded px-3 py-2 md:col-span-2" placeholder="Title">
+      <input id="dc_file" type="file" class="border rounded px-3 py-2 md:col-span-2">
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button data-close class="px-3 py-2 rounded border">Cancel</button>
+      <button id="dc_save" class="px-3 py-2 rounded bg-blue-600 text-white">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Address Check Modal -->
+<div id="addressModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-xl">
+    <div class="p-4 border-b flex items-center">
+      <div class="font-semibold">Address Check</div>
+      <button id="modalClose" class="ml-auto p-2 hover:bg-gray-100 rounded"><i data-feather="x"></i></button>
+    </div>
+    <div class="p-4 space-y-3">
+      <input id="searchInput" type="text" placeholder="Search address..." class="w-full border rounded px-3 py-2">
+      <div class="text-xs text-gray-500">Powered by OpenStreetMap Nominatim.</div>
+      <ul id="resultList" class="divide-y border rounded"></ul>
+    </div>
+    <div class="p-3 border-t text-right">
+      <button id="modalCancel" class="px-3 py-2 rounded border bg-white hover:bg-gray-50">Close</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ super() }}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+  const onReady = (fn) => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); };
+
+  onReady(function() {
+    if (window.feather) feather.replace();
+
+    const propName = "{{ prop.get('name') or name }}";
+
+    // ---------- Toasts ----------
+    const toastHost = document.getElementById('toastHost');
+    function showToast(msg, type='success', ms=2200){
+      if (!toastHost) return;
+      const t = document.createElement('div');
+      t.className = 'toast' + (type==='error' ? ' error':'');
+      t.textContent = msg;
+      toastHost.appendChild(t);
+      setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; }, ms);
+      setTimeout(()=>{ t.remove(); }, ms+350);
+    }
+
+    // ---------- Map ----------
+    const mapDiv = document.getElementById('siteMap');
+    const LAT = {{ (prop.get('lat') if prop.get('lat') is not none else -37.8136)|float }};
+    const LNG = {{ (prop.get('lng') if prop.get('lng') is not none else (prop.get('lon') if prop.get('lon') is not none else 144.9631))|float }};
+
+    const ZOOM = 15;
+    const MAPTILER_KEY = "{{ maptiler_key or '' }}";
+
+    let mapInited = false;
+    let map = null;
+    let marker = null;
+
+    const markerIcon = L.icon({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconSize:      [25, 41],
+      iconAnchor:    [12, 41],
+      popupAnchor:   [1, -34],
+      tooltipAnchor: [16, -28],
+      shadowSize:    [41, 41],
+      crossOrigin:   'anonymous'
+    });
+
+    function tileLayer() {
+      if (MAPTILER_KEY) {
+        return L.tileLayer(`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`, { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors | © MapTiler' });
+      }
+      return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, updateWhenIdle: true, keepBuffer: 1 });
+    }
+
+    function initMapOnce() {
+      if (mapInited || !mapDiv || typeof L === 'undefined') return;
+      map = L.map('siteMap', { zoomControl: true });
+      tileLayer().addTo(map);
+      map.setView([LAT, LNG], ZOOM);
+      marker = L.marker([LAT, LNG], { icon: markerIcon }).addTo(map);
+      mapInited = true;
+      setTimeout(() => map.invalidateSize(), 150);
+    }
+
+    // Tabs
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const panels = document.querySelectorAll('.tab-panel');
+    function showTab(name) {
+      panels.forEach(p => p.classList.toggle('hidden', p.getAttribute('data-tab-panel') !== name));
+      tabBtns.forEach(b => {
+        const active = b.getAttribute('data-tab') === name;
+        b.classList.toggle('bg-white', active);
+        b.classList.toggle('border', active);
+        b.classList.toggle('font-semibold', active);
+        b.classList.toggle('bg-gray-100', !active);
+      });
+      if (name === 'property') initMapOnce();
+    }
+    showTab('property');
+    tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.getAttribute('data-tab'))));
+
+    const recenter = document.getElementById('btnRecenter');
+    if (recenter) recenter.addEventListener('click', () => {
+      if (!mapInited) initMapOnce();
+      if (map) map.setView([LAT, LNG], ZOOM, { animate: true });
+      if (marker) marker.setLatLng([LAT, LNG]);
+    });
+
+    // ---------- Helpers ----------
+    let __csrfToken = null;
+
+    async function ensureCsrf() {
+      if (__csrfToken) return __csrfToken;
+
+      __csrfToken =
+        (window.csrf_token) ||
+        (window.frappe && window.frappe.csrf_token) ||
+        (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')) ||
+        null;
+
+      if (!__csrfToken) {
+        try {
+          const r = await fetch('/api/method/frappe.sessions.get_csrf_token', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+          });
+          const j = await r.json().catch(() => ({}));
+          __csrfToken = j && (j.message || j.csrf_token) || null;
+        } catch (e) {}
+      }
+      return __csrfToken;
+    }
+
+    async function post(url, payload) {
+      const token = await ensureCsrf();
+
+      // First try: JSON body (typical)
+      async function doJson() {
+        const r = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? { 'X-Frappe-CSRF-Token': token } : {})
+          },
+          body: JSON.stringify(payload || {})
+        });
+        return r;
+      }
+
+      // Fallback: form-encoded body
+      async function doForm() {
+        const fd = new URLSearchParams();
+        Object.entries(payload || {}).forEach(([k, v]) => fd.append(k, v == null ? '' : String(v)));
+        const r = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? { 'X-Frappe-CSRF-Token': token } : {})
+          },
+          body: fd.toString()
+        });
+        return r;
+      }
+
+      // Try JSON first
+      let r = await doJson();
+
+      // If CSRF fails, refresh token once and retry JSON
+      if (r.status === 417) {
+        __csrfToken = null;
+        await ensureCsrf();
+        r = await doJson();
+      }
+
+      // If still failing, try form-encoded once
+      if (r.status === 417) {
+        r = await doForm();
+      }
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.exc) {
+        let msg = 'Request failed';
+        try {
+          if (j._server_messages) {
+            const arr = JSON.parse(j._server_messages);
+            msg = arr.map(x => (JSON.parse(x).message || '')).filter(Boolean).join(' ') || msg;
+          } else if (j.message) {
+            msg = (typeof j.message === 'string') ? j.message : msg;
+          }
+        } catch {}
+        throw new Error(msg);
+      }
+      return j.message || j;
+    }
+
+    function openModal(el){ el.classList.remove('hidden'); el.classList.add('flex'); }
+    function closeModal(el){ el.classList.add('hidden'); el.classList.remove('flex'); }
+    function bindModal(id, opener){
+      const modal = document.getElementById(id);
+      const openerEl = typeof opener === 'string' ? document.getElementById(opener) : opener;
+      if (openerEl) openerEl.addEventListener('click', ()=>openModal(modal));
+      Array.from(modal.querySelectorAll('[data-close]')).forEach(btn=>btn.addEventListener('click', ()=>closeModal(modal)));
+      modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(modal); });
+      return modal;
+    }
+
+    // ---------- Save (main) ----------
+    document.getElementById('btnSaveMain')?.addEventListener('click', async ()=>{
+      try {
+        const notes = document.getElementById('notes_text').value || '';
+        const line1 = document.getElementById('addr_line1').value;
+        const line2 = document.getElementById('addr_line2').value;
+        const suburb = document.getElementById('addr_suburb').value;
+        const state = document.getElementById('addr_state').value;
+        const postcode = document.getElementById('addr_postcode').value;
+        const country = document.getElementById('addr_country').value || 'Australia';
+        await post('/api/method/firtrackpro.api.property.save_address', { property_name: propName, line1, line2, suburb, state, postcode, country });
+        await post('/api/method/firtrackpro.api.property.save_notes', { property_name: propName, notes });
+        showToast('Saved', 'success');
+        setTimeout(()=>location.reload(), 400);
+      } catch (e) {
+        showToast('Save failed', 'error');
+      }
+    });
+
+    // ---------- Address modal + live Nominatim search ----------
+    const mdlAddr = document.getElementById('addressModal');
+    const btnAddrOpen = document.getElementById('btnAddressCheck');
+    const btnAddrClose = document.getElementById('modalClose');
+    const btnAddrCancel = document.getElementById('modalCancel');
+    const searchInput = document.getElementById('searchInput');
+    const resultList = document.getElementById('resultList');
+
+    function openModalAddr(){ openModal(mdlAddr); if (searchInput) searchInput.focus(); }
+    function closeModalAddr(){ resultList.innerHTML=''; searchInput.value=''; closeModal(mdlAddr); }
+
+    btnAddrOpen?.addEventListener('click', openModalAddr);
+    btnAddrClose?.addEventListener('click', closeModalAddr);
+    btnAddrCancel?.addEventListener('click', closeModalAddr);
+    mdlAddr?.addEventListener('click', (e)=>{ if (e.target===mdlAddr) closeModalAddr(); });
+
+    async function apiSearch(q) {
+      const url = `/api/method/firtrackpro.api.address.search?q=${encodeURIComponent(q || "")}&limit=7&country=AU`;
+      try {
+        const r = await fetch(url, { method: 'GET' });
+        const j = await r.json().catch(() => ({}));
+        const out = Array.isArray(j) ? j : (j && j.message) || [];
+        return Array.isArray(out) ? out : [];
+      } catch { return []; }
+    }
+    function renderResults(list) {
+      resultList.innerHTML = '';
+      if (!list.length){
+        const li = document.createElement('li');
+        li.className = 'p-3 text-sm text-gray-500';
+        li.textContent = 'No results.';
+        resultList.appendChild(li);
+        return;
+      }
+      list.forEach(item=>{
+        const li = document.createElement('li');
+        li.className = 'p-3 flex items-center justify-between';
+        const sub = [item.suburb, item.state, item.postcode].filter(Boolean).join(' ');
+        const ctry = item.country || '';
+        li.innerHTML = `
+          <div class="text-sm">
+            <div class="font-medium">${item.line1 || ''}</div>
+            <div class="text-gray-500 text-xs">${sub}${ctry ? ', ' + ctry : ''}</div>
+          </div>
+          <button class="px-2 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700">Use</button>
+        `;
+        li.querySelector('button').addEventListener('click', () => {
+          const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+          set('addr_line1', item.line1 || '');
+          set('addr_line2', '');
+          set('addr_suburb', item.suburb || '');
+          set('addr_state', item.state || '');
+          set('addr_postcode', item.postcode || '');
+          set('addr_country', item.country || 'Australia');
+
+          if (!mapInited) initMapOnce();
+          if (map && item.lat && item.lng) {
+            const coord = [parseFloat(item.lat), parseFloat(item.lng)];
+            map.setView(coord, ZOOM);
+            if (marker) marker.setLatLng(coord);
+            else marker = L.marker(coord, { icon: markerIcon }).addTo(map);
+          }
+          closeModalAddr();
+          showToast('Address filled', 'success');
+        });
+        resultList.appendChild(li);
+      });
+    }
+    if (searchInput) {
+      let t = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(t);
+        const q = searchInput.value.trim();
+        resultList.innerHTML = q.length<3 ? '<li class="p-3 text-sm text-gray-500">Enter at least 3 characters…</li>' : '<li class="p-3 text-sm text-gray-500">Searching…</li>';
+        if (q.length < 3) return;
+        t = setTimeout(async ()=>{ const res = await apiSearch(q); renderResults(res); }, 250);
+      });
+    }
+
+    // ---------- Change Client (inline search) ----------
+    const mdlClient = bindModal('modalClient','btnChangeClient');
+    const mcInput = document.getElementById('mc_customer');
+    const mcList  = document.getElementById('mc_results');
+
+    let mcTimer = null;
+    let mcItems = [];
+    let mcActive = -1;
+
+    async function searchCustomers(q){
+      const url = `/api/method/firtrackpro.api.customer.search?q=${encodeURIComponent(q||'')}&limit=8`;
+      try{
+        const r = await fetch(url, { method:'GET', credentials:'same-origin' });
+        const j = await r.json().catch(()=>({}));
+        const arr = Array.isArray(j) ? j : (j && j.message) || [];
+        return Array.isArray(arr) ? arr : [];
+      }catch{ return []; }
+    }
+
+    function renderCustomerList(items){
+      mcItems = items;
+      mcActive = -1;
+      mcList.innerHTML = '';
+      if (!items.length) {
+        mcList.classList.add('hidden');
+        return;
+      }
+      items.forEach((it, idx)=>{
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div class="font-medium">${it.label}</div>
+          <div class="muted">${it.id}${it.group ? ' · ' + it.group : ''}${it.territory ? ' · ' + it.territory : ''}</div>
+        `;
+        li.addEventListener('click', ()=>selectCustomer(idx));
+        mcList.appendChild(li);
+      });
+      mcList.classList.remove('hidden');
+    }
+
+    function selectCustomer(idx){
+      const it = mcItems[idx];
+      if (!it) return;
+      mcInput.value = it.label;
+      mcInput.dataset.customerId = it.id;
+      mcList.classList.add('hidden');
+    }
+
+    function moveActive(delta){
+      if (!mcItems.length) return;
+      mcActive = (mcActive + delta + mcItems.length) % mcItems.length;
+      Array.from(mcList.children).forEach((li,i)=>li.classList.toggle('active', i===mcActive));
+    }
+
+    mcInput?.addEventListener('input', ()=>{
+      clearTimeout(mcTimer);
+      const q = mcInput.value.trim();
+      if (q.length < 2){ mcList.classList.add('hidden'); return; }
+      mcList.classList.remove('hidden');
+      mcList.innerHTML = '<li class="muted">Searching…</li>';
+      mcTimer = setTimeout(async ()=>{
+        const items = await searchCustomers(q);
+        renderCustomerList(items);
+      }, 200);
+    });
+
+    mcInput?.addEventListener('keydown', (e)=>{
+      if (mcList.classList.contains('hidden')) return;
+      if (e.key === 'ArrowDown'){ e.preventDefault(); moveActive(+1); }
+      else if (e.key === 'ArrowUp'){ e.preventDefault(); moveActive(-1); }
+      else if (e.key === 'Enter'){
+        if (mcActive >= 0){ e.preventDefault(); selectCustomer(mcActive); }
+      } else if (e.key === 'Escape'){
+        mcList.classList.add('hidden');
+      }
+    });
+
+    document.addEventListener('click', (ev)=>{
+      if (!mcList.contains(ev.target) && ev.target !== mcInput) {
+        mcList.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('mc_save')?.addEventListener('click', async ()=>{
+      try {
+        const customer_name = mcInput.value;
+        if (!customer_name || !customer_name.trim()){
+          showToast('Enter a customer name', 'error');
+          return;
+        }
+        await post('/api/method/firtrackpro.api.property.set_client', { property_name: propName, customer_name });
+        closeModal(mdlClient);
+        showToast('Client updated', 'success');
+        setTimeout(()=>location.reload(), 400);
+      } catch (e) {
+        showToast('Failed to update client', 'error');
+      }
+    });
+
+    // ---------- Edit Access ----------
+    const mdlAccess = bindModal('modalAccess','btnEditAccess');
+    document.getElementById('ma_save')?.addEventListener('click', async ()=>{
+      try {
+        await post('/api/method/firtrackpro.api.property.upsert_access', {
+          property_name: propName,
+          alarm_panel: document.getElementById('ma_alarm').value,
+          parking: document.getElementById('ma_parking').value
+        });
+        closeModal(mdlAccess);
+        showToast('Access saved', 'success');
+        setTimeout(()=>location.reload(), 400);
+      } catch(e){ showToast('Failed to save access', 'error'); }
+    });
+
+    // ---------- Add Contact ----------
+    const mdlContact = bindModal('modalContact','btnAddContact');
+    document.getElementById('mco_save')?.addEventListener('click', async ()=>{
+      try{
+        await post('/api/method/firtrackpro.api.property.add_contact', {
+          property_name: propName,
+          first_name: document.getElementById('mc_first').value,
+          last_name: document.getElementById('mc_last').value,
+          email: document.getElementById('mc_email').value,
+          phone: document.getElementById('mc_phone').value,
+          role: document.getElementById('mc_role').value,
+          is_primary: document.getElementById('mc_primary').checked ? 1 : 0
+        });
+        closeModal(mdlContact);
+        showToast('Contact added', 'success');
+        setTimeout(()=>location.reload(), 400);
+      }catch(e){ showToast('Failed to add contact', 'error'); }
+    });
+
+    // ---------- Add Schedule ----------
+    const mdlSchedule = bindModal('modalSchedule','btnAddSchedule');
+    document.getElementById('ms_save')?.addEventListener('click', async ()=>{
+      try{
+        await post('/api/method/firtrackpro.api.property.add_schedule_rule', {
+          property_name: propName,
+          frequency: document.getElementById('ms_frequency').value,
+          anchor_date: document.getElementById('ms_anchor').value,
+          contract_name: document.getElementById('ms_contract').value || null
+        });
+        closeModal(mdlSchedule);
+        showToast('Schedule added', 'success');
+        setTimeout(()=>location.reload(), 400);
+      }catch(e){ showToast('Failed to add schedule', 'error'); }
+    });
+
+    // ---------- Add Contract ----------
+    const mdlContract = bindModal('modalContract','btnAddContract');
+    document.getElementById('ct_save')?.addEventListener('click', async ()=>{
+      try{
+        await post('/api/method/firtrackpro.api.property.add_contract', {
+          property_name: propName,
+          title: document.getElementById('ct_title').value,
+          customer_name: document.getElementById('ct_customer').value,
+          start_date: document.getElementById('ct_start').value,
+          end_date: document.getElementById('ct_end').value,
+          active: document.getElementById('ct_active').value,
+          invoice_frequency: document.getElementById('ct_freq').value,
+          invoice_day: document.getElementById('ct_day').value,
+          price: document.getElementById('ct_price').value
+        });
+        closeModal(mdlContract);
+        showToast('Contract created', 'success');
+        setTimeout(()=>location.reload(), 400);
+      }catch(e){ showToast('Failed to create contract', 'error'); }
+    });
+
+    // ---------- Add Credential ----------
+    const mdlCredential = bindModal('modalCredential','btnAddCredential');
+    document.getElementById('cr_save')?.addEventListener('click', async ()=>{
+      try {
+        const type = document.getElementById('cr_type').value;
+        const validity = document.getElementById('cr_validity').value;
+        const blocking = document.getElementById('cr_blocking').checked ? 1 : 0;
+        const notes = document.getElementById('cr_notes').value;
+
+        await post('/api/method/firtrackpro.api.property.add_credential', {
+          property_name: propName,
+          credential_type: type,
+          validity_days: validity,
+          blocking,
+          notes
+        });
+
+        closeModal(mdlCredential);
+        showToast('Credential added', 'success');
+
+        const list = document.getElementById('cred_list');
+        if (list && list.firstElementChild && list.firstElementChild.classList.contains('text-sm')) {
+          list.innerHTML = '';
+        }
+        const labelMap = { police_check: 'Police Check', wwcc: 'WWCC', other: 'Other' };
+        const chip = document.createElement('span');
+        const suffix = validity ? ` (valid ${validity}d)` : '';
+        chip.className = 'px-2 py-1 rounded bg-green-100 text-green-800 text-xs';
+        chip.textContent = (labelMap[type] || type) + suffix;
+        list?.appendChild(chip);
+      } catch (e) {
+        showToast('Failed to add credential', 'error');
+      }
+    });
+
+    // ---------- Add Asset ----------
+    const mdlAsset = bindModal('modalAsset','btnAddAsset');
+
+    // Zone live search (Add)
+    (function () {
+      const inp = document.getElementById('as_zone');
+      const hid = document.getElementById('as_zone_name');
+      const list = document.getElementById('as_zone_results');
+      let timer = null, items = [];
+
+      function render(items) {
+        list.innerHTML = '';
+        if (!items.length) { list.classList.add('hidden'); return; }
+        items.forEach((it) => {
+          const li = document.createElement('li');
+          li.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer';
+          li.innerHTML = `<div class="font-medium text-sm">${it.title}</div><div class="text-xs text-gray-500">${it.path || ''}</div>`;
+          li.addEventListener('click', () => {
+            inp.value = it.title;
+            hid.value = it.name;
+            list.classList.add('hidden');
+          });
+          list.appendChild(li);
+        });
+        list.classList.remove('hidden');
+      }
+
+      inp?.addEventListener('input', () => {
+        clearTimeout(timer);
+        hid.value = '';
+        const q = inp.value.trim();
+        if (q.length < 2) { list.classList.add('hidden'); return; }
+        timer = setTimeout(async () => {
+          try {
+            const url = `/api/method/firtrackpro.api.zone.search?property=${encodeURIComponent(propName)}&q=${encodeURIComponent(q)}&limit=10`;
+            const r = await fetch(url, { method:'GET' });
+            const j = await r.json().catch(()=>({}));
+            items = Array.isArray(j) ? j : (j && j.message) || [];
+            render(items);
+          } catch { list.classList.add('hidden'); }
+        }, 200);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!list.contains(e.target) && e.target !== inp) list.classList.add('hidden');
+      });
+    })();
+
+    document.getElementById('as_save')?.addEventListener('click', async () => {
+      try{
+        const payload = {
+          property_name: propName,
+          asset_type: document.getElementById('as_type').value,
+          asset_label: document.getElementById('as_label').value,
+          asset_status: document.getElementById('as_status').value,
+          make: document.getElementById('as_make').value,
+          model: document.getElementById('as_model').value,
+          serial: document.getElementById('as_serial').value,
+          identifier: document.getElementById('as_identifier').value,
+          install_date: document.getElementById('as_install').value,
+          standard: document.getElementById('as_standard').value,
+          zone_name: document.getElementById('as_zone_name').value,
+          zone_title: document.getElementById('as_zone').value,
+          location_level: document.getElementById('as_level').value,
+          location_area: document.getElementById('as_area').value,
+          location_riser: document.getElementById('as_riser').value,
+          location_cupboard: document.getElementById('as_cupboard').value,
+          location_room: document.getElementById('as_room').value,
+          location_notes: document.getElementById('as_locnotes').value
+        };
+
+        const res = await post('/api/method/firtrackpro.api.property.add_asset', payload);
+        closeModal(mdlAsset);
+
+        const list = document.getElementById('assets_list');
+        list.querySelector('.empty-assets')?.remove();
+        const row = document.createElement('div');
+        row.className = 'p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 asset-row';
+        row.setAttribute('data-asset-id', res.asset.name);
+        row.innerHTML = `<div>
+          <div class="font-medium">${res.asset.label || ''}</div>
+          <div class="text-xs text-gray-500">${res.asset.type || ''}${res.asset.identifier ? ' • ' + res.asset.identifier : ''}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-1 rounded bg-gray-100">${res.asset.status || ''}</span>
+          <button class="ml-2 text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50 asset-edit-btn" data-asset-id="${res.asset.name}">View / Edit</button>
+        </div>`;
+        list.prepend(row);
+
+        showToast('Asset added', 'success');
+      }catch(e){ showToast('Failed to add asset', 'error'); }
+    });
+
+    // ---------- View/Edit Asset ----------
+    const mdlAssetView = bindModal('modalAssetView'); // open programmatically
+
+    async function fetchAsset(name){
+      const r = await fetch(`/api/method/firtrackpro.api.property.get_asset?name=${encodeURIComponent(name)}`, { method:'GET' });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok || j.exc) throw new Error(j.exc || 'Error');
+      return j.message || j;
+    }
+
+    function openAssetModal(data){
+      const set = (id, v='') => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+      document.getElementById('av_id').value = data.name;
+      set('av_label', data.label);
+      set('av_type', data.type_label || data.type);
+      set('av_make', data.make);
+      set('av_model', data.model);
+      set('av_serial', data.serial);
+      set('av_identifier', data.identifier);
+      set('av_install', data.install_date || '');
+      set('av_status', data.status || 'Active');
+      set('av_standard', data.standard || '');
+      set('av_level', data.location_level);
+      set('av_area', data.location_area);
+      set('av_riser', data.location_riser);
+      set('av_cupboard', data.location_cupboard);
+      set('av_room', data.location_room);
+      set('av_locnotes', data.location_notes);
+      set('av_zone', data.zone_title || '');
+      document.getElementById('av_zone_name').value = data.zone || '';
+      document.getElementById('av_zone_path').textContent = data.zone_path || '';
+      openModal(mdlAssetView);
+    }
+
+    // row click or "View/Edit" click
+    document.getElementById('assets_list')?.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('.asset-edit-btn');
+      const row = e.target.closest('.asset-row');
+      const assetId = (btn?.dataset.assetId) || (row?.dataset.assetId);
+      if (!assetId) return;
+      try {
+        const a = await fetchAsset(assetId);
+        openAssetModal(a);
+      } catch { showToast('Failed to load asset', 'error'); }
+    });
+
+    // zone live search in the view modal
+    (function () {
+      const inp = document.getElementById('av_zone');
+      const hid = document.getElementById('av_zone_name');
+      const list = document.getElementById('av_zone_results');
+      let timer = null, items = [];
+      function render(items) {
+        list.innerHTML = '';
+        if (!items.length) { list.classList.add('hidden'); return; }
+        items.forEach((it) => {
+          const li = document.createElement('li');
+          li.className = 'px-3 py-2 hover:bg-gray-100 cursor-pointer';
+          li.innerHTML = `<div class="font-medium text-sm">${it.title}</div><div class="text-xs text-gray-500">${it.path || ''}</div>`;
+          li.addEventListener('click', () => {
+            inp.value = it.title; hid.value = it.name;
+            document.getElementById('av_zone_path').textContent = it.path || '';
+            list.classList.add('hidden');
+          });
+          list.appendChild(li);
+        });
+        list.classList.remove('hidden');
+      }
+      inp?.addEventListener('input', () => {
+        clearTimeout(timer); hid.value = '';
+        const q = inp.value.trim();
+        if (q.length < 2) { list.classList.add('hidden'); return; }
+        timer = setTimeout(async () => {
+          try {
+            const url = `/api/method/firtrackpro.api.zone.search?property=${encodeURIComponent(propName)}&q=${encodeURIComponent(q)}&limit=10`;
+            const r = await fetch(url, { method:'GET' });
+            const j = await r.json().catch(()=>({}));
+            items = Array.isArray(j) ? j : (j && j.message) || [];
+            render(items);
+          } catch { list.classList.add('hidden'); }
+        }, 200);
+      });
+      document.addEventListener('click', (e) => { if (!list.contains(e.target) && e.target !== inp) list.classList.add('hidden'); });
+    })();
+
+    document.getElementById('av_save')?.addEventListener('click', async ()=>{
+      try{
+        const payload = {
+          name: document.getElementById('av_id').value,
+          asset_label: document.getElementById('av_label').value,
+          asset_type: document.getElementById('av_type').value,
+          asset_status: document.getElementById('av_status').value,
+          make: document.getElementById('av_make').value,
+          model: document.getElementById('av_model').value,
+          serial: document.getElementById('av_serial').value,
+          identifier: document.getElementById('av_identifier').value,
+          install_date: document.getElementById('av_install').value,
+          standard: document.getElementById('av_standard').value,
+          zone_name: document.getElementById('av_zone_name').value,
+          zone_title: document.getElementById('av_zone').value,
+          location_level: document.getElementById('av_level').value,
+          location_area: document.getElementById('av_area').value,
+          location_riser: document.getElementById('av_riser').value,
+          location_cupboard: document.getElementById('av_cupboard').value,
+          location_room: document.getElementById('av_room').value,
+          location_notes: document.getElementById('av_locnotes').value
+        };
+        await post('/api/method/firtrackpro.api.property.update_asset', payload);
+        closeModal(mdlAssetView);
+        showToast('Asset updated', 'success');
+
+        // update the visible row (label/type/identifier/status)
+        const list = document.getElementById('assets_list');
+        const row = list.querySelector(`.asset-row[data-asset-id="${payload.name}"]`);
+        if (row) {
+          row.querySelector('.font-medium').textContent = payload.asset_label || '';
+          const sub = row.querySelector('.text-xs.text-gray-500');
+          if (sub) sub.textContent = `${payload.asset_type || ''}${payload.identifier ? ' • ' + payload.identifier : ''}`;
+          const tag = row.querySelector('span.text-xs');
+          if (tag) tag.textContent = payload.asset_status || '';
+        }
+      }catch(e){ showToast('Failed to save asset', 'error'); }
+    });
+
+    // ---------- Add Job ----------
+    const mdlJob = bindModal('modalJob','btnAddJob');
+    document.getElementById('jb_save')?.addEventListener('click', async ()=>{
+      try{
+        const res = await post('/api/method/firtrackpro.api.property.add_job', {
+          property_name: propName,
+          title: document.getElementById('jb_title').value,
+          when: document.getElementById('jb_when').value,
+          status: document.getElementById('jb_status').value
+        });
+        closeModal(mdlJob);
+        const list = document.getElementById('jobs_list');
+        list.querySelector('.empty-jobs')?.remove();
+        const row = document.createElement('div');
+        row.className = 'p-4 flex items-center justify-between';
+        row.innerHTML = `<div><div class="font-medium">${res.job.name} — ${res.job.title}</div><div class="text-xs text-gray-500">${res.job.when || ''}</div></div><span class="text-xs px-2 py-1 rounded bg-gray-100">${res.job.status || ''}</span>`;
+        list.prepend(row);
+        showToast('Job created', 'success');
+      }catch(e){ showToast('Failed to create job', 'error'); }
+    });
+
+    // ---------- Upload Document ----------
+    const mdlDoc = bindModal('modalDoc','btnAddDoc');
+    async function uploadFileGetUrl(file){
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('is_private', '0');
+
+      const token = await ensureCsrf();
+
+      const r = await fetch('/api/method/upload_file', {
+        method:'POST',
+        credentials: 'same-origin',
+        headers: {
+          ...(token ? { 'X-Frappe-CSRF-Token': token } : {}),
+          'Accept': 'application/json'
+        },
+        body: fd
+      });
+      const j = await r.json().catch(()=>({}));
+      if (!r.ok || j.exc) throw new Error('Upload failed');
+      const msg = j.message || j;
+      const url = (msg && (msg.file_url || (msg[0] && msg[0].file_url))) || (msg && msg.data && msg.data.file_url);
+      if (!url) throw new Error('No file_url from server');
+      return url;
+    }
+    document.getElementById('dc_save')?.addEventListener('click', async ()=>{
+      try{
+        const title = document.getElementById('dc_title').value || 'Document';
+        const file = document.getElementById('dc_file').files[0];
+        if (!file) { showToast('Choose a file', 'error'); return; }
+        const url = await uploadFileGetUrl(file);
+        const res = await post('/api/method/firtrackpro.api.property.add_document', {
+          property_name: propName,
+          title, file_url: url
+        });
+        closeModal(mdlDoc);
+        const list = document.getElementById('docs_list');
+        list.querySelector('.empty-docs')?.remove();
+        const row = document.createElement('div');
+        row.className = 'p-4 flex items-center justify-between';
+        row.innerHTML = `<div class="font-medium"><a href="${res.document.url}" class="underline">${res.document.title}</a></div><div class="text-xs text-gray-500">—</div>`;
+        list.prepend(row);
+        showToast('Document uploaded', 'success');
+      }catch(e){ showToast('Upload failed', 'error'); }
+    });
+
+    // Keep title populated if missing
+    const pt = document.getElementById('propTitle');
+    if (pt && !pt.textContent) { pt.textContent = "{{ page_title }}"; }
+  });
+})();
+</script>
+{% endblock %}

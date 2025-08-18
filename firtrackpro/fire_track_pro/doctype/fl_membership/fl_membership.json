@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 16:17:52.821511",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "membership_organisation",
+  "membership_api_key",
+  "membership_status"
+ ],
+ "fields": [
+  {
+   "fieldname": "membership_organisation",
+   "fieldtype": "Link",
+   "label": "Organisation",
+   "options": "FL Organisation"
+  },
+  {
+   "fieldname": "membership_api_key",
+   "fieldtype": "Password",
+   "label": "API Key"
+  },
+  {
+   "fieldname": "membership_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "active\nrevoked"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 16:19:09.895875",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FL Membership",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

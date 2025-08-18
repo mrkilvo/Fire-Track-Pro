@@ -1,0 +1,69 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 14:54:42.022064",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "asset_lifecycle_asset",
+  "asset_lifecycle_event_type",
+  "asset_lifecycle_event_date",
+  "asset_lifecycle_notes",
+  "asset_lifecycle_attachments"
+ ],
+ "fields": [
+  {
+   "fieldname": "asset_lifecycle_asset",
+   "fieldtype": "Link",
+   "label": "Asset",
+   "options": "FT Asset"
+  },
+  {
+   "fieldname": "asset_lifecycle_event_type",
+   "fieldtype": "Select",
+   "label": "Event Type",
+   "options": "install\ncommission\nrelocate\nrefurbush\nretire"
+  },
+  {
+   "fieldname": "asset_lifecycle_event_date",
+   "fieldtype": "Date",
+   "label": "Event Date"
+  },
+  {
+   "fieldname": "asset_lifecycle_notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "asset_lifecycle_attachments",
+   "fieldtype": "Attach",
+   "label": "Attachments"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 14:56:37.351488",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Asset Lifecycle Event",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

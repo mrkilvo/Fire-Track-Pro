@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 14:48:02.385126",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "esm_property",
+  "esm_items_json",
+  "esm_last_signed_on",
+  "esm_next_due",
+  "esm_attachment"
+ ],
+ "fields": [
+  {
+   "fieldname": "esm_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "esm_items_json",
+   "fieldtype": "Code",
+   "label": "ESM Items (JSON)"
+  },
+  {
+   "fieldname": "esm_last_signed_on",
+   "fieldtype": "Date",
+   "label": "Last Signed On"
+  },
+  {
+   "fieldname": "esm_next_due",
+   "fieldtype": "Date",
+   "label": "Next Due"
+  },
+  {
+   "fieldname": "esm_attachment",
+   "fieldtype": "Attach",
+   "label": "Latest Pack"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 14:49:49.290007",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT ESM Register",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

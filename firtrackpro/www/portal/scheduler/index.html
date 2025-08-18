@@ -1,0 +1,491 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Scheduler{% endblock %}
+
+{% block header %}
+{{ super() }}
+<style>
+  /* ---------- Global rounding that RESPECTS explicit Tailwind rounded-* ---------- */
+  :root { --ftp-radius: .75rem; } /* tweak once to change default */
+
+  /* Apply default radius only if the element DOESN'T already have a rounded-* class */
+  :where(
+    button, .btn, .view-btn, .calendar-today, .calendar-prev, .calendar-next,
+    input[type="text"], input[type="search"], input[type="email"], input[type="number"], textarea,
+    select,
+    .sidebar-link, .submenu-toggle,
+    .external-task, .context-menu, .modal-card
+  ):not([class*="rounded-"]) { border-radius: var(--ftp-radius); }
+
+  /* Keep pills truly pill */
+  .rounded-full, [class*="rounded-full"] { border-radius: 9999px !important; }
+
+  /* FullCalendar bits */
+  .fc .fc-button        { border-radius: var(--ftp-radius); }
+  .fc .fc-event,
+  .fc .fc-v-event,
+  .fc .fc-h-event       { border-radius: var(--ftp-radius); overflow: hidden; }
+  .fc .fc-popover       { border-radius: var(--ftp-radius); }
+
+  /* Context menu */
+  .context-menu {
+    position:absolute; z-index:60; background:#fff; border:1px solid #e5e7eb;
+    border-radius: var(--ftp-radius);
+    box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);
+    min-width:180px;
+  }
+  .context-menu-list{ list-style:none; margin:0; padding:6px; }
+  .context-menu-list li{ padding:8px 10px; font-size:14px; border-radius:.5rem; cursor:pointer; }
+  .context-menu-list li:hover{ background:#f3f4f6; }
+
+  /* Modal */
+  .modal { position:fixed; inset:0; z-index:70; display:none; }
+  .modal.open { display:flex; }
+  .modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.4); }
+  .modal-card {
+    position:relative; margin:auto; width:100%; max-width:720px; background:#fff;
+    border-radius: var(--ftp-radius);
+    box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);
+  }
+
+  /* Ensure timeline scroller shows when content overflows horizontally */
+  #calendar .fc-scroller { overflow: auto !important; }
+
+  /* Ensure the tech chips are pills even without the global rule */
+  #selected_tech_chips button { border-radius:9999px; }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="flex flex-row w-full h-full bg-gray-50" style="min-height:calc(100vh - 56px)">
+
+  <!-- LEFT: Task lane / filters -->
+  <aside class="w-[390px] flex-shrink-0 bg-white border-r flex flex-col h-full max-h-[calc(100vh-60px)]">
+    <div class="px-5 py-4 border-b flex items-center gap-2">
+      <input id="task_search" type="text"
+             class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-3 py-2 w-full text-sm rounded-xl"
+             placeholder="Search tasks...">
+      <button class="bg-gray-100 px-3 py-2 rounded-full text-gray-700 text-sm hover:bg-gray-200">Filter</button>
+      <button class="bg-gray-100 px-3 py-2 rounded-full text-gray-700 text-sm hover:bg-gray-200">★</button>
+    </div>
+
+    <div class="px-5 pt-4 pb-1 flex gap-2 border-b">
+      <select class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-sm w-28 rounded-xl">
+        <option>Status: Ready</option>
+        <option>Status: In Progress</option>
+        <option>Status: Complete</option>
+      </select>
+      <select class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-sm w-20 rounded-xl">
+        <option>Active: Yes</option>
+        <option>Active: No</option>
+      </select>
+    </div>
+
+    <!-- Selected-tech chips + manage button -->
+    <div class="px-5 py-3 border-b space-y-2">
+      <div class="flex items-center justify-between">
+        <div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Technicians</div>
+        <div class="flex items-center gap-2">
+          <select id="group_by" class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-xs rounded-xl">
+            <option value="none">Group: None</option>
+            <option value="team">Group: Team</option>
+            <option value="region">Group: Region</option>
+          </select>
+          <button id="btn_manage_techs" class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Manage</button>
+        </div>
+      </div>
+      <div id="selected_tech_chips" class="flex gap-1 overflow-x-auto"></div>
+    </div>
+
+    <!-- Draggable tasks -->
+    <div class="flex-1 overflow-y-auto p-3 bg-gray-50" id="external-tasks">
+      {% for task in tasks %}
+      <div class="external-task bg-white border rounded-xl shadow-sm mb-3 p-3 hover:shadow-md cursor-move transition-all group"
+           data-title="{{ task.title }}"
+           data-duration="{{ task.duration or '1:00' }}"
+           data-task-id="{{ task.code }}"
+           style="user-select:none">
+        <div class="flex gap-2 items-center mb-1">
+          <span class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{{ task.status }}</span>
+          <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">{{ task.type }}</span>
+          <span class="ml-2 text-xs text-gray-500">{{ task.code }}</span>
+        </div>
+        <div class="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-700">{{ task.title }}</div>
+        <div class="text-xs text-gray-600 mt-0.5 truncate">{{ task.site }}</div>
+        <div class="text-xs text-gray-500 flex gap-2 mt-1">
+          <span><i data-feather="users" class="inline w-4 h-4"></i> {{ task.client }}</span>
+          <span><i data-feather="clock" class="inline w-4 h-4"></i> {{ task.duration }}</span>
+        </div>
+        <div class="mt-1 flex flex-wrap gap-1">
+          <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">NR</span>
+          <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full text-xs">NOTE</span>
+          <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">NORMAL</span>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-gray-400 italic mt-8 text-center">No tasks found.</div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <!-- RIGHT: Calendar -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden">
+    <div class="px-6 py-3 bg-white border-b flex flex-wrap items-center gap-2">
+      <!-- Use rounded-full to make pills -->
+      <button class="view-btn px-4 py-2 rounded-full bg-blue-100 text-blue-800" data-view="timeGridDay">Day</button>
+      <button class="view-btn px-4 py-2 rounded-full bg-blue-600 text-white font-semibold" data-view="timeGridWeek">Week</button>
+      <button class="view-btn px-4 py-2 rounded-full bg-blue-100 text-blue-800" data-view="dayGridMonth">Month</button>
+
+      <span id="tech_views_label" class="ml-3 text-xs text-gray-500">Tech views</span>
+      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimeGridDay">Tech Day</button>
+      <button class="view-btn px-4 py-2 rounded-full bg-purple-600 text-white font-semibold" data-view="resourceTimeGridWeek">Tech Week</button>
+      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimelineDay">Tech Timeline (Day)</button>
+      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimelineWeek">Tech Timeline (Week)</button>
+
+      <button class="calendar-today px-4 py-2 rounded-full bg-gray-100 text-gray-800 ml-3">Today</button>
+      <button class="calendar-prev px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="chevron-left" class="inline w-4 h-4"></i></button>
+      <button class="calendar-next px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="chevron-right" class="inline w-4 h-4"></i></button>
+      <span class="ml-2 font-semibold text-gray-700" id="calendarDateLabel"></span>
+
+      <button class="ml-4 px-4 py-2 rounded-full bg-gray-100 text-gray-800">Send Notifications</button>
+      <button class="px-4 py-2 rounded-full bg-gray-100 text-gray-800">+ Create non-task event</button>
+      <button class="ml-auto px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="maximize-2" class="inline w-4 h-4"></i></button>
+    </div>
+
+    <div class="flex-1 p-4 bg-gray-100 overflow-auto">
+      <div class="bg-white rounded-2xl shadow h-full w-full overflow-hidden">
+        <div id="calendar" style="height: 640px;"></div>
+      </div>
+    </div>
+    <div id="fc-context-menu" class="hidden context-menu"></div>
+  </main>
+</div>
+
+<!-- Manage Techs Modal -->
+<div id="tech_modal" class="modal items-center justify-center">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-lg font-semibold">Manage Technicians</div>
+      <button id="tech_modal_close" class="px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-sm">Close</button>
+    </div>
+    <div class="flex items-center gap-2">
+      <input id="tech_search" type="text"
+             class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 rounded-xl px-3 py-2 w-full text-sm"
+             placeholder="Search by name, team, region...">
+      <button id="tech_select_all"  class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Select all</button>
+      <button id="tech_select_none" class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Select none</button>
+    </div>
+    <div id="tech_modal_list" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto"></div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button id="tech_modal_save" class="px-4 py-2 rounded-full bg-blue-600 text-white text-sm">Apply</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<script>
+(function(){
+  function loadScript(src){
+    return new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src; s.async=true; s.onload=function(){resolve(src)}; s.onerror=function(){reject(src)};
+      document.head.appendChild(s);
+    });
+  }
+  function hasFC(){ return !!(window.FullCalendar && FullCalendar.Calendar); }
+
+  // Try premium Scheduler (local → CDN), else fallback to standard (free)
+  function loadScheduler(){
+    return loadScript("/assets/firtrackpro/js/vendor/fullcalendar-scheduler/index.global.min.js")
+      .catch(function(){ return loadScript("https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.19/index.global.min.js"); });
+  }
+  function loadStandard(){
+    return loadScript("/assets/firtrackpro/js/vendor/fullcalendar/index.global.min.js")
+      .catch(function(){ return loadScript("https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"); });
+  }
+
+  function toast(msg,bg){ if(window.Toastify) Toastify({ text:msg, duration:3000, style:{ background:bg }}).showToast(); }
+
+  function startPage(){
+    if(window.feather) feather.replace();
+
+    const demoResources = {{ (resources or [
+      {"id":"tech1","title":"Alice Johnson — FPA-123","color":"#93c5fd","team":"North","region":"VIC"},
+      {"id":"tech2","title":"Bob Singh — FPA-456","color":"#86efac","team":"South","region":"VIC"},
+      {"id":"tech3","title":"Cara Lee — FPA-789","color":"#fca5a5","team":"East","region":"NSW"},
+      {"id":"tech4","title":"Diego Martinez — FPA-321","color":"#f9a8d4","team":"North","region":"NSW"},
+      {"id":"tech5","title":"Eve Chen — FPA-654","color":"#fdba74","team":"South","region":"VIC"},
+      {"id":"tech6","title":"Finn O'Neil — FPA-987","color":"#c4b5fd","team":"East","region":"QLD"},
+      {"id":"tech7","title":"Gina Rossi — FPA-111","color":"#6ee7b7","team":"West","region":"WA"},
+      {"id":"tech8","title":"Harry King — FPA-222","color":"#93c5fd","team":"West","region":"WA"},
+      {"id":"tech9","title":"Isla Patel — FPA-333","color":"#86efac","team":"North","region":"VIC"},
+      {"id":"tech10","title":"Jack Wong — FPA-444","color":"#fca5a5","team":"South","region":"VIC"}
+    ]) | tojson }};
+    const demoEvents = {{ (events or [
+      {"id":1,"title":"Overheating pump defect","start":"2025-08-04T09:00:00","end":"2025-08-04T11:00:00","resourceId":"tech1"},
+      {"id":2,"title":"Sprinkler PM2025/08","start":"2025-08-05T12:00:00","end":"2025-08-05T16:00:00","resourceId":"tech2"},
+      {"id":3,"title":"Alarm System Test","start":"2025-08-07T10:00:00","end":"2025-08-07T11:00:00","resourceId":"tech3"}
+    ]) | tojson }};
+
+    const contextMenuEl = document.getElementById('fc-context-menu');
+    function hideMenu(){ contextMenuEl.classList.add('hidden'); contextMenuEl.innerHTML=''; }
+    function showMenu(options, ev){
+      hideMenu();
+      const ul=document.createElement('ul'); ul.className='context-menu-list';
+      options.forEach(opt=>{ const li=document.createElement('li'); li.textContent=opt.text; li.onclick=()=>{opt.onClick(); hideMenu();}; ul.appendChild(li); });
+      contextMenuEl.appendChild(ul);
+      contextMenuEl.style.top=ev.pageY+'px'; contextMenuEl.style.left=ev.pageX+'px';
+      contextMenuEl.classList.remove('hidden');
+    }
+
+    if (window.FullCalendar && window.FullCalendar.Draggable) {
+      new FullCalendar.Draggable(document.getElementById('external-tasks'), {
+        itemSelector: '.external-task',
+        eventData: el => ({
+          title: el.getAttribute('data-title'),
+          duration: el.getAttribute('data-duration') || '01:00',
+          extendedProps: { taskId: el.getAttribute('data-task-id') }
+        })
+      });
+    }
+
+    const calendarEl = document.getElementById('calendar');
+
+    const STORAGE_KEY_SEL = 'ftp_sched_selected_techs';
+    const STORAGE_KEY_GRP = 'ftp_sched_group_by';
+
+    const allResources = demoResources.slice();
+    let selectedIds = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_SEL) || '[]'));
+    if (selectedIds.size === 0) { allResources.forEach(r => selectedIds.add(r.id)); }
+    let groupBy = localStorage.getItem(STORAGE_KEY_GRP) || 'none';
+
+    const groupSelect = document.getElementById('group_by');
+    groupSelect.value = groupBy;
+
+    const chipsWrap = document.getElementById('selected_tech_chips');
+
+    function getSelectedResources() { return allResources.filter(r => selectedIds.has(r.id)); }
+
+    function renderChips(){
+      const sel = getSelectedResources();
+      chipsWrap.innerHTML = sel.map(r => `
+        <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-xs"
+                title="${r.title}">
+          <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${r.color || '#9ca3af'}"></span>
+          <span class="truncate max-w-[120px]">${(r.title || '').split('—')[0]}</span>
+        </button>
+      `).join('');
+    }
+
+    function refetchResources(){
+      calendar.refetchResources && calendar.refetchResources();
+      renderChips();
+      localStorage.setItem(STORAGE_KEY_SEL, JSON.stringify(Array.from(selectedIds)));
+      localStorage.setItem(STORAGE_KEY_GRP, groupBy);
+    }
+
+    function resourceSource(_info, success){ success(getSelectedResources()); }
+    function eventSource(_info, success){ success(demoEvents); }
+
+    function ensureDateLabelEl(){
+      let el = document.getElementById('calendarDateLabel');
+      if (!el) {
+        const header = document.querySelector('.px-6.py-3');
+        if (header) {
+          el = document.createElement('span');
+          el.id = 'calendarDateLabel';
+          el.className = 'ml-2 font-semibold text-gray-700';
+          header.appendChild(el);
+        }
+      }
+      return el;
+    }
+    function setDateLabel(s, e){
+      const el = ensureDateLabelEl();
+      if (!el) return;
+      el.textContent =
+        s.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'}) +
+        ' – ' +
+        new Date(e.getTime()-86400000).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+    }
+
+    let calendar;
+    let usingScheduler = true;
+    try {
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+        initialView: 'resourceTimelineWeek',
+        height: '100%',
+        allDaySlot: false,
+        nowIndicator: true,
+        editable: true,
+        droppable: true,
+        selectable: true,
+        resourceAreaHeaderContent: 'Technician',
+        resourceAreaWidth: '260px',
+        resourceGroupField: groupBy === 'none' ? null : groupBy,
+        resources: resourceSource,
+        events: eventSource,
+        eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+        slotEventOverlap: false,
+        slotDuration: '00:30',
+        slotMinWidth: 110,
+        stickyHeaderDates: true,
+
+        eventReceive: function(info){
+          const res = info.event.getResource && info.event.getResource();
+          const who = res ? (' → ' + (res.title || res.id)) : '';
+          toast('Task scheduled: ' + info.event.title + who, '#22c55e');
+        },
+        eventDrop: function(info){
+          const res = info.event.getResource && info.event.getResource();
+          const moved = res ? (' → ' + (res.title || res.id)) : '';
+          toast('Event moved: ' + info.event.title + moved, '#0ea5e9');
+        },
+        eventDidMount: function(info){
+          const res = info.event.getResource && info.event.getResource();
+          if(res && res.extendedProps && res.extendedProps.color){
+            info.el.style.backgroundColor = res.extendedProps.color;
+            info.el.style.borderColor = res.extendedProps.color;
+          }
+          info.el.addEventListener('contextmenu', function(ev){
+            ev.preventDefault();
+            showMenu([
+              { text:'Edit Event', onClick: function(){} },
+              { text:'Reassign…', onClick: function(){
+                  if(!res) return;
+                  const idx = allResources.findIndex(r => r.id === res.id);
+                  const next = allResources[(idx+1)%allResources.length];
+                  info.event.setProp('resourceId', next.id);
+                } },
+              { text:'Delete Event', onClick: function(){ info.event.remove(); } },
+              { text:'View Details', onClick: function(){ alert(info.event.title); } }
+            ], ev);
+          });
+        },
+        dayCellDidMount: function(info){
+          info.el.addEventListener('contextmenu', function(ev){
+            ev.preventDefault();
+            showMenu([
+              { text:'Create Event', onClick: function(){
+                  calendar.addEvent({
+                    title:'New Event',
+                    start: info.date,
+                    end: new Date(info.date.getTime()+60*60*1000),
+                    resourceId: (info.resource && info.resource.id) || null
+                  });
+                }},
+              { text:'Go to Day View', onClick: function(){ calendar.changeView('timeGridDay', info.date); } }
+            ], ev);
+          });
+        },
+        datesSet: function(){
+          const s=this.view.currentStart, e=this.view.currentEnd;
+          setDateLabel(s, e);
+        }
+      });
+      calendar.render();
+      setDateLabel(calendar.view.currentStart, calendar.view.currentEnd);
+    } catch (e) {
+      console.warn('Scheduler not available, falling back to standard:', e);
+      usingScheduler = false;
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        height: '100%',
+        allDaySlot: false,
+        nowIndicator: true,
+        editable: true,
+        droppable: true,
+        selectable: true,
+        events: demoEvents,
+        eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+        datesSet: function(){
+          const s=this.view.currentStart, e=this.view.currentEnd;
+          setDateLabel(s, e);
+        }
+      });
+      calendar.render();
+      setDateLabel(calendar.view.currentStart, calendar.view.currentEnd);
+      document.querySelectorAll('[data-view^="resource"]').forEach(function(btn){ btn.style.display='none'; });
+      var label = document.getElementById('tech_views_label'); if(label) label.style.display='none';
+    }
+
+    renderChips();
+
+    // View buttons styling + switch
+    document.querySelectorAll('.view-btn').forEach(btn=>{
+      btn.onclick=()=>{
+        document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('bg-blue-600','text-white','font-semibold','bg-purple-600'));
+        if(btn.dataset.view.startsWith('resource')) btn.classList.add('bg-purple-600','text-white','font-semibold');
+        else btn.classList.add('bg-blue-600','text-white','font-semibold');
+        try { calendar.changeView(btn.dataset.view); } catch(_) {}
+      };
+    });
+    document.querySelector('.calendar-today').onclick=()=>calendar.today();
+    document.querySelector('.calendar-prev').onclick=()=>calendar.prev();
+    document.querySelector('.calendar-next').onclick=()=>calendar.next();
+
+    // Context menu hide on outside click
+    document.addEventListener('click', (ev)=>{ const m=document.getElementById('fc-context-menu'); if(m && !m.contains(ev.target)) hideMenu(); });
+
+    // ----- Manage Techs Modal -----
+    const techModal = document.getElementById('tech_modal');
+    const modalList = document.getElementById('tech_modal_list');
+    const techSearch = document.getElementById('tech_search');
+    function openModal(){ techModal.classList.add('open'); }
+    function closeModal(){ techModal.classList.remove('open'); }
+    document.getElementById('btn_manage_techs').addEventListener('click', ()=>{ buildModalList(''); openModal(); });
+    document.getElementById('tech_modal_close').addEventListener('click', closeModal);
+
+    function buildModalList(q){
+      const query = (q||'').toLowerCase();
+      const rows = allResources.filter(r=>{
+        const hay = `${r.title} ${r.team||''} ${r.region||''}`.toLowerCase();
+        return hay.includes(query);
+      }).map(r=>`
+        <label class="flex items-center gap-2 border rounded-xl px-3 py-2">
+          <input type="checkbox" class="modal-tech" data-id="${r.id}" ${selectedIds.has(r.id)?'checked':''}>
+          <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${r.color||'#9ca3af'}"></span>
+          <div class="flex-1">
+            <div class="text-sm font-medium">${r.title}</div>
+            <div class="text-[11px] text-gray-500">Team: ${r.team||'-'} · Region: ${r.region||'-'}</div>
+          </div>
+        </label>
+      `).join('');
+      modalList.innerHTML = rows || '<div class="text-sm text-gray-500 p-3">No matches.</div>';
+    }
+    techSearch.addEventListener('input', ()=>buildModalList(techSearch.value));
+    document.getElementById('tech_select_all').addEventListener('click', ()=>{ allResources.forEach(r=>selectedIds.add(r.id)); buildModalList(techSearch.value); });
+    document.getElementById('tech_select_none').addEventListener('click', ()=>{ selectedIds.clear(); buildModalList(techSearch.value); });
+    document.getElementById('tech_modal_save').addEventListener('click', ()=>{
+      Array.from(modalList.querySelectorAll('.modal-tech')).forEach(cb=>{
+        const id = cb.dataset.id;
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+      });
+      refetchResources();
+      closeModal();
+    });
+  }
+
+  async function run(){
+    try {
+      await loadScheduler();
+      if(!hasFC()) throw new Error('Scheduler script failed to register');
+    } catch {
+      await loadStandard();
+    }
+    if(!hasFC()) {
+      console.error('FullCalendar not loaded');
+      toast('Could not load calendar library', '#ef4444');
+      return;
+    }
+    startPage();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "firtrackpro/www/templates/base_template.html" %}
+
+{% block title %}Log in | FireTrack Pro{% endblock %}
+
+{% block page_content %}
+<div class="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-indigo-500 via-pink-200 to-pink-500 dark:from-slate-900 dark:to-indigo-900">
+  <div class="flex flex-col w-full max-w-md mx-4 sm:mx-auto p-6 sm:p-10 rounded-2xl bg-white/90 dark:bg-slate-900 shadow-2xl border border-indigo-200 dark:border-slate-800">
+    <div class="flex flex-col items-center mb-7">
+      <img src="/assets/firtrackpro/images/firetrack-logo.svg" alt="FireTrack Pro" class="w-20 h-20 mb-2 rounded-xl shadow-xl bg-white/90 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700">
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-200 mb-2 mt-2">Sign in to FireTrack Pro</h1>
+      <p class="text-sm text-gray-500 dark:text-gray-400 text-center">The smart platform for fire safety professionals</p>
+    </div>
+    <form id="login-form" method="POST" action="/api/method/login" class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label for="usr" class="block text-gray-700 dark:text-gray-300 font-semibold mb-1">Email</label>
+        <input class="w-full px-4 py-3 rounded-xl border border-indigo-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-indigo-500 text-base" name="usr" id="usr" type="email" autocomplete="username" required>
+      </div>
+      <div>
+        <label for="pwd" class="block text-gray-700 dark:text-gray-300 font-semibold mb-1">Password</label>
+        <input class="w-full px-4 py-3 rounded-xl border border-indigo-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-pink-400 text-base" name="pwd" id="pwd" type="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="w-full py-3 mt-1 bg-indigo-600 text-white font-bold rounded-xl shadow hover:bg-indigo-700 text-lg transition">Log in</button>
+      <div id="login-error" class="text-red-500 text-center font-semibold mt-1 hidden"></div>
+    </form>
+    <div class="flex justify-between mt-6 text-sm">
+      <a href="/forgot" class="text-indigo-600 hover:underline">Forgot password?</a>
+      <a href="/" class="text-gray-400 hover:underline">← Back to site</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer_scripts %}
+  {{ super() }}
+  <script>
+    document.getElementById('login-form').onsubmit = async function(e) {
+      e.preventDefault();
+      let form = this;
+      let data = new FormData(form);
+      let btn = form.querySelector("button[type=submit]");
+      let errorBox = document.getElementById("login-error");
+      errorBox.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Signing in...";
+      try {
+        let res = await fetch(form.action, {
+          method: "POST",
+          body: data,
+          credentials: "same-origin"
+        });
+        let result = await res.json();
+        if (result.message == "Logged In") {
+          window.location.href = "/portal/";
+        } else {
+          throw new Error(result.message || "Login failed");
+        }
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.classList.remove("hidden");
+      }
+      btn.disabled = false;
+      btn.textContent = "Log in";
+    };
+  </script>
+{% endblock %}

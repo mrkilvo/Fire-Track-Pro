@@ -1,0 +1,287 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Properties{% endblock %}
+
+{% block page_content %}
+<div class="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-4">
+
+  <!-- Header / Actions -->
+  <div class="flex items-center justify-between">
+    <div>
+      <div class="text-2xl font-bold text-gray-900">Properties</div>
+      <div class="text-sm text-gray-500">All sites you manage. Click to view/edit.</div>
+    </div>
+    <button id="btn_new_property" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">+ New Property</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-3 items-center">
+    <input id="search" type="text" placeholder="Search by name, client, address…" class="border rounded px-3 py-2 w-full md:w-72">
+    <select id="filter_status" class="border rounded px-2 py-2 text-sm">
+      <option value="">Status: Any</option>
+      <option value="Active">Active</option>
+      <option value="Inactive">Inactive</option>
+    </select>
+    <select id="filter_region" class="border rounded px-2 py-2 text-sm">
+      <option value="">Region: Any</option>
+      <option>VIC</option><option>NSW</option><option>QLD</option><option>WA</option><option>SA</option><option>ACT</option><option>NT</option><option>TAS</option>
+    </select>
+    <div class="ml-auto text-sm text-gray-500"><span id="count_shown">0</span> shown</div>
+  </div>
+
+  {% set PROPS = properties or [] %}
+
+  <div class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="w-full text-sm table-auto">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left">Property</th>
+          <th class="px-4 py-2 text-left">Client</th>
+          <th class="px-4 py-2 text-left">Address</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Next Service</th>
+          <th class="px-4 py-2 text-left">Open Defects</th>
+        </tr>
+      </thead>
+      <tbody id="props_tbody">
+        {% for p in PROPS %}
+        <tr class="border-t hover:bg-gray-50 cursor-pointer"
+            onclick="window.location='/portal/properties/view?name={{ p.name }}'"
+            data-name="{{ p.name }}" data-status="{{ p.status }}" data-region="{{ p.region }}"
+            data-q="{{ (p.property_name ~ ' ' ~ (p.client_name or '') ~ ' ' ~ (p.address or ''))|lower }}">
+          <td class="px-4 py-2 font-medium text-gray-900">{{ p.property_name }}</td>
+          <td class="px-4 py-2">{{ p.client_name or '' }}</td>
+          <td class="px-4 py-2">{{ p.address or '' }}</td>
+          <td class="px-4 py-2">
+            {% if p.status == 'Active' %}
+              <span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">Active</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded text-xs bg-gray-200 text-gray-700">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2">{{ p.next_service or '—' }}</td>
+          <td class="px-4 py-2">{{ p.open_defects or 0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- New Property Modal -->
+<div id="new_property_modal" class="fixed inset-0 hidden items-center justify-center z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative bg-white rounded-xl shadow p-6 w-full max-w-2xl">
+    <div class="text-lg font-semibold mb-4">Create Property</div>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Property Name</label>
+        <input id="np_name" type="text" class="w-full border rounded px-3 py-2" placeholder="eg. Collins Square Tower 5">
+      </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Client (Customer Name)</label>
+        <input id="np_client" type="text" class="w-full border rounded px-3 py-2" placeholder="Exact Customer name or leave blank">
+      </div>
+
+      <!-- Address + Check -->
+      <div class="space-y-2 md:col-span-2">
+        <label class="text-sm font-medium">Address</label>
+        <div class="flex gap-2">
+          <input id="np_addr_search" type="text" class="w-full border rounded px-3 py-2" placeholder="Type or use Address Check">
+          <button id="np_addr_check" type="button" class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">Address Check</button>
+        </div>
+        <!-- Hidden fields to capture lat/lon and raw result -->
+        <input id="np_addr_lat" type="hidden">
+        <input id="np_addr_lon" type="hidden">
+        <input id="np_addr_json" type="hidden">
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Status</label>
+        <select id="np_status" class="w-full border rounded px-3 py-2">
+          <option>Active</option>
+          <option>Inactive</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="text-sm font-medium">Region</label>
+        <select id="np_region" class="w-full border rounded px-3 py-2">
+          <option>VIC</option><option>NSW</option><option>QLD</option><option>WA</option><option>SA</option><option>ACT</option><option>NT</option><option>TAS</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-2 mt-5">
+      <button id="np_cancel" class="px-3 py-2 rounded border">Cancel</button>
+      <button id="np_save" class="px-3 py-2 rounded bg-blue-600 text-white">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Address Check Modal -->
+<div id="addr_modal" class="fixed inset-0 hidden items-center justify-center z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative bg-white rounded-xl shadow w-full max-w-3xl p-0 overflow-hidden">
+    <div class="px-5 py-4 border-b flex items-center gap-2">
+      <div class="text-lg font-semibold flex-1">Address Check</div>
+      <button id="addr_close_top" class="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">Close</button>
+    </div>
+    <div class="p-5">
+      <div class="flex gap-2">
+        <input id="addr_query" type="text" class="border rounded px-3 py-2 w-full" placeholder="Search address (AU)">
+        <button id="addr_search_btn" class="px-3 py-2 rounded bg-blue-600 text-white">Search</button>
+      </div>
+      <div id="addr_hint" class="text-xs text-gray-500 mt-2">Results are from OpenStreetMap (Nominatim). Select the best match to fill the address.</div>
+      <div id="addr_results" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto"></div>
+    </div>
+    <div class="px-5 py-3 border-t text-right">
+      <button id="addr_close_bottom" class="px-3 py-2 rounded border">Close</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ super() }}
+<script>
+(function(){
+  const CSRF = "{{ csrf_token or '' }}";
+
+  // ===== Filters for list =====
+  const q = document.getElementById('search');
+  const st = document.getElementById('filter_status');
+  const rg = document.getElementById('filter_region');
+  const rows = Array.from(document.querySelectorAll('#props_tbody tr'));
+  const shown = document.getElementById('count_shown');
+
+  function applyFilters(){
+    const term=(q.value||'').toLowerCase(), status=st.value, region=rg.value;
+    let c=0;
+    rows.forEach(tr=>{
+      const okTerm = !term || tr.dataset.q.includes(term);
+      const okStatus = !status || tr.dataset.status === status;
+      const okRegion = !region || tr.dataset.region === region;
+      const show = okTerm && okStatus && okRegion;
+      tr.classList.toggle('hidden', !show); if(show) c++;
+    });
+    shown.textContent = c;
+  }
+  [q,st,rg].forEach(el=>el.addEventListener('input', applyFilters));
+  applyFilters();
+
+  // ===== New property modal =====
+  const modal = document.getElementById('new_property_modal');
+  document.getElementById('btn_new_property').onclick=()=>{ modal.classList.remove('hidden'); modal.classList.add('flex'); };
+  document.getElementById('np_cancel').onclick=()=>{ modal.classList.add('hidden'); modal.classList.remove('flex'); };
+
+  // ===== Address Check modal =====
+  const addrModal = document.getElementById('addr_modal');
+  const addrOpenBtn = document.getElementById('np_addr_check');
+  const addrCloseTop = document.getElementById('addr_close_top');
+  const addrCloseBottom = document.getElementById('addr_close_bottom');
+  const addrQuery = document.getElementById('addr_query');
+  const addrResults = document.getElementById('addr_results');
+  const addrInput = document.getElementById('np_addr_search');
+  const addrLat = document.getElementById('np_addr_lat');
+  const addrLon = document.getElementById('np_addr_lon');
+  const addrJson = document.getElementById('np_addr_json');
+
+  function openAddrModal(){
+    addrResults.innerHTML = '';
+    addrQuery.value = addrInput.value || '';
+    addrModal.classList.remove('hidden'); addrModal.classList.add('flex');
+    setTimeout(()=>addrQuery.focus(), 50);
+  }
+  function closeAddrModal(){
+    addrModal.classList.add('hidden'); addrModal.classList.remove('flex');
+  }
+  addrOpenBtn.addEventListener('click', openAddrModal);
+  addrCloseTop.addEventListener('click', closeAddrModal);
+  addrCloseBottom.addEventListener('click', closeAddrModal);
+  document.addEventListener('click', (ev)=>{
+    if (addrModal.classList.contains('flex')) {
+      const card = addrModal.querySelector('.relative.bg-white');
+      if (card && !card.contains(ev.target) && !addrOpenBtn.contains(ev.target)) closeAddrModal();
+    }
+  });
+
+  async function searchAddr(q){
+    const url=`/api/method/firtrackpro.api.address.search?q=${encodeURIComponent(q)}&limit=8&country=AU`;
+    const r = await fetch(url, { method:"GET" });
+    const j = await r.json().catch(()=>({}));
+    const list = Array.isArray(j) ? j : (j && j.message) || [];
+    return list;
+  }
+
+  function renderResults(list){
+    if (!list.length){
+      addrResults.innerHTML = '<div class="text-sm text-gray-500">No results. Try adding suburb or state.</div>';
+      return;
+    }
+    addrResults.innerHTML = list.map((it, idx)=>{
+      const line2 = [it.suburb, it.state, it.postcode].filter(Boolean).join(' · ');
+      return `
+        <div class="border rounded p-3">
+          <div class="text-sm font-medium">${it.line1 || ''}</div>
+          <div class="text-xs text-gray-500 mt-1">${line2 || ''}</div>
+          <div class="text-[11px] text-gray-500 mt-1">Lat: ${it.lat||''} · Lon: ${it.lng||''}</div>
+          <div class="mt-2 flex justify-end">
+            <button class="use-addr px-3 py-1 rounded bg-blue-600 text-white text-xs" data-idx="${idx}">Use this address</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    Array.from(addrResults.querySelectorAll('.use-addr')).forEach((btn)=>{
+      btn.addEventListener('click', ()=>{
+        const it = list[parseInt(btn.dataset.idx,10)];
+        addrInput.value = [it.line1, [it.suburb, it.state, it.postcode].filter(Boolean).join(' ') , it.country].filter(Boolean).join(', ');
+        addrLat.value = it.lat || '';
+        addrLon.value = it.lng || '';
+        addrJson.value = JSON.stringify(it);
+        closeAddrModal();
+      });
+    });
+  }
+
+  let slowTimer;
+  function doSearch(){
+    const k = addrQuery.value.trim();
+    if (k.length < 3){
+      addrResults.innerHTML = '<div class="text-sm text-gray-500">Enter at least 3 characters…</div>';
+      return;
+    }
+    addrResults.innerHTML = '<div class="text-sm text-gray-500">Searching…</div>';
+    searchAddr(k).then(renderResults).catch(()=>{ addrResults.innerHTML = '<div class="text-sm text-red-600">Error searching address.</div>'; });
+  }
+  document.getElementById('addr_search_btn').addEventListener('click', doSearch);
+  addrQuery.addEventListener('input', ()=>{ clearTimeout(slowTimer); slowTimer=setTimeout(doSearch, 350); });
+
+  // ===== Save (real API) =====
+  document.getElementById('np_save').onclick = async () => {
+    const payload = {
+      property_name: document.getElementById('np_name').value,
+      customer_name: document.getElementById('np_client').value,
+      address_display: document.getElementById('np_addr_search').value,
+      address_json: document.getElementById('np_addr_json').value,
+      lat: document.getElementById('np_addr_lat').value,
+      lng: document.getElementById('np_addr_lon').value
+    };
+    const r = await fetch('/api/method/firtrackpro.api.property.create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Frappe-CSRF-Token': (window.csrf_token || (window.frappe && frappe.csrf_token) || CSRF || '')
+      },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok || (j && j.exc)) {
+      alert('Error creating property');
+      return;
+    }
+    const msg = j.message || j;
+    if (!msg || !msg.name) { alert('Create failed'); return; }
+    window.location = `/portal/properties/view?name=${encodeURIComponent(msg.name)}`;
+  };
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 16:26:54.297606",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "client_quote_property",
+  "client_quote_provider",
+  "client_quote_currency",
+  "client_quote_valid_till",
+  "client_quote_items_json",
+  "client_quote_total",
+  "client_quote_status"
+ ],
+ "fields": [
+  {
+   "fieldname": "client_quote_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FL Property"
+  },
+  {
+   "fieldname": "client_quote_provider",
+   "fieldtype": "Link",
+   "label": "Provider Org",
+   "options": "FL Organisation"
+  },
+  {
+   "fieldname": "client_quote_currency",
+   "fieldtype": "Data",
+   "label": "Currency"
+  },
+  {
+   "fieldname": "client_quote_valid_till",
+   "fieldtype": "Date",
+   "label": "Valid Till"
+  },
+  {
+   "fieldname": "client_quote_items_json",
+   "fieldtype": "Code",
+   "label": "Items (JSON)"
+  },
+  {
+   "fieldname": "client_quote_total",
+   "fieldtype": "Currency",
+   "label": "Total"
+  },
+  {
+   "fieldname": "client_quote_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSend\nAccepted\nDeclined"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 16:29:27.081561",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FL Client Quote",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

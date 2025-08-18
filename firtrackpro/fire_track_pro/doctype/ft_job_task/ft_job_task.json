@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:35:33.915937",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "asset",
+  "test_suite",
+  "status",
+  "required_instrument",
+  "instrument",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "asset",
+   "fieldtype": "Link",
+   "label": "Asset",
+   "options": "FT Asset"
+  },
+  {
+   "fieldname": "test_suite",
+   "fieldtype": "Link",
+   "label": "Test Suite",
+   "options": "FT Test Suite"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "pending\npass\nfail\npartial\nna"
+  },
+  {
+   "default": "none",
+   "fieldname": "required_instrument",
+   "fieldtype": "Select",
+   "label": "Required Instrument",
+   "options": "none\nflow_meter\ndp_transmitter\nulltrasonic\npitot"
+  },
+  {
+   "fieldname": "instrument",
+   "fieldtype": "Link",
+   "label": "Instrument",
+   "options": "FT Instrument"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:44:31.218290",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job Task",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

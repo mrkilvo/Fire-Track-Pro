@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 17:14:46.440880",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "iq_from_org",
+  "iq_to_org",
+  "iq_property",
+  "iq_currency",
+  "iq_items_json",
+  "iq_total",
+  "iq_status"
+ ],
+ "fields": [
+  {
+   "fieldname": "iq_from_org",
+   "fieldtype": "Link",
+   "label": "From Organisation",
+   "options": "FL Organisation"
+  },
+  {
+   "fieldname": "iq_to_org",
+   "fieldtype": "Link",
+   "label": "To Organisation",
+   "options": "FL Organisation"
+  },
+  {
+   "fieldname": "iq_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FL Property"
+  },
+  {
+   "fieldname": "iq_currency",
+   "fieldtype": "Data",
+   "label": "Currency"
+  },
+  {
+   "fieldname": "iq_items_json",
+   "fieldtype": "Code",
+   "label": "Items (JSON)"
+  },
+  {
+   "fieldname": "iq_total",
+   "fieldtype": "Currency",
+   "label": "Total"
+  },
+  {
+   "fieldname": "iq_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSent\nAccepted\nDeclined"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 17:18:01.599436",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Interchange Quote",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 14:36:33.158640",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "asset_property",
+  "asset_type_code",
+  "asset_label",
+  "asset_serial",
+  "asset_identifier",
+  "asset_status"
+ ],
+ "fields": [
+  {
+   "fieldname": "asset_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FL Property"
+  },
+  {
+   "fieldname": "asset_type_code",
+   "fieldtype": "Data",
+   "label": "Asset Type Code"
+  },
+  {
+   "fieldname": "asset_label",
+   "fieldtype": "Data",
+   "label": "Label"
+  },
+  {
+   "fieldname": "asset_serial",
+   "fieldtype": "Data",
+   "label": "Serial"
+  },
+  {
+   "fieldname": "asset_identifier",
+   "fieldtype": "Data",
+   "label": "Identifier"
+  },
+  {
+   "fieldname": "asset_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "active\ninactive\nretired"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 16:23:24.005283",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FL Asset",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

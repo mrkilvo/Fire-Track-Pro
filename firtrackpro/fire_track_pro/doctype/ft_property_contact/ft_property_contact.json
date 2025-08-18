@@ -1,0 +1,59 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 18:52:00.970938",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "propert_contact_contact",
+  "propert_contact_role",
+  "property_contact_is_primary",
+  "property_contact_phone",
+  "property_contact_email"
+ ],
+ "fields": [
+  {
+   "fieldname": "propert_contact_contact",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "propert_contact_role",
+   "fieldtype": "Select",
+   "label": "Role",
+   "options": "Building Manager\nSecurity\nAfter Hours\nReception\nTenant Rep\nOther"
+  },
+  {
+   "default": "0",
+   "fieldname": "property_contact_is_primary",
+   "fieldtype": "Check",
+   "label": "Primary"
+  },
+  {
+   "fieldname": "property_contact_phone",
+   "fieldtype": "Data",
+   "label": "Phone Override"
+  },
+  {
+   "fieldname": "property_contact_email",
+   "fieldtype": "Data",
+   "label": "Email Override"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-11 19:17:21.446873",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Property Contact",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

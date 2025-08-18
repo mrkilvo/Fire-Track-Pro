@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:34:01.985376",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "defect_template_code",
+  "defect_template_title",
+  "defect_template_system",
+  "defect_template_asset_type",
+  "defect_template_clause",
+  "defect_template_default_severity",
+  "defect_template_recommended_action",
+  "defect_template_default_quote_lines"
+ ],
+ "fields": [
+  {
+   "fieldname": "defect_template_code",
+   "fieldtype": "Data",
+   "label": "Code"
+  },
+  {
+   "fieldname": "defect_template_title",
+   "fieldtype": "Data",
+   "label": "Title"
+  },
+  {
+   "fieldname": "defect_template_system",
+   "fieldtype": "Select",
+   "label": "System"
+  },
+  {
+   "fieldname": "defect_template_asset_type",
+   "fieldtype": "Link",
+   "label": "Asset Type",
+   "options": "FT Asset Type"
+  },
+  {
+   "fieldname": "defect_template_clause",
+   "fieldtype": "Data",
+   "label": "AS1851 Clause/Table"
+  },
+  {
+   "fieldname": "defect_template_default_severity",
+   "fieldtype": "Select",
+   "label": "Default Severity",
+   "options": "Low\nMedium\nHigh\nCritical"
+  },
+  {
+   "fieldname": "defect_template_recommended_action",
+   "fieldtype": "Small Text",
+   "label": "Recommended Action"
+  },
+  {
+   "fieldname": "defect_template_default_quote_lines",
+   "fieldtype": "Code",
+   "label": "Default Quote Lines (JSON)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 19:37:29.315382",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Defect Template",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

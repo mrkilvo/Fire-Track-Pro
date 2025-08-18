@@ -1,0 +1,2 @@
+graft firtrackpro
+global-exclude *.pyc __pycache__ .DS_Store

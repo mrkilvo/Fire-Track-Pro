@@ -1,0 +1,115 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 21:02:10.679598",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "defect_job",
+  "defect_property",
+  "defect_asset",
+  "defect_template",
+  "defect_severity",
+  "defect_description",
+  "defect_photo",
+  "defect_status",
+  "defect_quotation",
+  "defect_repair_job",
+  "defect_firelink_uid",
+  "defect_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "defect_job",
+   "fieldtype": "Data",
+   "label": "Job"
+  },
+  {
+   "fieldname": "defect_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "defect_asset",
+   "fieldtype": "Link",
+   "label": "Asset",
+   "options": "FT Asset"
+  },
+  {
+   "fieldname": "defect_template",
+   "fieldtype": "Link",
+   "label": "Defect Template",
+   "options": "FT Defect Template"
+  },
+  {
+   "fieldname": "defect_severity",
+   "fieldtype": "Select",
+   "label": "Severity",
+   "options": "Low\nMedium\nHigh\nCritical"
+  },
+  {
+   "fieldname": "defect_description",
+   "fieldtype": "Small Text",
+   "label": "Defect Description"
+  },
+  {
+   "fieldname": "defect_photo",
+   "fieldtype": "Attach Image",
+   "label": "Photo"
+  },
+  {
+   "fieldname": "defect_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nQuoted\nApproved\nIn Progress\nCompleted\nClosed\nDeferred"
+  },
+  {
+   "fieldname": "defect_quotation",
+   "fieldtype": "Link",
+   "label": "Quotation",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "defect_repair_job",
+   "fieldtype": "Data",
+   "label": "Repair Job"
+  },
+  {
+   "fieldname": "defect_firelink_uid",
+   "fieldtype": "Data",
+   "label": "Firelink UID"
+  },
+  {
+   "fieldname": "defect_notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 21:17:44.095753",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Defect",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

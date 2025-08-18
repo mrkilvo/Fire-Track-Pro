@@ -1,0 +1,200 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:58:23.389995",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "scheduled_end_column",
+  "job_title",
+  "job_status",
+  "job_contract",
+  "job_property",
+  "job_customer",
+  "job_instance",
+  "job_required_date",
+  "job_scheduled_start",
+  "job_scheduled_end",
+  "job_lead_user",
+  "job_crew",
+  "job_requires_subcontractor",
+  "job_subcontract",
+  "job_tasks",
+  "job_results",
+  "job_defects_created",
+  "job_part_usage",
+  "job_report_pdf",
+  "job_office_reviewed",
+  "job_sales_invoice",
+  "job_quote",
+  "job_firelink_uid",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "job_title",
+   "fieldtype": "Data",
+   "label": "Title"
+  },
+  {
+   "fieldname": "job_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nPlanned\nScheduled\nIn Progress\nComplete\nOffice Review\nInvoiced\nClosed"
+  },
+  {
+   "fieldname": "job_contract",
+   "fieldtype": "Link",
+   "label": "Contract",
+   "options": "FT Contract"
+  },
+  {
+   "fieldname": "job_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "job_customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "job_instance",
+   "fieldtype": "Link",
+   "label": "Instance",
+   "options": "FT Frequency"
+  },
+  {
+   "fieldname": "scheduled_end_column",
+   "fieldtype": "Column Break",
+   "label": "Scheduled End"
+  },
+  {
+   "fieldname": "job_scheduled_start",
+   "fieldtype": "Datetime",
+   "label": "Scheduled Start"
+  },
+  {
+   "fieldname": "job_scheduled_end",
+   "fieldtype": "Datetime",
+   "label": "Scheduled End"
+  },
+  {
+   "fieldname": "job_required_date",
+   "fieldtype": "Date",
+   "label": "Required Date"
+  },
+  {
+   "fieldname": "job_lead_user",
+   "fieldtype": "Link",
+   "label": "Lead User",
+   "options": "User"
+  },
+  {
+   "fieldname": "job_crew",
+   "fieldtype": "Table",
+   "label": "Crew",
+   "options": "FT Job Crew"
+  },
+  {
+   "default": "0",
+   "fieldname": "job_requires_subcontractor",
+   "fieldtype": "Check",
+   "label": "Requires Subcontractor"
+  },
+  {
+   "fieldname": "job_subcontract",
+   "fieldtype": "Table",
+   "label": "Subcontract",
+   "options": "FT Job Subcontract"
+  },
+  {
+   "fieldname": "job_tasks",
+   "fieldtype": "Table",
+   "label": "Tasks",
+   "options": "FT Job Task"
+  },
+  {
+   "fieldname": "job_results",
+   "fieldtype": "Table",
+   "label": "Results",
+   "options": "FT Job Result"
+  },
+  {
+   "fieldname": "job_defects_created",
+   "fieldtype": "Table",
+   "label": "Defects Created",
+   "options": "FT Defect Link"
+  },
+  {
+   "fieldname": "job_part_usage",
+   "fieldtype": "Table",
+   "label": "Parts Used",
+   "options": "FT Part Usage"
+  },
+  {
+   "fieldname": "job_report_pdf",
+   "fieldtype": "Attach",
+   "label": "Report PDF"
+  },
+  {
+   "default": "0",
+   "fieldname": "job_office_reviewed",
+   "fieldtype": "Check",
+   "label": "Office Reviewed"
+  },
+  {
+   "fieldname": "job_sales_invoice",
+   "fieldtype": "Link",
+   "label": "Sales Invoice",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "job_quote",
+   "fieldtype": "Link",
+   "label": "Quotation",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "job_firelink_uid",
+   "fieldtype": "Data",
+   "label": "FireLink UID"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 17:34:10.855586",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "job_title",
+ "translated_doctype": 1
+}

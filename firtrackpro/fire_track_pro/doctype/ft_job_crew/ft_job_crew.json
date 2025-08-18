@@ -1,0 +1,47 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 14:57:18.737369",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "job_crew_technician",
+  "job_crew_is_lead",
+  "job_crew_role"
+ ],
+ "fields": [
+  {
+   "fieldname": "job_crew_technician",
+   "fieldtype": "Link",
+   "label": "Technician",
+   "options": "FT Technician"
+  },
+  {
+   "default": "0",
+   "fieldname": "job_crew_is_lead",
+   "fieldtype": "Check",
+   "label": "Lead"
+  },
+  {
+   "fieldname": "job_crew_role",
+   "fieldtype": "Select",
+   "label": "Role",
+   "options": "sprinkler_fitter\nelectrician\npanel_tech\napprentice\nother"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:37:50.136167",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job Crew",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

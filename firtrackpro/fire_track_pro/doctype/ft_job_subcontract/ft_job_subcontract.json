@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:32:00.636476",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "job_subcontract_supplier",
+  "job_subcontract_po_reference",
+  "job_subcontract_scope",
+  "job_subcontract_cost",
+  "job_subcontract_status",
+  "job_subcontract_files"
+ ],
+ "fields": [
+  {
+   "fieldname": "job_subcontract_supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "job_subcontract_po_reference",
+   "fieldtype": "Data",
+   "label": "PO Reference"
+  },
+  {
+   "fieldname": "job_subcontract_scope",
+   "fieldtype": "Small Text",
+   "label": "Scope"
+  },
+  {
+   "fieldname": "job_subcontract_cost",
+   "fieldtype": "Currency",
+   "label": "Cost"
+  },
+  {
+   "fieldname": "job_subcontract_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "planned\nOrdered\nIn Progress\nComplete\nCancelled"
+  },
+  {
+   "fieldname": "job_subcontract_files",
+   "fieldtype": "Attach",
+   "label": "Files"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:34:12.842870",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job Subcontract",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

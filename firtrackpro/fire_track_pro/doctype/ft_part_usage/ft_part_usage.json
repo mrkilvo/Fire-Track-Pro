@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:52:24.646621",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "part_usage_item",
+  "part_usage_description",
+  "part_usage_qty",
+  "part_usage_rate",
+  "part_usage_serial_lot",
+  "part_usage_warranty_months"
+ ],
+ "fields": [
+  {
+   "fieldname": "part_usage_item",
+   "fieldtype": "Link",
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "part_usage_description",
+   "fieldtype": "Data",
+   "label": "Description"
+  },
+  {
+   "fieldname": "part_usage_qty",
+   "fieldtype": "Float",
+   "label": "Qty"
+  },
+  {
+   "fieldname": "part_usage_rate",
+   "fieldtype": "Currency",
+   "label": "Rate"
+  },
+  {
+   "fieldname": "part_usage_serial_lot",
+   "fieldtype": "Data",
+   "label": "Serial/Lot"
+  },
+  {
+   "fieldname": "part_usage_warranty_months",
+   "fieldtype": "Int",
+   "label": "Warranty (months)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:54:34.465702",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Part Usage",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,54 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:54:10.394972",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "contract_service_scope_system",
+  "contract_service_scope__asset_type",
+  "contract_service_scope_frequency",
+  "contract_service_scope_suite"
+ ],
+ "fields": [
+  {
+   "fieldname": "contract_service_scope_system",
+   "fieldtype": "Select",
+   "label": "System",
+   "options": "Wet\nDry\nPumps\nPanels\nSprinklers\nHydrants\nEmergency Lighting\nHose Reels\nEgress\nOther"
+  },
+  {
+   "fieldname": "contract_service_scope__asset_type",
+   "fieldtype": "Link",
+   "label": "Asset Type",
+   "options": "FT Asset Type"
+  },
+  {
+   "fieldname": "contract_service_scope_frequency",
+   "fieldtype": "Link",
+   "label": "Frequency",
+   "options": "FT Frequency"
+  },
+  {
+   "fieldname": "contract_service_scope_suite",
+   "fieldtype": "Link",
+   "label": "Test Suite",
+   "options": "FT Test Suite"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-11 20:07:15.783758",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Contract Service Scope",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

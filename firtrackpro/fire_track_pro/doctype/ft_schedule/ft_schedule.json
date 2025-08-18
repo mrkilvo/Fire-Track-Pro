@@ -1,0 +1,95 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 21:18:20.872133",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "schedule_job",
+  "schedule_property",
+  "schedule_required_date",
+  "schedule_scheduled_start",
+  "schedule_required_end",
+  "schedule_technician",
+  "schedule_bucket",
+  "schedule_ready",
+  "schedule_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "schedule_job",
+   "fieldtype": "Data",
+   "label": "Job"
+  },
+  {
+   "fieldname": "schedule_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "schedule_required_date",
+   "fieldtype": "Date",
+   "label": "Required Date"
+  },
+  {
+   "fieldname": "schedule_required_end",
+   "fieldtype": "Datetime",
+   "label": "Scheduled End"
+  },
+  {
+   "fieldname": "schedule_technician",
+   "fieldtype": "Link",
+   "label": "Technician (Lead)",
+   "options": "User"
+  },
+  {
+   "fieldname": "schedule_bucket",
+   "fieldtype": "Select",
+   "label": "Bucket/Lane",
+   "options": "Unassigned\nUrgent\nThis Week\nNext Week\nHold"
+  },
+  {
+   "default": "0",
+   "fieldname": "schedule_ready",
+   "fieldtype": "Check",
+   "label": "Ready"
+  },
+  {
+   "fieldname": "schedule_notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "schedule_scheduled_start",
+   "fieldtype": "Datetime",
+   "label": "Scheduled Start"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 21:22:36.595460",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Schedule",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

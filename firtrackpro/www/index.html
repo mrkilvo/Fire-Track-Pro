@@ -1,0 +1,186 @@
+{% extends "firtrackpro/www/templates/base_template.html" %}
+{% block navbar %}{% endblock %}
+{% block title %}FireTrack Pro — The Only Fire Compliance Platform You'll Ever Need{% endblock %}
+
+{% block page_content %}
+<div class="w-full min-h-screen bg-[#ffffff] flex flex-col">
+
+  <!-- HERO -->
+  <section class="flex flex-col items-center justify-center text-center px-4 py-20 sm:py-28 flex-1">
+    <div class="w-full max-w-4xl mx-auto">
+      <img src="/assets/firtrackpro/images/firetrack-logo.png" alt="FireTrack Pro Logo"
+           class="mx-auto mb-6 w-36 sm:w-48 md:w-56 lg:w-64 xl:w-72 2xl:w-80 h-auto object-contain" />
+      <h1 class="text-5xl sm:text-6xl font-extrabold mb-4 text-[#222B31] tracking-tight leading-tight">FireTrack Pro</h1>
+      <h2 class="text-2xl sm:text-3xl font-semibold text-[#D32F2F] mb-4 leading-snug">
+        Everything Fire Compliance, Zero Compromises.<br>
+        <span class="text-[#222B31]">Total Asset & Workflow Management — On Autopilot.</span>
+      </h2>
+      <p class="text-lg sm:text-xl text-[#7A868C] mx-auto mb-8 max-w-2xl">
+        The only fire SaaS with <b class="text-[#D32F2F]">FireLink™ network</b>, free Building Manager & End User access,<br>
+        unlimited pro features, and built-in world-leading ERP tech.<br>
+        <span class="font-bold text-[#D32F2F]">FireTrack Pro: serious compliance, serious results.</span>
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto justify-center mb-2">
+        <a href="/demo"
+           class="px-10 py-4 bg-[#D32F2F] text-white font-bold rounded-xl shadow-lg hover:bg-[#a1241a] hover:scale-105 transition-all duration-200 text-xl text-center">
+          Request a Demo
+        </a>
+        <a href="#features"
+           class="px-10 py-4 bg-white font-bold rounded-xl shadow border border-[#7A868C] text-[#222B31] hover:bg-[#f3f4f6] hover:scale-105 transition-all duration-200 text-xl text-center">
+          Explore Features
+        </a>
+      </div>
+      <span class="inline-block mt-4 px-3 py-1 bg-[#FFECEA] text-[#D32F2F] rounded-full font-semibold uppercase tracking-wide text-xs shadow">
+        FireLink™ Building Manager & End User Portal — Always Free
+      </span>
+      <div class="mt-8 text-sm text-[#7A868C] uppercase tracking-wide">
+        Built on Frappe Framework & ERPNext — Trusted Worldwide
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK PUNCH -->
+  <section class="w-full py-6 px-4 sm:px-10 flex flex-col items-center bg-[#FAFAFA]">
+    <div class="flex flex-col md:flex-row justify-center items-center gap-6 max-w-4xl">
+      <div class="flex flex-col items-center text-center">
+        <div class="text-4xl mb-2">🚀</div>
+        <span class="font-semibold text-lg sm:text-xl text-[#222B31]">Onboard your team in minutes—no technical learning curve.</span>
+      </div>
+      <div class="hidden md:block w-px h-12 bg-gradient-to-b from-[#D32F2F]/10 to-[#7A868C]/10"></div>
+      <div class="flex flex-col items-center text-center">
+        <div class="text-4xl mb-2">🛡️</div>
+        <span class="font-semibold text-lg sm:text-xl text-[#222B31]">Enterprise-grade, fully managed, always up to date.</span>
+      </div>
+      <div class="hidden md:block w-px h-12 bg-gradient-to-b from-[#D32F2F]/10 to-[#7A868C]/10"></div>
+      <div class="flex flex-col items-center text-center">
+        <div class="text-4xl mb-2">💡</div>
+        <span class="font-semibold text-lg sm:text-xl text-[#222B31]">Backed by full ERP system—grow as big as you want.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE GRID -->
+  <section id="features" class="w-full py-16 sm:py-24 px-2 sm:px-6 bg-white">
+    <h2 class="text-3xl sm:text-4xl font-extrabold text-center mb-14 text-[#222B31] tracking-tight">
+      World-Class Features. No Per-User Fees. No Limits.
+    </h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
+      {% set features = [
+        {"icon":"link","title":"FireLink™ Network (with Free Building Manager & End User Portal)","desc":"Connect instantly with any building manager, client, or contractor using FireTrack Pro. Manager/End User portal is always free.","color":"text-[#D32F2F]","highlight":true},
+        {"icon":"home","title":"Bookings & Issue Reporting","desc":"Building managers get a dedicated portal for bookings, job tracking, and raising issues—free, unlimited sites.","color":"text-[#222B31]"},
+        {"icon":"users","title":"Unlimited Users & Roles","desc":"Onboard every tech, admin, contractor, and client. Granular permissions, no seat licenses.","color":"text-[#7A868C]"},
+        {"icon":"smartphone","title":"Mobile Apps & Field Tools","desc":"Log jobs, photos, signatures, and compliance from the field. iOS and Android supported.","color":"text-[#D32F2F]"},
+        {"icon":"activity","title":"Live Scheduling & Work Orders","desc":"Drag-and-drop work allocation, real-time updates, live job boards. Total visibility.","color":"text-[#222B31]"},
+        {"icon":"check-circle","title":"Instant Compliance & Audit Trails","desc":"Auto-generate checklists, reminders, reports, and compliance docs. One click. Always ready.","color":"text-[#D32F2F]"},
+        {"icon":"cpu","title":"Integrations for Everything","desc":"Connect to Xero, MYOB, Outlook, Google, maps, SMS, custom APIs. Never re-enter data.","color":"text-[#222B31]"},
+        {"icon":"bar-chart-2","title":"Live Dashboards & Reporting","desc":"Track compliance, assets, revenue, and performance. Exportable, beautiful, up to the minute.","color":"text-[#D32F2F]"},
+        {"icon":"feather","title":"Streamlined, Intuitive UX","desc":"No more 10-click tasks. Fewer screens, less admin, instant results. Built for doers.","color":"text-[#7A868C]"},
+        {"icon":"server","title":"Built-In ERP Power","desc":"Full inventory, quoting, invoicing, CRM, and document management. Scale with confidence.","color":"text-[#222B31]"}
+      ] %}
+      {% for f in features %}
+        <div class="bg-white rounded-2xl p-7 sm:p-9 shadow-lg flex flex-col items-start h-full transition hover:shadow-2xl hover:-translate-y-1 duration-200 border {{ 'border-2 border-dashed border-[#D32F2F]' if f.highlight }}">
+          <div class="flex items-center mb-3">
+            <i data-feather="{{ f.icon }}" class="w-8 h-8 {{ f.color }} mr-3"></i>
+            <span class="text-xl sm:text-2xl font-bold {{ 'text-[#D32F2F]' if f.highlight else 'text-[#222B31]' }}">
+              {{ f.title }}
+              {% if f.highlight %}
+                <span class="ml-1 text-xs bg-[#FFECEA] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide text-[#D32F2F]">FREE PORTAL</span>
+              {% endif %}
+            </span>
+          </div>
+          <p class="text-[#7A868C] text-base">{{ f.desc }}</p>
+          {% if f.highlight %}
+            <p class="text-[#D32F2F] font-bold mt-2">Manager & End User access always free. Contractor/Admin access: enterprise grade.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- FIRELINK -->
+  <section class="w-full py-14 sm:py-20 px-4 sm:px-10 flex flex-col items-center bg-[#FFECEA] border-t-2 border-[#FFD1D1]">
+    <div class="max-w-3xl text-center">
+      <div class="flex flex-col items-center mb-4">
+        <i data-feather="link" class="w-14 h-14 text-[#D32F2F] mb-3"></i>
+        <span class="uppercase text-xs font-bold text-[#D32F2F] tracking-widest mb-2">FireLink™</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold mb-2 text-[#D32F2F]">FireLink™ Network</h2>
+      </div>
+      <p class="text-lg sm:text-xl text-[#222B31] mb-6"><b>Connect your entire fire safety network.</b> FireLink™ links FireTrack Pro users—contractors, clients, and building managers—for true two-way sync.</p>
+      <ul class="text-left text-base sm:text-lg text-[#222B31] mb-7 mx-auto max-w-lg list-disc list-inside">
+        <li><b>Manager & End User Portal: Always Free.</b></li>
+        <li>Book jobs, track requests, report issues—right from the web or app</li>
+        <li>Real-time status, documentation, and notifications for everyone</li>
+        <li>Full control over who sees what—your data, your permissions</li>
+        <li>Contractor/Admin: unlock full features, role-based workflows, and advanced reporting</li>
+      </ul>
+      <div class="text-[#D32F2F] text-lg font-semibold mb-8">Seamless collaboration for your entire ecosystem—no extra cost for your managers or clients.</div>
+      <a href="/portal/login" class="inline-block mt-2 px-10 py-4 bg-[#D32F2F] text-white font-bold rounded-xl shadow-lg hover:bg-[#a1241a] hover:scale-105 transition-all duration-200 text-lg">See FireLink™ & Manager Portal</a>
+    </div>
+  </section>
+
+  <!-- LOGOS -->
+  <section class="w-full py-8 sm:py-12 px-2 sm:px-6 flex flex-col items-center bg-[#FAFAFA]">
+    <h3 class="text-xl sm:text-2xl font-bold mb-6 text-[#222B31]">Trusted Security & Technology Partners</h3>
+    <div class="flex gap-5 flex-wrap justify-center items-center mt-6">
+      <a href="https://www.ssl.com/faqs/what-is-128-bit-ssl-encryption/" target="_blank" rel="noopener" title="128-bit SSL Encryption">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Lock-green.svg/64px-Lock-green.svg.png" alt="128 Bit Encryption" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+      <a href="https://letsencrypt.org/" target="_blank" rel="noopener" title="Let's Encrypt">
+        <img src="https://letsencrypt.org/images/letsencrypt-logo-horizontal.svg" alt="Let's Encrypt Logo" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+      <a href="https://frappeframework.com/" target="_blank" rel="noopener" title="Frappe Framework">
+        <img src="https://frappeframework.com/files/frappe-framework-logo.svg" alt="Frappe Framework Logo" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+      <a href="https://erpnext.com/" target="_blank" rel="noopener" title="ERPNext">
+        <img src="https://erpnext.com/files/erpnext-logo.svg" alt="ERPNext Logo" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+      <a href="https://www.visa.com.au/" target="_blank" rel="noopener" title="Visa">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png" alt="Visa Logo" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+      <a href="https://www.mastercard.com.au/" target="_blank" rel="noopener" title="Mastercard">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/0/0e/Mastercard-logo.png" alt="Mastercard Logo" class="h-8 opacity-90 hover:opacity-100 transition" />
+      </a>
+    </div>
+  </section>
+
+  <!-- DIFFERENTIATORS -->
+  <section class="w-full py-12 sm:py-16 px-4 sm:px-8 flex flex-col items-center">
+    <h3 class="text-2xl sm:text-3xl font-bold text-center text-[#222B31] mb-8">Why FireTrack Pro?</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+      <div class="bg-white rounded-2xl shadow p-6">
+        <h4 class="font-bold mb-2 text-lg text-[#D32F2F]">No Per-User or Per-Building Charges</h4>
+        <p class="text-[#7A868C]">Onboard your whole team, all your clients, and every contractor. No surprise bills. No limits on growth.</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-6">
+        <h4 class="font-bold mb-2 text-lg text-[#222B31]">FireLink™: Real-Time Networked Jobs</h4>
+        <p class="text-[#7A868C]">Managers and clients work live with your team—one platform, instant updates, permissioned control.</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-6">
+        <h4 class="font-bold mb-2 text-lg text-[#7A868C]">Enterprise-Grade, Always Improving</h4>
+        <p class="text-[#7A868C]">Continuous feature releases and upgrades. Always the latest tech—never legacy bloat.</p>
+      </div>
+      <div class="bg-white rounded-2xl shadow p-6">
+        <h4 class="font-bold mb-2 text-lg text-[#D32F2F]">Future-Proof, Scalable, Integrated</h4>
+        <p class="text-[#7A868C]">Built on Frappe/ERPNext. Full ERP, open integrations, never outgrow your system.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="w-full py-14 px-4 bg-transparent flex flex-col items-center text-center">
+    <h2 class="text-2xl sm:text-3xl font-bold mb-3 text-[#222B31]">Book Your Demo — See Why Contractors Are Switching</h2>
+    <p class="text-base sm:text-lg text-[#7A868C] mb-7 max-w-2xl">FireTrack Pro powers Australia’s most proactive fire companies. See it for yourself—start today.</p>
+    <a href="/demo" class="inline-block px-12 py-4 bg-[#D32F2F] text-white font-bold rounded-xl shadow-lg hover:bg-[#a1241a] text-xl hover:scale-105 transition-all duration-200">Request a Demo</a>
+    <div class="mt-4 text-[#7A868C] text-sm">Already a user? <a href="/portal/login" class="text-[#222B31] underline">Log in here</a></div>
+  </section>
+</div>
+{% endblock %}
+
+{% block script %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.feather) feather.replace();
+    });
+  </script>
+{% endblock %}

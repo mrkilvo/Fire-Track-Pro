@@ -1,0 +1,55 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 17:04:18.168319",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "merge_task_target_type",
+  "merge_task_candidates_json",
+  "merge_task_resolution"
+ ],
+ "fields": [
+  {
+   "fieldname": "merge_task_target_type",
+   "fieldtype": "Data",
+   "label": "Target Type"
+  },
+  {
+   "fieldname": "merge_task_candidates_json",
+   "fieldtype": "Code",
+   "label": "Candidates (JSON)"
+  },
+  {
+   "fieldname": "merge_task_resolution",
+   "fieldtype": "Data",
+   "label": "Resolution"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 17:14:25.002500",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FL Merge Task",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

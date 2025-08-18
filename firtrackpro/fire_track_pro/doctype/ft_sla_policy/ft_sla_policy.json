@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 16:40:25.589031",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sla_policy_name",
+  "sla_policy_contract",
+  "sla_policy_property",
+  "sla_policy_system",
+  "sla_policy_response_mins",
+  "sla_policy_restore_mins",
+  "sla_policy_escelation"
+ ],
+ "fields": [
+  {
+   "fieldname": "sla_policy_name",
+   "fieldtype": "Data",
+   "label": "Policy Name"
+  },
+  {
+   "fieldname": "sla_policy_contract",
+   "fieldtype": "Link",
+   "label": "Contract",
+   "options": "FT Contract"
+  },
+  {
+   "fieldname": "sla_policy_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "sla_policy_system",
+   "fieldtype": "Select",
+   "label": "System",
+   "options": "wet\ndry\npumps\npanels\nsprinklers\nhydrants\nemergency_lighting\nhose_reels\negress\nother"
+  },
+  {
+   "fieldname": "sla_policy_response_mins",
+   "fieldtype": "Int",
+   "label": "Response (mins)"
+  },
+  {
+   "fieldname": "sla_policy_restore_mins",
+   "fieldtype": "Int",
+   "label": "Restore (mins)"
+  },
+  {
+   "fieldname": "sla_policy_escelation",
+   "fieldtype": "Table",
+   "label": "Escalation",
+   "options": "FT SLA Event"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 16:45:24.307035",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT SLA Policy",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

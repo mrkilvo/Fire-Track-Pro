@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 18:37:45.255653",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "property_name",
+  "property_customer",
+  "property_address",
+  "property_lat",
+  "property_lng",
+  "property_as1851_edition",
+  "property_standards",
+  "property_credentials",
+  "property_zone_root",
+  "property_access",
+  "firelink_uid",
+  "property_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "property_name",
+   "fieldtype": "Data",
+   "label": "Display Name"
+  },
+  {
+   "fieldname": "property_customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "property_address",
+   "fieldtype": "Link",
+   "label": "Address",
+   "options": "Address"
+  },
+  {
+   "fieldname": "property_lat",
+   "fieldtype": "Float",
+   "label": "Latitude"
+  },
+  {
+   "fieldname": "property_lng",
+   "fieldtype": "Float",
+   "label": "Longitude"
+  },
+  {
+   "fieldname": "property_as1851_edition",
+   "fieldtype": "Select",
+   "label": "AS1851 Edition",
+   "options": "2005\n2012\n2018\n2021"
+  },
+  {
+   "fieldname": "property_standards",
+   "fieldtype": "Table",
+   "label": "Standards Map",
+   "options": "FT Property Standard"
+  },
+  {
+   "fieldname": "property_zone_root",
+   "fieldtype": "Link",
+   "label": "Zone Root",
+   "options": "FT Property Zone"
+  },
+  {
+   "fieldname": "property_access",
+   "fieldtype": "Link",
+   "label": "Access Details",
+   "options": "FT Property Access"
+  },
+  {
+   "fieldname": "firelink_uid",
+   "fieldtype": "Data",
+   "label": "FireLink UID"
+  },
+  {
+   "fieldname": "property_notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "property_credentials",
+   "fieldtype": "Table",
+   "label": "Property Credentials",
+   "options": "FT Property Credential Requirement"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 17:47:17.717484",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Property",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "property_name",
+ "translated_doctype": 1
+}

@@ -1,0 +1,63 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:07:28.210081",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "technician_clearance_type",
+  "technician_clearance_state",
+  "technician_clearance_reference",
+  "technician_clearance_completed_on",
+  "technician_clearance_expires_on",
+  "technician_clearance_document"
+ ],
+ "fields": [
+  {
+   "fieldname": "technician_clearance_type",
+   "fieldtype": "Select",
+   "label": "Clearance Type",
+   "options": "police check\nwwcc\nother"
+  },
+  {
+   "fieldname": "technician_clearance_state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fieldname": "technician_clearance_reference",
+   "fieldtype": "Data",
+   "label": "Reference"
+  },
+  {
+   "fieldname": "technician_clearance_completed_on",
+   "fieldtype": "Date",
+   "label": "Completed On"
+  },
+  {
+   "fieldname": "technician_clearance_expires_on",
+   "fieldtype": "Date",
+   "label": "Expires On"
+  },
+  {
+   "fieldname": "technician_clearance_document",
+   "fieldtype": "Attach",
+   "label": "Document"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:09:39.995634",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Technician Clearance",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

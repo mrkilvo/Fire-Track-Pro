@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:46:09.299843",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "job_result_asset",
+  "job_result_test_item",
+  "job_result__value",
+  "job_result_pass_fail",
+  "job_result_remarks",
+  "job_result_photo"
+ ],
+ "fields": [
+  {
+   "fieldname": "job_result_asset",
+   "fieldtype": "Link",
+   "label": "Asset",
+   "options": "FT Asset"
+  },
+  {
+   "fieldname": "job_result_test_item",
+   "fieldtype": "Data",
+   "label": "Test item"
+  },
+  {
+   "fieldname": "job_result__value",
+   "fieldtype": "Data",
+   "label": "Reading"
+  },
+  {
+   "fieldname": "job_result_pass_fail",
+   "fieldtype": "Select",
+   "label": "Pass/Fail",
+   "options": "pass\nfail\nna"
+  },
+  {
+   "fieldname": "job_result_remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "job_result_photo",
+   "fieldtype": "Attach Image",
+   "label": "Photo"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:48:09.329703",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Job Result",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

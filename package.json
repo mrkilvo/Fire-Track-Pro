@@ -1,0 +1,14 @@
+{
+  "name": "firtrackpro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fire Support System",
+
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "tailwindcss": "^4.1.11"
+  },
+  "dependencies": {
+    "fullcalendar": "^6.1.19"
+  }
+}

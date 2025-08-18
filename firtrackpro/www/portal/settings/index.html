@@ -1,0 +1,279 @@
+{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% block title %}Settings — {{ SETTINGS.system_name }}{% endblock %}
+
+{% block page_content %}
+<div class="p-6">
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex items-center gap-3">
+      <img src="{{ SETTINGS.logo }}" class="h-10 w-10 rounded" alt="Logo">
+      <div>
+        <h1 class="text-2xl font-bold">Settings</h1>
+        <div class="text-sm text-gray-500">{{ SETTINGS.system_name }}</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow">
+      <div class="border-b flex overflow-x-auto">
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent data-[active=true]:border-black data-[active=true]:text-black text-gray-500" data-tab="company">Company</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent data-[active=true]:border-black data-[active=true]:text-black text-gray-500" data-tab="firelink">FireLink</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent data-[active=true]:border-black data-[active=true]:text-black text-gray-500" data-tab="apis">External APIs</button>
+        <button class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent data-[active=true]:border-black data-[active=true]:text-black text-gray-500" data-tab="colors">Colours</button>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <section class="tab-panel" id="tab-company">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Company Name</label>
+              <input type="text" value="{{ COMPANY.company_name }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">ABN</label>
+              <input type="text" value="{{ COMPANY.abn }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Phone</label>
+              <input type="text" value="{{ COMPANY.phone }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Email</label>
+              <input type="email" value="{{ COMPANY.email }}" class="w-full rounded border px-3 py-2">
+            </div>
+
+            <div class="md:col-span-2 space-y-2 relative">
+              <label class="text-sm font-medium">Address</label>
+              <input type="text" id="addressSearch" value="{{ COMPANY.address }}" placeholder="Start typing an address..." class="w-full rounded border px-3 py-2">
+              <div id="addressResults" class="absolute z-20 top-full left-0 right-0 bg-white border rounded shadow max-h-64 overflow-y-auto hidden"></div>
+              <input type="hidden" id="addressLat" value="{{ COMPANY.lat }}">
+              <input type="hidden" id="addressLon" value="{{ COMPANY.lon }}">
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Logo URL</label>
+              <input type="text" value="{{ COMPANY.logo }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Favicon URL</label>
+              <input type="text" value="{{ COMPANY.favicon }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Currency</label>
+              <input type="text" value="{{ COMPANY.currency }}" class="w-full rounded border px-3 py-2">
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Footer Note</label>
+            <textarea class="w-full rounded border px-3 py-2" rows="3">{{ COMPANY.footer_note }}</textarea>
+          </div>
+
+          <div class="flex items-center justify-between text-sm text-gray-500">
+            <div></div>
+            <button class="px-4 py-2 rounded-lg border">Save</button>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" id="tab-firelink">
+          <div class="grid md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if FIRELINK.enabled %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Enable FireLink</span>
+            </label>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Share Mode</label>
+              <select class="w-full rounded border px-3 py-2">
+                <option value="opt_in" {% if FIRELINK.share_mode=='opt_in' %}selected{% endif %}>Opt-in</option>
+                <option value="opt_out" {% if FIRELINK.share_mode=='opt_out' %}selected{% endif %}>Opt-out</option>
+              </select>
+            </div>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if FIRELINK.allow_site_history_sharing %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Share Site History</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if FIRELINK.allow_asset_register_sharing %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Share Asset Register</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if FIRELINK.allow_defect_sharing %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Share Defects</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if FIRELINK.lock_on_publish %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Lock Records On Publish</span>
+            </label>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Webhook URL</label>
+              <input type="text" value="{{ FIRELINK.webhook_url }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">API Key</label>
+              <input type="text" value="{{ FIRELINK.api_key }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Org Slug</label>
+              <input type="text" value="{{ FIRELINK.org_slug }}" class="w-full rounded border px-3 py-2">
+            </div>
+          </div>
+          <div class="flex items-center justify-end">
+            <button class="px-4 py-2 rounded-lg border">Save</button>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" id="tab-apis">
+          <div class="grid md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if APIS.stripe_enabled %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Enable Stripe</span>
+            </label>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Stripe Publishable Key</label>
+              <input type="text" value="{{ APIS.stripe_public_key }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Stripe Secret Key</label>
+              <input type="password" value="{{ APIS.stripe_secret_key }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Stripe Webhook Secret</label>
+              <input type="password" value="{{ APIS.stripe_webhook_secret }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if APIS.auspost_enabled %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Enable Australia Post</span>
+            </label>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">AusPost API Key</label>
+              <input type="text" value="{{ APIS.auspost_api_key }}" class="w-full rounded border px-3 py-2">
+            </div>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if APIS.openstreetmap_enabled %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Use OpenStreetMap</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" {% if APIS.google_maps_enabled %}checked{% endif %} class="h-4 w-4"><span class="text-sm">Use Google Maps</span>
+            </label>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Google Maps API Key</label>
+              <input type="text" value="{{ APIS.google_maps_key }}" class="w-full rounded border px-3 py-2">
+            </div>
+          </div>
+          <div class="flex items-center justify-end">
+            <button class="px-4 py-2 rounded-lg border">Save</button>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" id="tab-colors">
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Primary</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.primary_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.primary_color }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Accent</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.accent_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.accent_color }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Sidebar BG</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.sidebar_bg }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.sidebar_bg }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Sidebar Text</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.sidebar_text }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.sidebar_text }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Danger</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.danger_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.danger_color }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Warning</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.warning_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.warning_color }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Success</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.success_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.success_color }}"></span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Info</label>
+              <div class="flex gap-2">
+                <input type="text" value="{{ COLORS.info_color }}" class="flex-1 rounded border px-3 py-2">
+                <span class="h-10 w-10 rounded border" style="background: {{ COLORS.info_color }}"></span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center justify-end">
+            <button class="px-4 py-2 rounded-lg border">Save</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    {% include "firtrackpro/www/templates/includes/settings_brand_block.html" %}
+  </div>
+</div>
+
+<script>
+  const tabs = Array.from(document.querySelectorAll('.tab-btn'))
+  const panels = Array.from(document.querySelectorAll('.tab-panel'))
+  function activateTab(key){tabs.forEach(b=>b.dataset.active=(b.dataset.tab===key));panels.forEach(p=>p.classList.toggle('hidden',p.id!=='tab-'+key));localStorage.setItem('ftp_settings_active_tab',key)}
+  const initial = localStorage.getItem('ftp_settings_active_tab')||'company'
+  activateTab(initial)
+  tabs.forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)))
+  if(window.feather){feather.replace()}
+
+  const addrInput=document.getElementById('addressSearch')
+  const addrBox=document.getElementById('addressResults')
+  const addrLat=document.getElementById('addressLat')
+  const addrLon=document.getElementById('addressLon')
+  let addrTimer
+  function hideBox(){addrBox.classList.add('hidden')}
+  function showBox(){addrBox.classList.remove('hidden')}
+  function renderResults(items){
+    addrBox.innerHTML=items.map(it=>{
+      const name=it.display_name||''
+      const lat=it.lat||''
+      const lon=it.lon||''
+      return `<div class="px-3 py-2 hover:bg-gray-100 cursor-pointer" data-name="${name.replace(/"/g,'&quot;')}" data-lat="${lat}" data-lon="${lon}">${name}</div>`
+    }).join('')
+    if(items.length){showBox()}else{hideBox()}
+  }
+  async function searchAddress(q){
+    const url=`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=au&q=${encodeURIComponent(q)}&email=${encodeURIComponent('{{ SETTINGS.support_email }}')}`
+    const res=await fetch(url)
+    if(!res.ok){renderResults([]);return}
+    const data=await res.json()
+    renderResults(data)
+  }
+  addrInput.addEventListener('input',e=>{
+    clearTimeout(addrTimer)
+    const q=e.target.value.trim()
+    if(q.length<3){hideBox();return}
+    addrTimer=setTimeout(()=>searchAddress(q),400)
+  })
+  addrBox.addEventListener('click',e=>{
+    const el=e.target.closest('[data-name]')
+    if(!el)return
+    addrInput.value=el.dataset.name||''
+    addrLat.value=el.dataset.lat||''
+    addrLon.value=el.dataset.lon||''
+    hideBox()
+  })
+  document.addEventListener('click',e=>{
+    if(!addrBox.contains(e.target)&&e.target!==addrInput){hideBox()}
+  })
+  addrInput.addEventListener('focus',()=>{if(addrBox.innerHTML.trim().length)showBox()})
+</script>
+{% endblock %}

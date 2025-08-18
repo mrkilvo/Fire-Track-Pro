@@ -1,0 +1,56 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-12 15:41:06.591532",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "instrument_calibration_cert_c",
+  "instrument_calibration_date",
+  "instrument_calibration_expires_on",
+  "instrument_calibration_cert",
+  "instrument_calibration_notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "instrument_calibration_cert_c",
+   "fieldtype": "Data",
+   "label": "Certificate No"
+  },
+  {
+   "fieldname": "instrument_calibration_date",
+   "fieldtype": "Data",
+   "label": "Calibrated On"
+  },
+  {
+   "fieldname": "instrument_calibration_expires_on",
+   "fieldtype": "Date",
+   "label": "Expires On"
+  },
+  {
+   "fieldname": "instrument_calibration_cert",
+   "fieldtype": "Attach",
+   "label": "Certificate"
+  },
+  {
+   "fieldname": "instrument_calibration_notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-08-12 15:43:48.796219",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Instrument Calibration",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

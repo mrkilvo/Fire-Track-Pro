@@ -1,0 +1,170 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-08-11 19:38:18.404454",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "asset_label",
+  "asset_property",
+  "asset_customer",
+  "asset_type",
+  "asset_standard",
+  "asset_make",
+  "asset_model",
+  "asset_serial",
+  "asset_identifier",
+  "asset_install_date",
+  "asset_zone",
+  "asset_location_level",
+  "asset_location_area",
+  "asset_location_riser",
+  "asset_location_cupboard",
+  "asset_location_room",
+  "asset_location_notes",
+  "asset_status",
+  "asset_last_tested",
+  "asset_next_due",
+  "asset_firelink_uid"
+ ],
+ "fields": [
+  {
+   "fieldname": "asset_label",
+   "fieldtype": "Data",
+   "label": "Label"
+  },
+  {
+   "fieldname": "asset_property",
+   "fieldtype": "Link",
+   "label": "Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "asset_customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "asset_type",
+   "fieldtype": "Link",
+   "label": "Asset Type",
+   "options": "FT Asset Type"
+  },
+  {
+   "fieldname": "asset_standard",
+   "fieldtype": "Link",
+   "label": "Standard",
+   "options": "FT Standard"
+  },
+  {
+   "fieldname": "asset_make",
+   "fieldtype": "Data",
+   "label": "Make"
+  },
+  {
+   "fieldname": "asset_model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "asset_serial",
+   "fieldtype": "Data",
+   "label": "Serial Number"
+  },
+  {
+   "fieldname": "asset_identifier",
+   "fieldtype": "Data",
+   "label": "Barcode/UID"
+  },
+  {
+   "fieldname": "asset_install_date",
+   "fieldtype": "Date",
+   "label": "Install Date"
+  },
+  {
+   "fieldname": "asset_zone",
+   "fieldtype": "Link",
+   "label": "Zone",
+   "options": "FT Property Zone"
+  },
+  {
+   "fieldname": "asset_location_level",
+   "fieldtype": "Data",
+   "label": "Level"
+  },
+  {
+   "fieldname": "asset_location_area",
+   "fieldtype": "Data",
+   "label": "Area"
+  },
+  {
+   "fieldname": "asset_location_riser",
+   "fieldtype": "Data",
+   "label": "Riser"
+  },
+  {
+   "fieldname": "asset_location_cupboard",
+   "fieldtype": "Data",
+   "label": "Cupboard"
+  },
+  {
+   "fieldname": "asset_location_room",
+   "fieldtype": "Data",
+   "label": "Room"
+  },
+  {
+   "fieldname": "asset_location_notes",
+   "fieldtype": "Small Text",
+   "label": "Location Notes"
+  },
+  {
+   "fieldname": "asset_status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nInactive\nDecommissioned"
+  },
+  {
+   "fieldname": "asset_last_tested",
+   "fieldtype": "Date",
+   "label": "Last Tested"
+  },
+  {
+   "fieldname": "asset_next_due",
+   "fieldtype": "Date",
+   "label": "Next Test Due"
+  },
+  {
+   "fieldname": "asset_firelink_uid",
+   "fieldtype": "Data",
+   "label": "FireLink UID"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-12 17:57:52.831524",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Asset",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "asset_label"
+}
