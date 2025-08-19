@@ -1,0 +1,116 @@
+/* ===== Fire Track Pro • White + Red portal theme (scoped) ===== */
+/* Scope ensures nothing outside the portal is affected */
+.ftp-portal{
+  /* smooth system font */
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol" !important;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility; font-feature-settings:"liga","kern";
+
+  /* brand tokens — change --ftp-red to your exact red if needed */
+  --ftp-red:#dc2626;         /* primary */
+  --ftp-red-700:#b91c1c;     /* active text */
+  --ftp-red-100:#fee2e2;     /* hover bg */
+  --ftp-red-50:#fef2f2;      /* active bg */
+
+  --ftp-text:#111827;        /* near-black */
+  --ftp-muted:#6b7280;       /* gray-500 */
+  --ftp-border:#e5e7eb;      /* gray-200 */
+  --ftp-card:#ffffff;
+  --ftp-bg:#f6f7fb;          /* page background */
+}
+
+/* inherit font everywhere in the portal even if libs try to override */
+.ftp-portal, .ftp-portal * { font-family:inherit !important; }
+
+.ftp-portal main{ background:var(--ftp-bg); }
+
+/* ===== top bar ===== */
+.ftp-portal .sticky.top-0{
+  background:#fff !important;
+  color:var(--ftp-text) !important;
+  border-bottom:2px solid var(--ftp-red);
+}
+.ftp-portal .sticky.top-0 a:hover,
+.ftp-portal .sticky.top-0 button:hover{ color:var(--ftp-red) !important; }
+
+/* ===== sidebar (light, white + red accents) ===== */
+.ftp-portal #sidebar-desktop{
+  background:#fff !important;
+  color:var(--ftp-text) !important;
+  border-right:1px solid var(--ftp-border);
+}
+.ftp-portal #sidebar-desktop .brand-title{ color:var(--ftp-red); }
+
+.ftp-portal #sidebar-desktop a,
+.ftp-portal #sidebar-desktop button{
+  background:transparent !important;
+  color:#374151 !important;                /* gray-700 text */
+  border-radius:.5rem;
+}
+.ftp-portal #sidebar-desktop svg{
+  color:#9ca3af !important;                /* gray-400 icon */
+  opacity:.95;
+}
+.ftp-portal #sidebar-desktop a:hover,
+.ftp-portal #sidebar-desktop button:hover{
+  background:var(--ftp-red-100) !important;
+  color:var(--ftp-red) !important;
+}
+.ftp-portal #sidebar-desktop a:hover svg,
+.ftp-portal #sidebar-desktop button:hover svg{
+  color:var(--ftp-red) !important; opacity:1;
+}
+
+/* active/current link */
+.ftp-portal #sidebar-desktop a.active{
+  position:relative;
+  background:var(--ftp-red-50) !important;
+  color:var(--ftp-red-700) !important;
+  font-weight:600;
+}
+.ftp-portal #sidebar-desktop a.active::before{
+  content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
+  background:var(--ftp-red); border-radius:2px;
+}
+
+/* submenu tree */
+.ftp-portal #portal_nav [data-sub]{
+  border-left:1px dashed var(--ftp-border) !important;
+  margin-left:.25rem; padding-left:.5rem;
+}
+.ftp-portal #portal_nav [data-sub].hidden{ display:none !important; }
+.ftp-portal #portal_nav .chev{ transition:transform .15s ease; }
+
+/* cards & panels (match your screenshot) */
+.ftp-portal .card,
+.ftp-portal .frappe-card,
+.ftp-portal .shadow-sm.bg-white,
+.ftp-portal .awesomplete{
+  background:var(--ftp-card);
+  border:1px solid var(--ftp-border);
+  border-radius:14px !important;
+  box-shadow:0 8px 24px rgba(17,24,39,.06) !important; /* soft drop */
+}
+
+/* buttons: subtle with red hover */
+.ftp-portal .btn, .ftp-portal button, .ftp-portal a.btn{ border-radius:10px; }
+.ftp-portal .btn-primary, .ftp-portal .btn.btn-primary{
+  background:var(--ftp-red); border-color:var(--ftp-red);
+}
+.ftp-portal .btn-primary:hover{ filter:brightness(.92); }
+
+/* inputs focus ring in red */
+.ftp-portal :focus-visible{ outline:2px solid var(--ftp-red); outline-offset:2px; }
+
+/* Neutralise common third-party resets without breaking layout */
+.ftp-portal .svg-inline--fa,
+.ftp-portal [class^="Vitally--"], .ftp-portal [class*=" Vitally--"]{
+  font-family:inherit !important; letter-spacing:normal !important;
+  text-transform:none !important; line-height:normal !important;
+}
+
+/* hide any legacy website sidebars inside portal pages */
+.page-sidebar, .website-sidebar, .web-sidebar{ display:none !important; }
+
+/* Mobile overlay sidebar helpers */
+#sidebar-mobile{ will-change: transform; }

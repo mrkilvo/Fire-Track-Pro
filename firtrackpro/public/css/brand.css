@@ -1,0 +1,100 @@
+/* Fire Track Pro – minimal brand layer (safe: no layout changes) */
+
+/* smooth system fonts where it matters */
+#sidebar-desktop, .sticky.top-0, main {
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,
+               "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol" !important;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+
+/* brand reds */
+:root {
+  --ftp-red:#d61f1f;     /* primary red */
+  --ftp-red-700:#b91c1c; /* darker red for active text */
+  --ftp-red-100:#fee2e2; /* soft hover background */
+  --ftp-red-50:#fef2f2;  /* very soft active background */
+  --ftp-border:#e5e7eb;  /* subtle border */
+}
+
+/* ===== sidebar (keep your structure, just recolor) ===== */
+#sidebar-desktop {
+  background:#fff !important;
+  color:#111827 !important;
+  border-right:1px solid var(--ftp-border);
+}
+
+#sidebar-desktop .brand-title { color:var(--ftp-red); }
+
+#sidebar-desktop a,
+#sidebar-desktop button {
+  color:#374151 !important;               /* gray-700 */
+  border-radius:8px;
+  background:transparent !important;
+}
+
+#sidebar-desktop svg { color:#9ca3af !important; }   /* gray-400 icons */
+
+#sidebar-desktop a:hover,
+#sidebar-desktop button:hover {
+  background:var(--ftp-red-100) !important;
+  color:var(--ftp-red) !important;
+}
+#sidebar-desktop a:hover svg,
+#sidebar-desktop button:hover svg { color:var(--ftp-red) !important; }
+
+/* active/current link hint */
+#sidebar-desktop a.active {
+  position:relative;
+  background:var(--ftp-red-50) !important;
+  color:var(--ftp-red-700) !important;
+  font-weight:600;
+}
+#sidebar-desktop a.active::before {
+  content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
+  background:var(--ftp-red); border-radius:2px;
+}
+
+/* ===== top bar: leave layout, add subtle red underline ===== */
+.sticky.top-0 {
+  background:#fff !important;
+  color:#111827 !important;
+  border-bottom:2px solid var(--ftp-red);
+}
+
+/* ===== cards: gentle rounding + soft shadow (matches your screenshot) ===== */
+.shadow-sm.bg-white, .card, .frappe-card {
+  border:1px solid var(--ftp-border);
+  border-radius:14px !important;
+  box-shadow:0 8px 24px rgba(17,24,39,.06) !important;
+}
+/* Sidebar submenu colors (works for any dark/blue sidebar) */
+#sidebar-desktop .nav-sub a.sidebar-link:link,
+#sidebar-desktop .nav-sub a.sidebar-link:visited,
+#mobile-sidebar  .nav-sub a.sidebar-link:link,
+#mobile-sidebar  .nav-sub a.sidebar-link:visited {
+  color: #ffffff !important;
+}
+
+#sidebar-desktop .nav-sub a.sidebar-link:hover,
+#mobile-sidebar  .nav-sub a.sidebar-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.10) !important; /* light overlay on blue */
+}
+
+/* active/highlighted item */
+#sidebar-desktop .nav-sub a.sidebar-link.active,
+#mobile-sidebar  .nav-sub a.sidebar-link.active {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: inset 3px 0 0 0 #e11d48; /* brand red accent */
+}
+
+/* make chevrons + toggles white too */
+#sidebar-desktop .nav-toggle,
+#mobile-sidebar  .nav-toggle {
+  color: #ffffff !important;
+}
+#sidebar-desktop .nav-toggle .chev,
+#mobile-sidebar  .nav-toggle .chev {
+  stroke: currentColor !important;
+}

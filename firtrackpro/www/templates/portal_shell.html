@@ -1,0 +1,141 @@
+{% extends "templates/web.html" %}
+
+{# Optional: remove website footer on portal pages #}
+{% set hide_base_footer = True %}
+
+{# Top website navbar block (we hide it on portal pages) #}
+{% block navbar %}{% endblock %}
+
+{# ----- left menu + top bar wrapper ----- #}
+{% block content %}
+<div id="portal-root">
+  {# ============ DESKTOP SIDEBAR ============ #}
+  <nav id="sidebar-desktop">
+    <div class="brand">
+      <img src="/assets/firtrackpro/images/firetrack-logo.png" alt="Logo">
+      <span class="title">Fire Track Pro</span>
+    </div>
+
+    {# 3-level menu: item -> children -> grandchildren #}
+    {% for item in MENU %}
+      {% set gid = ('g' ~ loop.index) %}
+      {% if item.children %}
+        <button class="nav-toggle" type="button" data-target="sub-{{ gid }}">
+          <i data-feather="{{ item.icon or 'folder' }}"></i>
+          <span>{{ item.label }}</span>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <div id="sub-{{ gid }}" class="nav-sub hidden opacity-0 max-h-0">
+          {% for sub in item.children %}
+            {% if sub.children %}
+              {% set sgid = gid ~ '-' ~ loop.index %}
+              <button class="nav-toggle" type="button" data-target="sub-{{ sgid }}">
+                <span>{{ sub.label }}</span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <div id="sub-{{ sgid }}" class="nav-sub hidden opacity-0 max-h-0">
+                {% for leaf in sub.children %}
+                  <a class="sidebar-link" href="{{ leaf.url }}"><span>{{ leaf.label }}</span></a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <a class="sidebar-link" href="{{ sub.url }}"><span>{{ sub.label }}</span></a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <a class="sidebar-link" href="{{ item.url }}">
+          <i data-feather="{{ item.icon or 'link' }}"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  {# MOBILE overlay + drawer #}
+  <div id="mobile-sidebar-overlay" class="hidden"></div>
+  <nav id="mobile-sidebar" class="-translate-x-full">
+    <div class="brand">
+      <img src="/assets/firtrackpro/images/firetrack-logo.png" alt="Logo">
+      <span class="title">Fire Track Pro</span>
+      <button id="mobile-menu-close" class="btn" style="margin-left:auto">✕</button>
+    </div>
+    {# repeat same menu for mobile (kept simple) #}
+    {% for item in MENU %}
+      {% set gid = ('m' ~ loop.index) %}
+      {% if item.children %}
+        <button class="nav-toggle" type="button" data-target="msub-{{ gid }}">
+          <i data-feather="{{ item.icon or 'folder' }}"></i>
+          <span>{{ item.label }}</span>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <div id="msub-{{ gid }}" class="nav-sub hidden opacity-0 max-h-0">
+          {% for sub in item.children %}
+            {% if sub.children %}
+              {% set sgid = gid ~ '-' ~ loop.index %}
+              <button class="nav-toggle" type="button" data-target="msub-{{ sgid }}">
+                <span>{{ sub.label }}</span>
+                <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <div id="msub-{{ sgid }}" class="nav-sub hidden opacity-0 max-h-0">
+                {% for leaf in sub.children %}
+                  <a class="sidebar-link" href="{{ leaf.url }}"><span>{{ leaf.label }}</span></a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <a class="sidebar-link" href="{{ sub.url }}"><span>{{ sub.label }}</span></a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <a class="sidebar-link" href="{{ item.url }}">
+          <i data-feather="{{ item.icon or 'link' }}"></i>
+          <span>{{ item.label }}</span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  {# ============ MAIN COLUMN ============ #}
+  <main class="flex-1 flex-col" style="display:flex; width:100%">
+    <div class="topbar">
+      <div class="flex gap-3" style="display:flex; gap:12px; align-items:center">
+        <button id="mobile-menu-btn" class="iconbtn" type="button">☰</button>
+        <span id="topbar-title" class="title">Dashboard</span>
+      </div>
+      <div class="flex gap-3" style="display:flex; gap:12px; align-items:center">
+        <button class="iconbtn" title="Notifications"><i data-feather="bell"></i></button>
+        <button class="iconbtn" title="Messages"><i data-feather="message-square"></i></button>
+        <a href="/portal/accounts/profile" class="flex gap-2" style="display:flex; gap:8px; align-items:center; text-decoration:none; color:var(--ink)">
+          <strong>{{ full_name or "User" }}</strong>
+          <div style="width:36px;height:36px;border-radius:999px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-weight:700;color:#111827">
+            {{ (full_name or 'U')[:1] }}
+          </div>
+        </a>
+      </div>
+    </div>
+
+    {% block page_content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+
+{# Include our CSS and JS as website assets #}
+{% block style %}
+  {{ super() }}
+  <link rel="stylesheet" href="/assets/firtrackpro/css/portal.css">
+{% endblock %}
+
+{% block footer %}
+  {{ super() }}
+  <script defer src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+  <script defer src="/assets/firtrackpro/js/portal_nav.js"></script>
+{% endblock %}

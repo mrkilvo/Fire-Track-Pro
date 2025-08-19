@@ -2,45 +2,99 @@
 {% set hide_base_footer = True %}
 {% block navbar %}{% endblock %}
 
+{# =====================
+   MENU (3 levels+ ok)
+   ===================== #}
 {% set MENU = [
   {"label":"Dashboard","icon":"home","url":"/portal"},
-  {"label":"Scheduler","icon":"calendar","url":"/portal/scheduler"},
-  {"label":"Tasks","icon":"list","url":"/portal/tasks"},
-  {"label":"Defect Quotes","icon":"file-text","url":"/portal/defect-quotes"},
-  {"label":"People","icon":"users","url":"/portal/people"},
-  {"label":"Billing","icon":"dollar-sign","url":"#","children":[
-    {"label":"Invoices","url":"/portal/invoices"},
-    {"label":"Purchase Orders","url":"/portal/purchase-orders"}
+
+  {"label":"Work","icon":"briefcase","children":[
+    {"label":"Scheduler","icon":"calendar","url":"/portal/scheduler"},
+    {"label":"Tasks","icon":"list","url":"/portal/tasks"},
+    {"label":"Defect Quotes","icon":"file-text","url":"/portal/defect-quotes"},
+    {"label":"Inspections","icon":"clipboard","url":"/portal/inspections"},
+    {"label":"Incidents","icon":"alert-circle","url":"/portal/incidents"},
+    {"label":"Quotes","icon":"file-plus","url":"/portal/quotes"}
   ]},
-  {"label":"Customer Data","icon":"database","url":"/portal/customers"},
-  {"label":"Tools","icon":"tool","url":"/portal/tools"},
-  {"label":"Assets","icon":"box","url":"/portal/assets"},
-  {"label":"Sites","icon":"map","url":"/portal/sites"},
-  {"label":"Documents","icon":"file","url":"/portal/documents"},
+
+  {"label":"Sites & Assets","icon":"map","children":[
+    {"label":"Sites","icon":"map","url":"/portal/sites"},
+    {"label":"Assets","icon":"box","url":"/portal/assets"},
+    {"label":"Documents","icon":"file","url":"/portal/documents"}
+  ]},
+
+  {"label":"People","icon":"users","children":[
+    {"label":"Customer Data","icon":"database","url":"/portal/customers"},
+    {"label":"Suppliers","icon":"truck","url":"/portal/suppliers"}
+  ]},
+
+  {"label":"Billing","icon":"dollar-sign","children":[
+    {"label":"Invoices","icon":"file","url":"/portal/invoices"},
+    {"label":"Purchase Orders","icon":"file","url":"/portal/purchase-orders"}
+  ]},
+
   {"label":"Reports","icon":"bar-chart-2","url":"/portal/reports"},
-  {"label":"Inspections","icon":"clipboard","url":"/portal/inspections"},
-  {"label":"Incidents","icon":"alert-circle","url":"/portal/incidents"},
-  {"label":"Suppliers","icon":"truck","url":"/portal/suppliers"},
-  {"label":"Quotes","icon":"file-plus","url":"/portal/quotes"},
-  {"label":"Contracts","icon":"file","url":"/portal/contracts"},
-  {"label":"Settings","icon":"settings","url":"/portal/settings"},
-  {"label":"Help","icon":"help-circle","url":"/portal/help"},
-  {"label":"Accounts","icon":"user","url":"#","children":[
-    {"label":"Dashboard","url":"/portal/accounts/dashboard"},
-    {"label":"Create User","url":"/portal/accounts/create"},
-    {"label":"Audit Log","url":"/portal/accounts/accesslog"},
-    {"label":"Send Welcome Email","url":"/portal/accounts/sendwelcomeemail"},
-    {"label":"Assume Identity","url":"/portal/accounts/assumeidentity"}
-  ]},
-  {"label":"Configuration","icon":"settings","url":"/portal/configuration"},
-  {"label":"Custom Forms","icon":"edit","url":"/portal/forms"}
+
+  {"label":"Admin","icon":"settings","children":[
+    {"label":"Tools","icon":"tool","url":"/portal/tools"},
+    {"label":"Configuration","icon":"settings","url":"/portal/configuration"},
+    {"label":"Custom Forms","icon":"edit","url":"/portal/forms"},
+    {"label":"Accounts","icon":"user","children":[
+      {"label":"Users","icon":"user","children":[
+        {"label":"Dashboard","url":"/portal/accounts/dashboard"},
+        {"label":"Create User","url":"/portal/accounts/create"}
+      ]},
+      {"label":"Security","icon":"shield","children":[
+        {"label":"Audit Log","url":"/portal/accounts/accesslog"},
+        {"label":"Assume Identity","url":"/portal/accounts/assumeidentity"}
+      ]},
+      {"label":"Email","icon":"mail","children":[
+        {"label":"Send Welcome Email","url":"/portal/accounts/sendwelcomeemail"}
+      ]}
+    ]},
+    {"label":"Settings","icon":"sliders","url":"/portal/settings"},
+    {"label":"Help","icon":"help-circle","url":"/portal/help"}
+  ]}
 ] %}
+
+{# ==============
+   RENDER (recursive)
+   ============== #}
+{% macro render_menu(items, path="root", level=0, dark=True) %}
+<ul id="{{ path }}" class="{% if level>0 %}nav-sub hidden opacity-0 max-h-0 overflow-hidden pl-6 transition-all duration-300 ease-in-out{% else %}space-y-1{% endif %}">
+  {% for item in items %}
+    {# make a stable id for submenus #}
+    {% set slug = (item.label|lower|replace(' ', '-')|replace('&','and')) %}
+    {% set sid = (path ~ '-' ~ loop.index0 ~ '-' ~ slug) %}
+    {% if item.children %}
+      <li class="nav-group">
+        <button type="button"
+                class="nav-toggle flex items-center gap-2 px-3 py-2 rounded-lg w-full {% if dark %}text-white hover:bg-gray-700{% else %}text-gray-800 hover:bg-gray-100{% endif %} font-semibold"
+                data-target="{{ sid }}">
+          <i data-feather="{{ item.icon or 'folder' }}"></i><span>{{ item.label }}</span>
+          <svg class="ml-auto w-4 h-4 chev" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        {{ render_menu(item.children, sid, level+1, dark) }}
+      </li>
+    {% else %}
+      <li>
+        <a href="{{ item.url }}"
+           class="sidebar-link flex items-center gap-2 px-3 py-2 rounded-lg {% if dark %}text-gray-300 hover:bg-gray-600{% else %}text-gray-700 hover:bg-gray-100{% endif %} {% if level>0 %}text-sm{% endif %}">
+          {% if item.icon %}<i data-feather="{{ item.icon }}"></i>{% endif %}<span>{{ item.label }}</span>
+        </a>
+      </li>
+    {% endif %}
+  {% endfor %}
+</ul>
+{% endmacro %}
 
 {# block content = chrome (menu + layout) #}
 {% block content %}
 <div id="portal-root" class="min-h-screen flex flex-row bg-gray-50 font-sans">
 
-  <!-- DESKTOP SIDEBAR: always visible (no hidden/md gate) -->
+  <!-- DESKTOP SIDEBAR -->
   <nav id="sidebar-desktop"
        class="flex flex-col w-64 bg-gray-900 text-white px-4 py-6 space-y-1 shadow-lg z-10"
        style="display:flex">
@@ -48,36 +102,13 @@
       <img src="/assets/firtrackpro/images/firetrack-logo.png" class="w-10 h-10 rounded bg-white" alt="Logo">
       <span class="text-2xl font-bold tracking-wide text-white">Fire Track Pro</span>
     </div>
-
-    {% for item in MENU %}
-      {% if item.children %}
-        <div class="submenu-group">
-          <button type="button"
-                  class="submenu-toggle flex items-center gap-2 px-3 py-2 rounded-lg w-full text-white hover:bg-gray-700 font-semibold">
-            <i data-feather="{{ item.icon }}"></i><span>{{ item.label }}</span>
-            <svg class="ml-auto w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
-          <div class="submenu hidden flex-col space-y-1 pl-6 transition-all duration-300 ease-in-out opacity-0 max-h-0 overflow-hidden">
-            {% for sub in item.children %}
-              <a href="{{ sub.url }}" class="sidebar-link flex items-center gap-2 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-600 text-sm">
-                <span>{{ sub.label }}</span>
-              </a>
-            {% endfor %}
-          </div>
-        </div>
-      {% else %}
-        <a href="{{ item.url }}" class="sidebar-link flex items-center gap-2 px-3 py-2 rounded-lg text-white hover:bg-gray-700">
-          <i data-feather="{{ item.icon }}"></i><span>{{ item.label }}</span>
-        </a>
-      {% endif %}
-    {% endfor %}
+    {{ render_menu(MENU, "desk-root", 0, True) }}
   </nav>
 
-  <!-- MOBILE SIDEBAR (only on small screens) -->
+  <!-- MOBILE OVERLAY -->
   <div id="mobile-sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-40 z-40 hidden md:hidden"></div>
 
+  <!-- MOBILE SIDEBAR -->
   <nav id="mobile-sidebar"
        class="fixed left-0 top-14 bottom-0 w-64 bg-gray-900 text-white z-50 transform -translate-x-full transition-transform duration-300 flex md:hidden flex-col px-4 py-6 space-y-1 shadow-lg overflow-y-auto"
        style="height:calc(100vh - 56px);">
@@ -90,32 +121,10 @@
         </svg>
       </button>
     </div>
-    {% for item in MENU %}
-      {% if item.children %}
-        <div class="submenu-group">
-          <button type="button" class="submenu-toggle flex items-center gap-2 px-3 py-2 rounded-lg w-full text-white hover:bg-gray-700 font-semibold">
-            <i data-feather="{{ item.icon }}"></i><span>{{ item.label }}</span>
-            <svg class="ml-auto w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
-          <div class="submenu hidden flex-col space-y-1 pl-6 transition-all duration-300 ease-in-out opacity-0 max-h-0 overflow-hidden">
-            {% for sub in item.children %}
-              <a href="{{ sub.url }}" class="sidebar-link flex items-center gap-2 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-600 text-sm">
-                <span>{{ sub.label }}</span>
-              </a>
-            {% endfor %}
-          </div>
-        </div>
-      {% else %}
-        <a href="{{ item.url }}" class="sidebar-link flex items-center gap-2 px-3 py-2 rounded-lg text-white hover:bg-gray-700">
-          <i data-feather="{{ item.icon }}"></i><span>{{ item.label }}</span>
-        </a>
-      {% endif %}
-    {% endfor %}
+    {{ render_menu(MENU, "m-root", 0, True) }}
   </nav>
 
-  <!-- MAIN COLUMN: page content -->
+  <!-- MAIN COLUMN -->
   <main class="flex-1 flex flex-col w-full min-h-screen">
     <div class="sticky top-0 z-50 w-full bg-white border-b shadow-sm h-14 flex items-center justify-between px-4 md:px-6">
       <div class="flex items-center gap-3 h-full">
@@ -146,55 +155,77 @@
 {% block script %}
 {{ super() }}
 <script>
-document.addEventListener('DOMContentLoaded',function(){
-  if(window.feather) feather.replace();
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.feather) feather.replace();
 
-  const path = window.location.pathname.replace(/\/$/,"");
+  const path = window.location.pathname.replace(/\/$/, "");
+  const navs = [
+    {root: document.getElementById('sidebar-desktop'), key: 'ftp_nav_open_desktop'},
+    {root: document.getElementById('mobile-sidebar'), key: 'ftp_nav_open_mobile'}
+  ];
 
-  // Submenus
-  document.querySelectorAll('.submenu-group').forEach(function(group){
-    const btn = group.querySelector('.submenu-toggle');
-    const submenu = group.querySelector('.submenu');
-    let active = false;
+  navs.forEach(({root, key}) => {
+    if (!root) return;
 
-    group.querySelectorAll('a.sidebar-link').forEach(function(a){
-      if ((a.getAttribute('href')||'').replace(/\/$/,'') === path) {
-        a.classList.add('bg-gray-600','text-white'); active = true;
+    // toggle handler
+    root.querySelectorAll('.nav-toggle').forEach(btn => {
+      const id = btn.getAttribute('data-target');
+      const sub = document.getElementById(id);
+      if (!sub) return;
+
+      btn.addEventListener('click', () => {
+        const willOpen = sub.classList.contains('hidden');
+        if (willOpen) {
+          sub.classList.remove('hidden','opacity-0','max-h-0');
+          sub.classList.add('opacity-100','max-h-96');
+          btn.classList.add('open');
+        } else {
+          sub.classList.add('opacity-0','max-h-0');
+          sub.classList.remove('opacity-100','max-h-96');
+          setTimeout(()=>sub.classList.add('hidden'), 200);
+          btn.classList.remove('open');
+        }
+        saveState(root, key);
+      });
+    });
+
+    // highlight current link + open ancestors
+    root.querySelectorAll('a.sidebar-link').forEach(a => {
+      const href = (a.getAttribute('href') || '').replace(/\/$/, '');
+      if (href && path === href) {
+        a.classList.add('bg-gray-700','text-white');
+        let p = a.parentElement;
+        while (p && p !== root) {
+          if (p.classList.contains('nav-sub')) {
+            p.classList.remove('hidden','opacity-0','max-h-0');
+            p.classList.add('opacity-100','max-h-96');
+            const pid = p.getAttribute('id');
+            root.querySelector(`.nav-toggle[data-target="${pid}"]`)?.classList.add('open');
+          }
+          p = p.parentElement;
+        }
       }
     });
 
-    if (active && submenu && btn) {
-      submenu.classList.remove('hidden','opacity-0','max-h-0');
-      submenu.classList.add('opacity-100','max-h-96');
-      btn.classList.add('bg-gray-800','text-white');
-    }
-
-    if (btn && submenu) {
-      btn.addEventListener('click', function(){
-        const open = !submenu.classList.contains('hidden');
-        if (open) {
-          submenu.classList.add('opacity-0','max-h-0');
-          submenu.classList.remove('opacity-100','max-h-96');
-          setTimeout(()=>submenu.classList.add('hidden'),300);
-        } else {
-          submenu.classList.remove('hidden');
-          requestAnimationFrame(()=>{
-            submenu.classList.remove('opacity-0','max-h-0');
-            submenu.classList.add('opacity-100','max-h-96');
-          });
-        }
+    // restore open state
+    try {
+      const openIds = JSON.parse(localStorage.getItem(key) || '[]');
+      openIds.forEach(id => {
+        const sub = document.getElementById(id);
+        if (!sub) return;
+        sub.classList.remove('hidden','opacity-0','max-h-0');
+        sub.classList.add('opacity-100','max-h-96');
+        root.querySelector(`.nav-toggle[data-target="${id}"]`)?.classList.add('open');
       });
+    } catch(e){}
+
+    function saveState(rootNode, storageKey){
+      const openIds = [...rootNode.querySelectorAll('.nav-sub')].filter(ul => !ul.classList.contains('hidden')).map(ul => ul.id);
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
     }
   });
 
-  // highlight direct links
-  document.querySelectorAll('a.sidebar-link').forEach(function(a){
-    if ((a.getAttribute('href')||'').replace(/\/$/,'') === path) {
-      a.classList.add('bg-gray-700','text-white');
-    }
-  });
-
-  // mobile drawer
+  // mobile drawer controls
   const openBtn = document.getElementById('mobile-menu-btn');
   const closeBtn = document.getElementById('mobile-menu-close');
   const sidebar  = document.getElementById('mobile-sidebar');
@@ -205,8 +236,8 @@ document.addEventListener('DOMContentLoaded',function(){
   if (closeBtn) closeBtn.onclick = closeSidebar;
   if (overlay) overlay.onclick = closeSidebar;
 
-  // title
-  const tt=document.getElementById('topbar-title');
+  // topbar title reflect active link
+  const tt = document.getElementById('topbar-title');
   if (tt) {
     const active = document.querySelector(`a.sidebar-link[href="${path}"] span`);
     tt.textContent = active ? active.textContent.trim() : (document.title || 'Dashboard');

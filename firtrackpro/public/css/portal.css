@@ -1,0 +1,103 @@
+/* Fire Track Pro – website portal shell */
+/* Brand + base */
+:root{
+  --brand-red:#e1192d;     /* primary red */
+  --brand-red-600:#c51629; /* darker hover */
+  --ink:#111827;
+  --ink-2:#374151;
+  --muted:#6b7280;
+  --bg:#f8fafc;
+  --card:#ffffff;
+  --sidebar:#0f172a;       /* dark slate */
+  --sidebar-2:#111827;
+  --sidebar-3:#1f2937;
+  --ring:#e5e7eb;
+  --shadow:0 1px 2px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.08);
+}
+html,body{height:100%}
+body{
+  margin:0;
+  color:var(--ink);
+  background:var(--bg);
+  font:400 14px/1.45 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+
+/* Layout */
+#portal-root{display:flex; min-height:100vh; background:var(--bg)}
+#sidebar-desktop{
+  display:flex; flex-direction:column;
+  width:256px; min-width:256px; max-width:256px;
+  background:var(--sidebar); color:#fff;
+  padding:24px 16px; box-shadow:var(--shadow); z-index:10;
+}
+#sidebar-desktop .brand{
+  display:flex; align-items:center; gap:10px; margin:0 0 24px 0;
+}
+#sidebar-desktop .brand img{width:40px; height:40px; border-radius:8px; background:#fff}
+#sidebar-desktop .brand .title{font-weight:800; letter-spacing:.3px; font-size:20px}
+
+/* Links */
+.sidebar-link{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:10px; text-decoration:none;
+  color:#e5e7eb; transition:background .15s ease, color .15s ease, padding .15s ease;
+}
+.sidebar-link:hover{background:var(--sidebar-3); color:#fff}
+.sidebar-link.active{background:rgba(225,25,45,.12); color:#fff; border-left:3px solid var(--brand-red); padding-left:9px}
+
+/* Toggle buttons (parents) */
+.nav-toggle{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; width:100%;
+  border:none; background:transparent; color:#fff;
+  border-radius:10px; cursor:pointer; font-weight:600;
+  transition:background .15s ease, color .15s ease;
+}
+.nav-toggle:hover{background:var(--sidebar-2)}
+.nav-toggle .chev{margin-left:auto; transition:transform .18s ease}
+.nav-toggle.open .chev{transform:rotate(90deg)}
+
+/* Submenus */
+.nav-sub{
+  display:flex; flex-direction:column; gap:6px;
+  padding-left:14px; margin:6px 0 12px 20px; border-left:1px dashed rgba(255,255,255,.15);
+  transition:max-height .18s ease, opacity .18s ease;
+}
+.hidden{display:none !important}
+.opacity-0{opacity:0} .opacity-100{opacity:1}
+.max-h-0{max-height:0} .max-h-96{max-height:24rem}
+.bg-active{background:rgba(225,25,45,.12)}
+
+/* Mobile drawer */
+#mobile-sidebar-overlay{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40}
+#mobile-sidebar{
+  position:fixed; left:0; top:56px; bottom:0; width:256px; background:var(--sidebar); color:#fff;
+  transform:translateX(-100%); transition:transform .25s ease; z-index:50; overflow:auto; padding:24px 16px;
+}
+.-translate-x-full{transform:translateX(-100%)} .translate-x-0{transform:translateX(0)}
+
+/* Topbar */
+.topbar{
+  position:sticky; top:0; z-index:60; height:56px; background:#fff; border-bottom:1px solid var(--ring);
+  display:flex; align-items:center; justify-content:space-between; padding:0 16px; box-shadow:0 1px 0 rgba(0,0,0,.04);
+}
+.topbar .title{font-size:18px; font-weight:700; color:var(--ink)}
+.topbar .iconbtn{padding:8px; border-radius:8px; border:none; background:transparent; cursor:pointer}
+.topbar .iconbtn:hover{background:#f3f4f6}
+
+/* Page content helpers */
+.container{max-width:1120px; margin:24px auto; padding:0 16px}
+.card{background:var(--card); border:1px solid var(--ring); border-radius:14px; box-shadow:var(--shadow); padding:20px}
+.card h2{margin:0 0 10px 0; font-size:20px}
+.text-muted{color:var(--muted)}
+
+/* Buttons */
+.btn{display:inline-flex; align-items:center; gap:8px; border-radius:10px; padding:10px 12px; border:none; cursor:pointer}
+.btn-primary{background:var(--brand-red); color:#fff}
+.btn-primary:hover{background:var(--brand-red-600)}
+
+/* Simple utility fallbacks for things we referenced in markup */
+.flex{display:flex} .flex-col{flex-direction:column} .flex-1{flex:1}
+.gap-2{gap:8px} .gap-3{gap:12px} .mb-8{margin-bottom:20px}
+.rounded{border-radius:10px} .w-10{width:40px} .h-10{height:40px}

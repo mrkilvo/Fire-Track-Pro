@@ -1,0 +1,242 @@
+{% extends "firtrackpro/www/templates/base_brand.html" %}
+
+{% block title %}Tailwind Sidebar – White Menu with Nested Toggles{% endblock %}
+{% block navbar %}{% endblock %}
+{% block page_content %}
+<div class="min-h-screen flex bg-gray-50">
+
+  <!-- Sidebar -->
+  <aside id="sidebar"
+         class="w-64 min-h-screen sticky top-0 bg-[var(--sidebar-bg)] text-[var(--sidebar-text)]">
+
+ <!-- Brand header with YOUR LOGO (same size as icons) -->
+<div class="px-4 py-5 border-b border-white/10">
+  <div class="flex items-center gap-3">
+    <img
+      src="/assets/firtrackpro/images/firetrack-logo.png"
+      alt="Fire Track Pro logo"
+      class="h-25 w-25 object-contain select-none shrink-0"
+      draggable="false"
+    />
+    <div class="leading-tight">
+      <div class="text-white font-semibold">Fire Track Pro</div>
+      <div class="text-xs text-white/70">Navigation</div>
+    </div>
+  </div>
+</div>
+
+    <nav class="p-3 text-sm text-white">
+      <p class="px-2 py-2 text-xs uppercase tracking-wider text-white/60">Main</p>
+
+      <!-- Simple link -->
+      <a href="#"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
+        <i class="fa-solid fa-gauge-high w-5 text-white"></i>
+        <span class="text-white">Dashboard</span>
+      </a>
+
+      <!-- LEVEL 1: Scheduler -->
+      <button type="button"
+              data-toggle
+              class="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white"
+              aria-expanded="false">
+        <span class="flex items-center gap-3">
+          <i class="fa-solid fa-calendar-days w-5 text-white"></i>
+          <span class="text-white">Scheduler</span>
+        </span>
+        <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+      </button>
+      <div class="submenu ml-2 mt-1 space-y-1 hidden">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 text-white">
+          <i class="fa-regular fa-circle w-5 text-white"></i>
+          <span class="text-white">Overview</span>
+        </a>
+
+        <!-- LEVEL 2: By Week -->
+        <button type="button"
+                data-toggle
+                class="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/10 text-white"
+                aria-expanded="false">
+          <span class="flex items-center gap-3">
+            <i class="fa-solid fa-clock w-5 text-white"></i>
+            <span class="text-white">By Week</span>
+          </span>
+          <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+        </button>
+        <div class="submenu ml-4 mt-1 space-y-1 hidden">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-regular fa-calendar w-5 text-white"></i>
+            <span class="text-white">This Week</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-regular fa-calendar-check w-5 text-white"></i>
+            <span class="text-white">Next Week</span>
+          </a>
+        </div>
+
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 text-white">
+          <i class="fa-solid fa-users w-5 text-white"></i>
+          <span class="text-white">By Technician</span>
+        </a>
+      </div>
+
+      <!-- LEVEL 1: Assets -->
+      <button type="button"
+              data-toggle
+              class="w-full flex items-center justify-between px-3 py-2.5 mt-2 rounded-lg hover:bg-white/10 focus:bg-white/10 text-white"
+              aria-expanded="false">
+        <span class="flex items-center gap-3">
+          <i class="fa-solid fa-box-archive w-5 text-white"></i>
+          <span class="text-white">Assets</span>
+        </span>
+        <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+      </button>
+      <div class="submenu ml-2 mt-1 space-y-1 hidden">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 text-white">
+          <i class="fa-regular fa-circle w-5 text-white"></i>
+          <span class="text-white">All Assets</span>
+        </a>
+
+        <!-- LEVEL 2: Plant -->
+        <button type="button"
+                data-toggle
+                class="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/10 text-white"
+                aria-expanded="false">
+          <span class="flex items-center gap-3">
+            <i class="fa-solid fa-screwdriver-wrench w-5 text-white"></i>
+            <span class="text-white">Plant</span>
+          </span>
+          <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+        </button>
+        <div class="submenu ml-4 mt-1 space-y-1 hidden">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-solid fa-pump-soap w-5 text-white"></i>
+            <span class="text-white">Pump Sets</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-solid fa-fire-extinguisher w-5 text-white"></i>
+            <span class="text-white">Extinguishers</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Simple link -->
+      <a href="#"
+         class="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 focus:bg-white/10 text-white">
+        <i class="fa-solid fa-file-lines w-5 text-white"></i>
+        <span class="text-white">Reports</span>
+      </a>
+
+      <!-- LEVEL 1: Accounts -->
+      <button type="button"
+              data-toggle
+              class="w-full flex items-center justify-between px-3 py-2.5 mt-2 rounded-lg hover:bg-white/10 focus:bg-white/10 text-white"
+              aria-expanded="false">
+        <span class="flex items-center gap-3">
+          <i class="fa-solid fa-user-gear w-5 text-white"></i>
+          <span class="text-white">Accounts</span>
+        </span>
+        <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+      </button>
+      <div class="submenu ml-2 mt-1 space-y-1 hidden">
+        <a href="#" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/10 text-white">
+          <i class="fa-regular fa-id-badge w-5 text-white"></i>
+          <span class="text-white">Profile</span>
+        </a>
+
+        <!-- LEVEL 2: Users -->
+        <button type="button"
+                data-toggle
+                class="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/10 text-white"
+                aria-expanded="false">
+          <span class="flex items-center gap-3">
+            <i class="fa-solid fa-users-gear w-5 text-white"></i>
+            <span class="text-white">Users</span>
+          </span>
+          <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+        </button>
+        <div class="submenu ml-4 mt-1 space-y-1 hidden">
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-solid fa-user-plus w-5 text-white"></i>
+            <span class="text-white">Invite</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 text-white">
+            <i class="fa-solid fa-shield-halved w-5 text-white"></i>
+            <span class="text-white">Roles & Permissions</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- tiny sidebar footer -->
+    <div class="mt-4 px-3 py-3 border-t border-white/10 text-xs text-white/70">
+      © <span id="year"></span> SJK Systems Design
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1">
+    <header class="sticky top-0 z-10 backdrop-blur bg-white/75 border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-900">Demo Page</h1>
+        <div class="flex items-center gap-2">
+          <button class="px-2 py-1.5 rounded-md bg-[var(--brand-accent)] text-white hover:bg-[var(--brand-accent-600)]">
+            <i class="fa-solid fa-plus mr-2"></i>New
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <section class="max-w-7xl mx-auto p-6">
+      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 class="text-slate-800 text-base font-semibold mb-2">Nested menus open/close correctly</h2>
+        <p class="text-slate-600">
+          Click “Scheduler”, then “By Week” (sub-submenu). Same for “Assets → Plant”.
+        </p>
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+  // Robust event delegation: works for any nesting depth.
+  document.addEventListener('DOMContentLoaded', function(){
+    const sidebar = document.getElementById('sidebar');
+    const setYear = () => {
+      const y = document.getElementById('year'); if (y) y.textContent = new Date().getFullYear();
+    };
+    setYear();
+    if (!sidebar) return;
+
+    sidebar.addEventListener('click', function(e){
+      const btn = e.target.closest('[data-toggle]');
+      if (!btn || !sidebar.contains(btn)) return;
+
+      e.preventDefault();
+
+      // immediate sibling .submenu of the clicked toggle
+      const panel = btn.nextElementSibling;
+      if (!panel || !panel.classList.contains('submenu')) return;
+
+      const isOpen = !panel.classList.contains('hidden');
+      panel.classList.toggle('hidden');
+
+      // Rotate the chevron
+      const chev = btn.querySelector('[data-chevron]');
+      if (chev) chev.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+
+      // Close other sibling submenus at the same level (optional accordion)
+      const siblings = [];
+      let node = btn.parentElement.firstElementChild;
+      while (node) {
+        if (node !== btn && node.classList && node.classList.contains('submenu')) siblings.push(node);
+        node = node.nextElementSibling;
+      }
+      siblings.forEach(el => { if (el !== panel) el.classList.add('hidden'); });
+    });
+  });
+</script>
+{% endblock %}

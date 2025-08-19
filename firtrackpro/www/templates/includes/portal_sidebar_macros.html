@@ -1,0 +1,108 @@
+{# Map your logical icon names to Font Awesome #}
+{% set ICON = {
+  "home": "fa-solid fa-gauge-high",
+  "briefcase": "fa-solid fa-briefcase",
+  "calendar": "fa-solid fa-calendar-days",
+  "list": "fa-solid fa-list-check",
+  "file-text": "fa-solid fa-file-lines",
+  "clipboard": "fa-solid fa-clipboard-list",
+  "alert-circle": "fa-solid fa-triangle-exclamation",
+  "file-plus": "fa-solid fa-file-circle-plus",
+  "map": "fa-solid fa-map",
+  "box": "fa-solid fa-box-archive",
+  "file": "fa-solid fa-file",
+  "users": "fa-solid fa-users",
+  "database": "fa-solid fa-database",
+  "truck": "fa-solid fa-truck",
+  "dollar-sign": "fa-solid fa-dollar-sign",
+  "bar-chart-2": "fa-solid fa-chart-column",
+  "settings": "fa-solid fa-gear",
+  "tool": "fa-solid fa-screwdriver-wrench",
+  "edit": "fa-solid fa-pen-to-square",
+  "user": "fa-solid fa-user",
+  "shield": "fa-solid fa-shield-halved",
+  "mail": "fa-solid fa-envelope",
+  "sliders": "fa-solid fa-sliders",
+  "help-circle": "fa-solid fa-circle-question"
+} %}
+
+{% macro _icon(name) -%}
+  <i class="{{ ICON.get(name, 'fa-solid fa-circle') }} w-5"></i>
+{%- endmacro %}
+
+{# RBAC check helper #}
+{% macro _allowed(item, user_roles) -%}
+  {%- set ns = namespace(ok = (item.roles is not defined) or (item.roles|length == 0)) -%}
+  {%- if not ns.ok and user_roles -%}
+    {%- for r in item.roles or [] -%}
+      {%- if r in user_roles -%}{% set ns.ok = true %}{%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+  {{ ns.ok }}
+{%- endmacro %}
+
+{# Recursive items renderer #}
+{% macro recursive_items(items, user_roles) -%}
+  {%- for item in items -%}
+    {# Compute visibility for this item and whether it has any visible children #}
+    {%- set has_children = item.children is defined and item.children -%}
+    {%- set allowed_self = (_allowed(item, user_roles)|string) == 'True' -%}
+    {%- set any_child = namespace(ok=false) -%}
+    {%- if has_children -%}
+      {%- for c in item.children -%}
+        {%- if (_allowed(c, user_roles)|string) == 'True' -%}{% set any_child.ok = true %}{% endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- if allowed_self or any_child.ok -%}
+      {%- if has_children -%}
+        <button type="button" data-toggle
+                class="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white"
+                aria-expanded="false">
+          <span class="flex items-center gap-3">
+            {{ _icon(item.icon) }}
+            <span class="text-white">{{ item.label }}</span>
+          </span>
+          <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+        </button>
+        <div class="submenu ml-2 mt-1 space-y-1 hidden">
+          {{ recursive_items(item.children, user_roles) }}
+        </div>
+      {%- else -%}
+        <a href="{{ item.url or '#' }}"
+           class="flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
+          {{ _icon(item.icon) }}
+          <span class="text-white">{{ item.label }}</span>
+        </a>
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endmacro %}
+
+{# Top-level sidebar wrapper #}
+{% macro render_sidebar(menu, user_roles) -%}
+  <aside id="sidebar" class="w-64 min-h-screen sticky top-0 bg-[var(--sidebar-bg)] text-[var(--sidebar-text)]">
+    <!-- Brand header with logo (same size as icons) -->
+    <div class="px-4 py-5 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <img src="/assets/firtrackpro/images/firetrack-logo.png"
+             alt="Fire Track Pro"
+             class="w-5 h-5 object-contain select-none shrink-0"
+             draggable="false">
+        <div class="leading-tight">
+          <div class="text-white font-semibold">Fire Track Pro</div>
+          <div class="text-xs text-white/70">Navigation</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="p-3 text-sm text-white">
+      <p class="px-2 py-2 text-xs uppercase tracking-wider text-white/60">Main</p>
+      {{ recursive_items(menu, user_roles) }}
+    </nav>
+
+    <div class="mt-4 px-3 py-3 border-t border-white/10 text-xs text-white/70">
+      © <span id="year"></span> SJK Systems Design
+    </div>
+  </aside>
+{%- endmacro %}

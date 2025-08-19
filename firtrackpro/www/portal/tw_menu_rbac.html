@@ -1,0 +1,82 @@
+{% extends "firtrackpro/www/templates/base_brand.html" %}
+{% block title %}Tailwind Sidebar – RBAC{% endblock %}
+{% block navbar %}{% endblock %}
+
+{# Add FA + set brand colors here #}
+{% block head_include %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous">
+  <style>
+    :root{
+      --sidebar-bg:#161616;           /* deep gray, not harsh */
+      --sidebar-text:#ffffff;
+      --brand-accent:#e11d48;         /* red */
+      --brand-accent-600:#be123c;
+    }
+  </style>
+{% endblock %}
+
+{% block page_content %}
+<div class="min-h-screen flex bg-gray-50">
+
+  {# bring in MENU + ROLE #}
+  {% include "firtrackpro/www/templates/includes/portal_menu_data.html" %}
+
+  {# import the sidebar renderer #}
+  {% import "firtrackpro/www/templates/includes/portal_sidebar_macros.html" as SB %}
+
+  {# render with real user roles from context (set in .py) #}
+  {{ SB.render_sidebar(MENU, user_roles) }}
+
+  <main class="flex-1">
+    <header class="sticky top-0 z-10 backdrop-blur bg-white/75 border-b border-gray-200">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <h1 class="text-lg font-semibold text-slate-900">Demo Page (RBAC)</h1>
+        <div class="flex items-center gap-2">
+          <button class="px-2 py-1.5 rounded-md bg-[var(--brand-accent)] text-white hover:bg-[var(--brand-accent-600)]">
+            <i class="fa-solid fa-plus mr-2"></i>New
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <section class="max-w-7xl mx-auto p-6">
+      <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 class="text-slate-800 text-base font-semibold mb-2">RBAC + Nested toggles</h2>
+        <p class="text-slate-600">
+          Menus are filtered by your real Frappe roles. Click “Work”, then “Scheduler → By Week” etc.
+        </p>
+        <p class="mt-3 text-slate-600">
+          Your roles (for debugging): <code>{{ user_roles|default([]) }}</code>
+        </p>
+      </div>
+    </section>
+  </main>
+</div>
+{% endblock %}
+
+{% block script %}
+  {{ super() }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      const sidebar = document.getElementById('sidebar');
+      const y = document.getElementById('year'); if (y) y.textContent = new Date().getFullYear();
+      if (!sidebar) return;
+
+      // Event delegation for any nesting depth
+      sidebar.addEventListener('click', function(e){
+        const btn = e.target.closest('[data-toggle]');
+        if (!btn || !sidebar.contains(btn)) return;
+        e.preventDefault();
+
+        const panel = btn.nextElementSibling;
+        if (!panel || !panel.classList.contains('submenu')) return;
+
+        const isOpen = !panel.classList.contains('hidden');
+        panel.classList.toggle('hidden');
+
+        const chev = btn.querySelector('[data-chevron]');
+        if (chev) chev.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      });
+    });
+  </script>
+{% endblock %}

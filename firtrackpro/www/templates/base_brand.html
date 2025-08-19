@@ -1,0 +1,65 @@
+{% extends "frappe/templates/web.html" %}
+
+{% block title %}Fire Track Pro{% endblock %}
+
+{% block head_include %}{% endblock %}
+{% block navbar %}{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <!-- Tailwind (browser build for testing; swap to CLI in prod) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Lato (smooth font) -->
+  <link rel="stylesheet" href="https://use.typekit.net/ytb2blj.css">
+
+  <!-- Font Awesome 6 (no SRI to avoid the digest error) -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
+        referrerpolicy="no-referrer">
+
+  <style>
+    :root{
+      /* Use your white/red theme for accents outside the sidebar */
+      --brand-accent:#e11d48;         /* red-600 */
+      --brand-accent-600:#be123c;     /* darker hover */
+
+      /* Lighter sidebar greys; ALL text will be white */
+      --sidebar-bg:#1b1f24;
+      --sidebar-active:#2a3138;
+      --sidebar-text:#ffffff;
+    }
+    html,body{
+      font-family:"lato","Helvetica Neue",Arial,sans-serif;
+      color:#1e1e1e;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    ::-webkit-scrollbar{width:8px}
+    ::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:6px}
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="min-h-screen flex flex-col bg-gray-50">
+    <main class="flex-1 flex flex-col">
+      {% block page_content %}{% endblock %}
+    </main>
+
+    {% if not hide_base_footer %}
+    <footer class="mt-auto bg-gray-900 text-gray-400 text-center p-4">
+      &copy; <span id="year"></span> SJK Systems Design
+    </footer>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block script %}
+  {{ super() }}
+  <script>
+    const y=document.getElementById('year'); if(y){ y.textContent=new Date().getFullYear(); }
+  </script>
+  <script src="https://unpkg.com/feather-icons@4.29.2/dist/feather.min.js"></script>
+{% endblock %}

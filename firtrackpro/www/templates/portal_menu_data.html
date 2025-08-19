@@ -1,0 +1,59 @@
+{# firtrackpro/www/templates/includes/portal_menu_data.html #}
+{# =========================================================
+   Shared MENU structure (3+ levels supported)
+   Add an optional "roles": ["Role A", "Role B"] to control visibility.
+   ========================================================= #}
+
+{% set MENU = [
+  {"label":"Dashboard","icon":"home","url":"/portal"},
+
+  {"label":"Work","icon":"briefcase","children":[
+    {"label":"Scheduler","icon":"calendar","url":"/portal/scheduler"},
+    {"label":"Tasks","icon":"list","url":"/portal/tasks"},
+    {"label":"Defect Quotes","icon":"file-text","url":"/portal/defect-quotes"},
+    {"label":"Inspections","icon":"clipboard","url":"/portal/inspections"},
+    {"label":"Incidents","icon":"alert-circle","url":"/portal/incidents"},
+    {"label":"Quotes","icon":"file-plus","url":"/portal/quotes"}
+  ]},
+
+  {"label":"Sites & Assets","icon":"map","children":[
+    {"label":"Sites","icon":"map","url":"/portal/sites"},
+    {"label":"Assets","icon":"box","url":"/portal/assets"},
+    {"label":"Documents","icon":"file","url":"/portal/documents"}
+  ]},
+
+  {"label":"People","icon":"users","children":[
+    {"label":"Customer Data","icon":"database","url":"/portal/customers"},
+    {"label":"Suppliers","icon":"truck","url":"/portal/suppliers"}
+  ]},
+
+  {# Billing: restrict to accounts roles (example) #}
+  {"label":"Billing","icon":"dollar-sign","roles":["Accounts User","Accounts Manager","System Manager"],"children":[
+    {"label":"Invoices","icon":"file","url":"/portal/invoices"},
+    {"label":"Purchase Orders","icon":"file","url":"/portal/purchase-orders"}
+  ]},
+
+  {"label":"Reports","icon":"bar-chart-2","url":"/portal/reports"},
+
+  {# Admin area: restrict to admin roles (example) #}
+  {"label":"Admin","icon":"settings","roles":["System Manager","Administrator"],"children":[
+    {"label":"Tools","icon":"tool","url":"/portal/tools"},
+    {"label":"Configuration","icon":"settings","url":"/portal/configuration"},
+    {"label":"Custom Forms","icon":"edit","url":"/portal/forms"},
+    {"label":"Accounts","icon":"user","children":[
+      {"label":"Users","icon":"user","children":[
+        {"label":"Dashboard","url":"/portal/accounts/dashboard"},
+        {"label":"Create User","url":"/portal/accounts/create"}
+      ]},
+      {"label":"Security","icon":"shield","children":[
+        {"label":"Audit Log","url":"/portal/accounts/accesslog"},
+        {"label":"Assume Identity","url":"/portal/accounts/assumeidentity"}
+      ]},
+      {"label":"Email","icon":"mail","children":[
+        {"label":"Send Welcome Email","url":"/portal/accounts/sendwelcomeemail"}
+      ]}
+    ]},
+    {"label":"Settings","icon":"sliders","url":"/portal/settings"},
+    {"label":"Help","icon":"help-circle","url":"/portal/help"}
+  ]}
+] %}

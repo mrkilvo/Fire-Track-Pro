@@ -1,0 +1,235 @@
+{% extends "firtrackpro/www/templates/base_template.html" %}
+{% set hide_base_footer = True %}
+{% block navbar %}{% endblock %}
+
+{% block head_include %}
+  {{ super() }}
+  <!-- Tailwind (Play CDN for dev/testing) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { DEFAULT: '#e1192d', 600:'#c51629', 700:'#a81222' } },
+          boxShadow: { card:'0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.10)' }
+        }
+      },
+      corePlugins: { preflight: false } // let Frappe’s base styles win
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/feather-icons"></script>
+  <style>
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .collapse{transition:max-height .22s ease, opacity .18s ease}
+  </style>
+{% endblock %}
+
+{# ---------- recursive menu renderer (supports 3+ levels) ---------- #}
+{% macro render_items(items, level=0, path='') -%}
+  {%- for item in items %}
+    {%- set slug = (item.key or item.label|lower|replace(' ', '-')|replace('/', '-') ) %}
+    {%- set key  = (path ~ (path and '>') ~ slug) %}
+    {%- set has_children = item.children and item.children|length %}
+    {%- set pad = ['pl-3','pl-6','pl-9','pl-12','pl-14'][level] if level < 5 else 'pl-14' %}
+    {%- set safe_id = ('menu-' ~ key|replace('>','-')) %}
+    {% if has_children %}
+      <div class="group" data-key="{{ key }}">
+        <button
+          type="button"
+          class="w-full flex items-center gap-2 {{ pad }} py-2.5 rounded-md text-white/90 hover:bg-white/10 hover:text-white"
+          data-toggle="{{ key }}"
+          aria-controls="{{ safe_id }}"
+          aria-expanded="false">
+          <i data-feather="{{ item.icon or 'folder' }}" class="w-4 h-4 opacity-90"></i>
+          <span class="truncate">{{ item.label }}</span>
+          <svg class="ml-auto w-4 h-4 transition-transform duration-200"
+               data-chevron="{{ key }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <div
+          id="{{ safe_id }}"
+          class="collapse overflow-hidden max-h-0 opacity-0 hidden"
+          data-sub="{{ key }}">
+          {{ render_items(item.children, level+1, key) }}
+        </div>
+      </div>
+    {% else %}
+      <a href="{{ item.url or '#' }}"
+         class="sidebar-link {{ pad }} py-2.5 rounded-md flex items-center gap-2 text-white/90 hover:bg-white/10 hover:text-white"
+         data-href="{{ (item.url or '#')|trim('/') }}">
+        {% if item.icon %}<i data-feather="{{ item.icon }}" class="w-4 h-4 opacity-90"></i>{% endif %}
+        <span class="truncate">{{ item.label }}</span>
+      </a>
+    {% endif %}
+  {%- endfor %}
+{%- endmacro %}
+
+{% block content %}
+<div class="min-h-screen flex bg-slate-50 text-slate-800 antialiased">
+
+  {# DESKTOP SIDEBAR #}
+  <nav id="sidebar-desktop" class="flex flex-col w-64 bg-slate-900 text-white px-4 py-6 space-y-2">
+    <a href="/portal" class="flex items-center gap-3 px-2 mb-8">
+      <img src="/assets/firtrackpro/images/firetrack-logo.png" class="w-10 h-10 rounded bg-white" alt="Logo">
+      <span class="text-xl font-semibold">Fire Track Pro</span>
+    </a>
+
+    {% set INTERNAL_MENU = MENU if MENU is defined and MENU else [
+      {"label":"Dashboard","icon":"home","url":"/portal"},
+      {"label":"Work","icon":"briefcase","children":[
+        {"label":"Scheduler","url":"/portal/scheduler"},
+        {"label":"Tasks","url":"/portal/tasks","children":[
+          {"label":"Open","url":"/portal/tasks?status=open"},
+          {"label":"Completed","url":"/portal/tasks?status=done"},
+          {"label":"By Technician","url":"/portal/tasks/tech","children":[
+            {"label":"Unassigned","url":"/portal/tasks/tech?state=unassigned"},
+            {"label":"Me","url":"/portal/tasks/tech/me"}
+          ]}
+        ]}
+      ]},
+      {"label":"Billing","icon":"dollar-sign","children":[
+        {"label":"Invoices","url":"/portal/invoices"},
+        {"label":"Purchase Orders","url":"/portal/purchase-orders"}
+      ]}
+    ] %}
+    {{ render_items(INTERNAL_MENU) }}
+  </nav>
+
+  {# MOBILE SIDEBAR + overlay #}
+  <div id="mobile-overlay" class="fixed inset-0 bg-black/40 z-40 hidden"></div>
+  <nav id="sidebar-mobile"
+       class="fixed z-50 top-14 left-0 bottom-0 w-64 bg-slate-900 text-white px-4 py-6 overflow-y-auto transform -translate-x-full transition-transform duration-300 md:hidden">
+    <a href="/portal" class="flex items-center gap-3 px-2 mb-8">
+      <img src="/assets/firtrackpro/images/firetrack-logo.png" class="w-10 h-10 rounded bg-white" alt="Logo">
+      <span class="text-xl font-semibold">Fire Track Pro</span>
+    </a>
+    {{ render_items(INTERNAL_MENU) }}
+  </nav>
+
+  {# MAIN COLUMN #}
+  <main class="flex-1 flex flex-col w-full min-h-screen">
+    <div class="sticky top-0 z-30 w-full bg-white border-b h-14 flex items-center justify-between px-4 md:px-6">
+      <div class="flex items-center gap-3">
+        <button id="btn-open-mobile" class="md:hidden p-2 -ml-2" type="button" aria-label="Open menu">
+          <svg class="w-7 h-7 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <span id="topbar-title" class="text-lg md:text-xl font-semibold">Dashboard</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/portal/accounts/profile" class="flex items-center gap-2 group">
+          <span class="font-medium text-slate-700 group-hover:underline">{{ full_name or "User" }}</span>
+          <div class="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center font-bold text-slate-800">
+            {{ (full_name or "User")[:1] }}
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="p-4 md:p-6">
+      {% block page_content %}{% endblock %}
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.feather) feather.replace();
+
+  const path = (window.location.pathname || '').replace(/\/$/, '');
+  const storeKey = 'ftp_open_groups';
+
+  function eachNav(fn){
+    document.querySelectorAll('#sidebar-desktop, #sidebar-mobile').forEach(fn);
+  }
+
+  function setExpanded(btn, expanded){
+    btn?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
+  function openSub(nav, key, persist){
+    const sub = nav.querySelector(`[data-sub="${CSS.escape(key)}"]`);
+    const chev = nav.querySelector(`[data-chevron="${CSS.escape(key)}"]`);
+    const btn  = nav.querySelector(`[data-toggle="${CSS.escape(key)}"]`);
+    if (!sub) return;
+    sub.classList.remove('hidden','max-h-0','opacity-0');
+    sub.classList.add('max-h-96','opacity-100','mt-1','pl-2','border-l','border-white/10');
+    if (chev) chev.style.transform = 'rotate(90deg)';
+    setExpanded(btn, true);
+    if (persist) remember(key, true);
+  }
+
+  function closeSub(nav, key, persist){
+    const sub = nav.querySelector(`[data-sub="${CSS.escape(key)}"]`);
+    const chev = nav.querySelector(`[data-chevron="${CSS.escape(key)}"]`);
+    const btn  = nav.querySelector(`[data-toggle="${CSS.escape(key)}"]`);
+    if (!sub) return;
+    sub.classList.add('max-h-0','opacity-0');
+    setTimeout(()=>sub.classList.add('hidden'), 200);
+    if (chev) chev.style.transform = '';
+    setExpanded(btn, false);
+    if (persist) remember(key, false);
+  }
+
+  function remember(key, on){
+    const set = new Set(JSON.parse(localStorage.getItem(storeKey) || '[]'));
+    on ? set.add(key) : set.delete(key);
+    localStorage.setItem(storeKey, JSON.stringify([...set]));
+  }
+
+  // Bind toggles (scoped per NAV so desktop+mobile both work)
+  eachNav(nav => {
+    nav.querySelectorAll('[data-toggle]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = btn.dataset.toggle;
+        const sub = nav.querySelector(`[data-sub="${CSS.escape(key)}"]`);
+        if (!sub) return;
+        const isOpen = !sub.classList.contains('hidden') && !sub.classList.contains('max-h-0');
+        isOpen ? closeSub(nav, key, true) : openSub(nav, key, true);
+      });
+    });
+  });
+
+  // Restore remembered groups
+  const saved = JSON.parse(localStorage.getItem(storeKey) || '[]');
+  eachNav(nav => saved.forEach(k => openSub(nav, k, false)));
+
+  // Active link + open ancestors
+  eachNav(nav => {
+    nav.querySelectorAll('a.sidebar-link').forEach(a => {
+      const href = (a.dataset.href || '').replace(/\/$/, '');
+      if (href && href === path) {
+        a.classList.add('bg-white/10','text-white');
+        // open ancestors in this nav
+        let p = a.parentElement;
+        while (p) {
+          const group = p.closest('.group'); if (!group) break;
+          const key = group.dataset.key;
+          openSub(nav, key, false);
+          p = group.parentElement;
+        }
+      }
+    });
+  });
+
+  // Mobile drawer
+  const mob = document.getElementById('sidebar-mobile');
+  const overlay = document.getElementById('mobile-overlay');
+  const openBtn = document.getElementById('btn-open-mobile');
+  function openMob(){ mob.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); }
+  function closeMob(){ mob.classList.add('-translate-x-full'); overlay.classList.add('hidden'); }
+  openBtn?.addEventListener('click', openMob);
+  overlay?.addEventListener('click', closeMob);
+});
+</script>
+{% endblock %}
