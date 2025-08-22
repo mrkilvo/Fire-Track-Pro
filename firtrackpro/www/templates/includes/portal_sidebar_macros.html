@@ -1,4 +1,4 @@
-{# Map your logical icon names to Font Awesome #}
+{# Font Awesome icon map #}
 {% set ICON = {
   "home": "fa-solid fa-gauge-high",
   "briefcase": "fa-solid fa-briefcase",
@@ -27,48 +27,67 @@
 } %}
 
 {% macro _icon(name) -%}
-  <i class="{{ ICON.get(name, 'fa-solid fa-circle') }} w-5"></i>
+  <i class="sb-icon {{ ICON.get(name, 'fa-solid fa-circle') }}"></i>
 {%- endmacro %}
 
-{# RBAC check helper #}
+{# RBAC check with namespace so state persists across loops #}
 {% macro _allowed(item, user_roles) -%}
-  {%- set ns = namespace(ok = (item.roles is not defined) or (item.roles|length == 0)) -%}
-  {%- if not ns.ok and user_roles -%}
-    {%- for r in item.roles or [] -%}
-      {%- if r in user_roles -%}{% set ns.ok = true %}{%- endif -%}
+  {%- set roles = item.roles or [] -%}
+  {%- if roles|length == 0 -%}
+    {{ True }}
+  {%- else -%}
+    {%- set ns = namespace(ok=False) -%}
+    {%- for r in roles -%}
+      {%- set rr = (r or '')|trim|lower -%}
+      {%- if rr == '*' -%}
+        {%- set ns.ok = True -%}
+      {%- else -%}
+        {%- for ur in user_roles or [] -%}
+          {%- if (ur or '')|trim|lower == rr -%}
+            {%- set ns.ok = True -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
     {%- endfor -%}
+    {{ ns.ok }}
   {%- endif -%}
-  {{ ns.ok }}
 {%- endmacro %}
 
-{# Recursive items renderer #}
+{# Recursive renderer with "child promotion" when parent is restricted #}
 {% macro recursive_items(items, user_roles) -%}
-  {%- for item in items -%}
-    {# Compute visibility for this item and whether it has any visible children #}
+  {%- for item in items or [] -%}
     {%- set has_children = item.children is defined and item.children -%}
     {%- set allowed_self = (_allowed(item, user_roles)|string) == 'True' -%}
-    {%- set any_child = namespace(ok=false) -%}
+
+    {%- set vc = namespace(list=[]) -%}
     {%- if has_children -%}
       {%- for c in item.children -%}
-        {%- if (_allowed(c, user_roles)|string) == 'True' -%}{% set any_child.ok = true %}{% endif -%}
+        {%- if (_allowed(c, user_roles)|string) == 'True' -%}
+          {%- set vc.list = vc.list + [c] -%}
+        {%- endif -%}
       {%- endfor -%}
     {%- endif -%}
 
-    {%- if allowed_self or any_child.ok -%}
-      {%- if has_children -%}
+    {%- if has_children -%}
+      {%- if allowed_self -%}
         <button type="button" data-toggle
-                class="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white"
-                aria-expanded="false">
+                class="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
           <span class="flex items-center gap-3">
             {{ _icon(item.icon) }}
             <span class="text-white">{{ item.label }}</span>
           </span>
-          <i data-chevron class="fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
+          <i data-chevron class="sb-chevron fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
         </button>
-        <div class="submenu ml-2 mt-1 space-y-1 hidden">
-          {{ recursive_items(item.children, user_roles) }}
-        </div>
-      {%- else -%}
+        {% if vc.list|length > 0 %}
+          <div class="submenu ml-2 mt-1 space-y-1 hidden">
+            {{ recursive_items(vc.list, user_roles) }}
+          </div>
+        {% endif %}
+      {%- elif vc.list|length > 0 -%}
+        {{ recursive_items(vc.list, user_roles) }}
+      {%- endif -%}
+    {%- else -%}
+      {%- if allowed_self -%}
         <a href="{{ item.url or '#' }}"
            class="flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
           {{ _icon(item.icon) }}
@@ -79,10 +98,8 @@
   {%- endfor -%}
 {%- endmacro %}
 
-{# Top-level sidebar wrapper #}
 {% macro render_sidebar(menu, user_roles) -%}
   <aside id="sidebar" class="w-64 min-h-screen sticky top-0 bg-[var(--sidebar-bg)] text-[var(--sidebar-text)]">
-    <!-- Brand header with logo (same size as icons) -->
     <div class="px-4 py-5 border-b border-white/10">
       <div class="flex items-center gap-3">
         <img src="/assets/firtrackpro/images/firetrack-logo.png"

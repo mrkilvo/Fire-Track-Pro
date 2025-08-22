@@ -236,4 +236,3 @@ app_include_css = "assets/firtrackpro/css/brand.css"
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
-

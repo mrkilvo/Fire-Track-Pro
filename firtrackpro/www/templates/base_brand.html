@@ -7,34 +7,39 @@
 
 {% block head %}
   {{ super() }}
-  <!-- Tailwind (browser build for testing; swap to CLI in prod) -->
+
+  <!-- Tailwind (browser build) -->
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
-  <!-- Lato (smooth font) -->
-  <link rel="stylesheet" href="https://use.typekit.net/ytb2blj.css">
+  <!-- Inter (crisp UI font) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Font Awesome 6 (no SRI to avoid the digest error) -->
+  <!-- Font Awesome -->
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css"
         referrerpolicy="no-referrer">
 
   <style>
     :root{
-      /* Use your white/red theme for accents outside the sidebar */
-      --brand-accent:#e11d48;         /* red-600 */
-      --brand-accent-600:#be123c;     /* darker hover */
-
-      /* Lighter sidebar greys; ALL text will be white */
+      /* Brand + sidebar vars */
+      --brand-accent:#e11d48;
+      --brand-accent-600:#be123c;
       --sidebar-bg:#1b1f24;
       --sidebar-active:#2a3138;
       --sidebar-text:#ffffff;
     }
+
     html,body{
-      font-family:"lato","Helvetica Neue",Arial,sans-serif;
+      font-family:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:#1e1e1e;
       -webkit-font-smoothing:antialiased;
       -moz-osx-font-smoothing:grayscale;
+      text-rendering:optimizeLegibility;
+      font-synthesis-weight:none; /* prevent fake bold */
     }
+
     ::-webkit-scrollbar{width:8px}
     ::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:6px}
   </style>
