@@ -1,87 +1,111 @@
 {# Template-only menu source of truth.
-   This macro BUILDS the MENU and immediately calls the sidebar renderer.
-   No JSON, no Python menu structures needed. #}
+   Builds ROLE + MENU and calls the sidebar renderer macro. #}
 
 {% macro render_with_sidebar(SB, user_roles) -%}
-  {# ----- Role groups (edit to match your site's Roles) ----- #}
+
+  {# ---- Base role sets ---- #}
   {% set ROLE = {
     "admin": ["Administrator","System Manager"],
-    "office": ["Administrator","System Manager","Projects Manager","Sales Manager","Sales User","Support Team","Purchase User","Stock User","Accounts User","Accounts Manager","Website Manager"],
-    "field": ["Administrator","Technician","Field User","Maintenance User"],
-    "billing": ["Administrator","Accounts User","Accounts Manager","System Manager"],
-    "reports": ["Report Manager","System Manager","Analytics"],
-    "people": ["Sales User","CRM User","Support Team","System Manager"],
-    "sites": ["Projects User","Sales User","System Manager"],
-    "assets": ["Maintenance User","Stock User","System Manager"],
-    "documents": ["Website Manager","System Manager","Sales User","Support Team"],
-    "quotes": ["Sales User","Sales Manager","System Manager"],
-    "inspections": ["Quality Manager","Maintenance User","System Manager"],
-    "incidents": ["Support Team","System Manager"],
-    "suppliers": ["Purchase User","Buying User","Stock User","System Manager"],
-    "tools": ["System Manager"],
-    "configuration": ["System Manager"],
-    "forms": ["Website Manager","System Manager"],
-    "accounts_admin": ["Administrator","System Manager"],
-    "accounts_security": ["Administrator","System Manager"],
-    "accounts_email": ["System Manager","Support Team"],
-    "settings": ["System Manager"],
-    "help": []
+    "office": ["Projects Manager","Sales Manager","Sales User","Support Team","Website Manager","System Manager"],
+    "field": ["Technician","Field User","Maintenance User"],
+    "billing": ["Accounts User","Accounts Manager","System Manager"],
+    "inventory": ["Stock User","Purchase User","System Manager"],
+    "reports": ["Report Manager","Analytics","System Manager"],
+    "people": ["CRM User","Sales User","Support Team","System Manager"],
+    "compliance": ["Quality Manager","Maintenance User","System Manager"],
+    "safety": ["Technician","Maintenance User","System Manager"],
+    "fleet": ["System Manager","Maintenance User"],
+    "firelink": ["System Manager"]
   } %}
 
-  {# ----- MENU definition (3+ levels supported) ----- #}
+  {# ---- Combined groups (avoid + inside dicts) ---- #}
+  {% set R_WORK_ALL = ROLE.office + ROLE.field + ROLE.admin %}
+  {% set R_OFFICE_ADMIN = ROLE.office + ROLE.admin %}
+  {% set R_PEOPLE_ADMIN = ROLE.people + ROLE.admin %}
+  {% set R_BILL_ADMIN = ROLE.billing + ROLE.admin %}
+  {% set R_REPORTS_ADMIN = ROLE.reports + ROLE.admin %}
+  {% set R_FLEET_ADMIN = ROLE.fleet + ROLE.admin %}
+  {% set R_COMPLIANCE_ADMIN = ROLE.compliance + ROLE.admin %}
+  {% set R_SAFETY_ADMIN = ROLE.safety + ROLE.admin %}
+  {% set R_INVENTORY_ADMIN = ROLE.inventory + ROLE.admin %}
+
+  {# ---- MENU definition ---- #}
   {% set MENU = [
     {"label":"Dashboard","icon":"home","url":"/portal","roles":["*"]},
 
-    {"label":"Work","icon":"briefcase","roles": ROLE.office + ROLE.field + ROLE.admin,"children":[
-      {"label":"Scheduler","icon":"calendar","url":"/portal/scheduler","roles": ROLE.office + ROLE.field},
-      {"label":"Tasks","icon":"list","url":"/portal/tasks","roles": ROLE.office + ROLE.field},
-      {"label":"Defect Quotes","icon":"file-text","url":"/portal/defect-quotes","roles": ROLE.quotes},
-      {"label":"Inspections","icon":"clipboard","url":"/portal/inspections","roles": ROLE.inspections},
-      {"label":"Incidents","icon":"alert-circle","url":"/portal/incidents","roles": ROLE.incidents},
-      {"label":"Quotes","icon":"file-plus","url":"/portal/quotes","roles": ROLE.quotes}
+    {"label":"Work","icon":"briefcase","roles": R_WORK_ALL, "children":[
+      {"label":"Scheduler","icon":"calendar","url":"/portal/scheduler","roles": R_OFFICE_ADMIN},
+      {"label":"Jobs","icon":"list","url":"/portal/jobs","roles": R_WORK_ALL},
+      {"label":"Defects","icon":"alert-circle","url":"/portal/defects","roles": R_WORK_ALL},
+      {"label":"Repairs","icon":"tool","url":"/portal/repairs","roles": R_WORK_ALL},
+      {"label":"Quotes","icon":"file-plus","url":"/portal/quotes","roles": ["Sales User","Sales Manager","System Manager"]}
     ]},
 
-    {"label":"Sites & Assets","icon":"map","roles": ROLE.sites + ROLE.assets + ROLE.admin,"children":[
-      {"label":"Sites","icon":"map","url":"/portal/sites","roles": ROLE.sites},
-      {"label":"Assets","icon":"box","url":"/portal/assets","roles": ROLE.assets},
-      {"label":"Documents","icon":"file","url":"/portal/documents","roles": ROLE.documents}
+    {"label":"Sites & Assets","icon":"map","roles": R_WORK_ALL, "children":[
+      {"label":"Properties","icon":"map","url":"/portal/sites","roles": R_WORK_ALL},
+      {"label":"Assets","icon":"box","url":"/portal/assets","roles": R_WORK_ALL},
+      {"label":"Zones","icon":"map","url":"/portal/zones","roles": R_OFFICE_ADMIN},
+      {"label":"Document Vault","icon":"file-text","url":"/portal/documents","roles": R_OFFICE_ADMIN},
+      {"label":"Pump Profiles","icon":"settings","url":"/portal/pump-profiles","roles": R_WORK_ALL},
+      {"label":"Flow Tests","icon":"bar-chart-2","url":"/portal/flow-tests","roles": R_WORK_ALL}
     ]},
 
-    {"label":"People","icon":"users","roles": ROLE.people + ROLE.admin,"children":[
-      {"label":"Customer Data","icon":"database","url":"/portal/customers","roles": ROLE.people},
-      {"label":"Suppliers","icon":"truck","url":"/portal/suppliers","roles": ROLE.suppliers}
+    {"label":"Compliance","icon":"shield","roles": R_COMPLIANCE_ADMIN, "children":[
+      {"label":"ESM Register (VIC)","icon":"clipboard","url":"/portal/esm","roles": R_COMPLIANCE_ADMIN},
+      {"label":"AFSS Certificates (NSW)","icon":"file","url":"/portal/afss","roles": R_COMPLIANCE_ADMIN},
+      {"label":"Notifications","icon":"mail","url":"/portal/notifications","roles": R_COMPLIANCE_ADMIN}
     ]},
 
-    {"label":"Billing","icon":"dollar-sign","roles": ROLE.billing,"children":[
-      {"label":"Invoices","icon":"file","url":"/portal/invoices","roles": ROLE.billing},
-      {"label":"Purchase Orders","icon":"file","url":"/portal/purchase-orders","roles": ROLE.billing}
+    {"label":"Safety","icon":"help-circle","roles": R_SAFETY_ADMIN, "children":[
+      {"label":"JSA","icon":"clipboard","url":"/portal/jsa","roles": R_SAFETY_ADMIN},
+      {"label":"SWMS","icon":"file-text","url":"/portal/swms","roles": R_SAFETY_ADMIN},
+      {"label":"Permits to Work","icon":"edit","url":"/portal/permits","roles": R_SAFETY_ADMIN},
+      {"label":"Toolbox Talks","icon":"users","url":"/portal/toolbox","roles": R_SAFETY_ADMIN},
+      {"label":"Incidents & CAPA","icon":"alert-circle","url":"/portal/incidents","roles": R_SAFETY_ADMIN}
     ]},
 
-    {"label":"Reports","icon":"bar-chart-2","url":"/portal/reports","roles": ROLE.reports + ROLE.admin},
+    {"label":"Instruments","icon":"settings","roles": R_INVENTORY_ADMIN, "children":[
+      {"label":"Instruments","icon":"settings","url":"/portal/instruments","roles": R_INVENTORY_ADMIN},
+      {"label":"Calibrations","icon":"settings","url":"/portal/instrument-calibrations","roles": R_INVENTORY_ADMIN},
+      {"label":"Bookings","icon":"calendar","url":"/portal/instrument-bookings","roles": R_INVENTORY_ADMIN}
+    ]},
 
-    {"label":"Admin","icon":"settings","roles": ROLE.admin,"children":[
-      {"label":"Tools","icon":"tool","url":"/portal/tools","roles": ROLE.tools},
-      {"label":"Configuration","icon":"settings","url":"/portal/configuration","roles": ROLE.configuration},
-      {"label":"Custom Forms","icon":"edit","url":"/portal/forms","roles": ROLE.forms},
+    {"label":"People","icon":"users","roles": R_PEOPLE_ADMIN, "children":[
+      {"label":"Customers","icon":"database","url":"/portal/customers","roles": R_PEOPLE_ADMIN},
+      {"label":"Suppliers","icon":"truck","url":"/portal/suppliers","roles": ["Purchase User","Stock User","System Manager"]},
+      {"label":"Technicians","icon":"user","url":"/portal/technicians","roles": R_OFFICE_ADMIN}
+    ]},
 
-      {"label":"Accounts","icon":"user","roles": ROLE.accounts_admin,"children":[
-        {"label":"Users","icon":"user","roles": ROLE.accounts_admin,"children":[
-          {"label":"Dashboard","url":"/portal/accounts/dashboard","roles": ROLE.accounts_admin},
-          {"label":"Create User","url":"/portal/accounts/create","roles": ROLE.accounts_admin}
-        ]},
-        {"label":"Security","icon":"shield","roles": ROLE.accounts_security,"children":[
-          {"label":"Audit Log","url":"/portal/accounts/accesslog","roles": ROLE.accounts_security},
-          {"label":"Assume Identity","url":"/portal/accounts/assumeidentity","roles": ROLE.accounts_security}
-        ]},
-        {"label":"Email","icon":"mail","roles": ROLE.accounts_email,"children":[
-          {"label":"Send Welcome Email","url":"/portal/accounts/sendwelcomeemail","roles": ROLE.accounts_email}
-        ]}
-      ]},
+    {"label":"Billing","icon":"dollar-sign","roles": R_BILL_ADMIN, "children":[
+      {"label":"Invoices","icon":"file","url":"/portal/invoices","roles": R_BILL_ADMIN},
+      {"label":"Purchase Orders","icon":"file","url":"/portal/purchase-orders","roles": ["Purchase User","Accounts Manager","System Manager"]}
+    ]},
 
-      {"label":"Settings","icon":"sliders","url":"/portal/settings","roles": ROLE.settings},
-      {"label":"Help","icon":"help-circle","url":"/portal/help","roles": ROLE.help}
+    {"label":"Reporting","icon":"bar-chart-2","roles": R_REPORTS_ADMIN, "children":[
+      {"label":"Report Packages","icon":"file-text","url":"/portal/report-packages","roles": R_REPORTS_ADMIN},
+      {"label":"Drafts","icon":"edit","url":"/portal/report-drafts","roles": R_REPORTS_ADMIN},
+      {"label":"Publications","icon":"file-text","url":"/portal/report-publications","roles": R_REPORTS_ADMIN},
+      {"label":"Document Vault","icon":"file","url":"/portal/documents","roles": R_REPORTS_ADMIN}
+    ]},
+
+    {"label":"Workforce & Fleet","icon":"truck","roles": R_FLEET_ADMIN, "children":[
+      {"label":"Timesheets","icon":"list","url":"/portal/timesheets","roles": R_WORK_ALL},
+      {"label":"Job Events (GPS)","icon":"map","url":"/portal/job-events","roles": R_OFFICE_ADMIN},
+      {"label":"Vehicles","icon":"truck","url":"/portal/vehicles","roles": R_FLEET_ADMIN},
+      {"label":"Vehicle Logs","icon":"file-text","url":"/portal/vehicle-logs","roles": R_FLEET_ADMIN}
+    ]},
+
+    {"label":"Admin","icon":"settings","roles": ROLE.admin, "children":[
+      {"label":"FT Settings","icon":"settings","url":"/portal/settings","roles": ROLE.admin},
+      {"label":"SLA Policies","icon":"sliders","url":"/portal/sla-policies","roles": ROLE.admin},
+      {"label":"Work Calendar","icon":"calendar","url":"/portal/work-calendar","roles": ROLE.admin},
+      {"label":"Audit Log","icon":"shield","url":"/portal/audit-log","roles": ROLE.admin},
+      {"label":"QC Review","icon":"edit","url":"/portal/qc-review","roles": ROLE.admin},
+      {"label":"FireLink Consent","icon":"settings","url":"/portal/firelink-consent","roles": ROLE.firelink},
+      {"label":"Email","icon":"mail","url":"/portal/emails","roles": ["System Manager","Support Team"]}
     ]}
   ] %}
 
   {{ SB.render_sidebar(MENU, user_roles) }}
+
 {%- endmacro %}
