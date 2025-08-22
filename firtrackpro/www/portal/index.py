@@ -7,7 +7,7 @@ no_cache = 1
 
 
 def _safe_get_all(doctype, *, fields=None, filters=None, order_by=None, limit=5):
-	"""Lightweight helper: return [] if the doctype/fields don’t exist."""
+	"""Lightweight helper: return [] if the doctype/fields dont exist."""
 	try:
 		return frappe.get_all(
 			doctype,
@@ -56,7 +56,7 @@ def get_context(context):
 		limit=5,
 	)
 
-	# 2) Recent messages (Communication) where I’m a recipient
+	# 2) Recent messages (Communication) where Im a recipient
 	messages = _safe_get_all(
 		"Communication",
 		fields=["name", "subject", "creation", "status"],
