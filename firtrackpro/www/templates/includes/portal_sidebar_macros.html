@@ -30,7 +30,7 @@
   <i class="sb-icon {{ ICON.get(name, 'fa-solid fa-circle') }}"></i>
 {%- endmacro %}
 
-{# RBAC check with namespace so state persists across loops #}
+{# RBAC check #}
 {% macro _allowed(item, user_roles) -%}
   {%- set roles = item.roles or [] -%}
   {%- if roles|length == 0 -%}
@@ -53,12 +53,13 @@
   {%- endif -%}
 {%- endmacro %}
 
-{# Recursive renderer with "child promotion" when parent is restricted #}
-{% macro recursive_items(items, user_roles) -%}
+{# Recursive Flowbite accordion renderer #}
+{% macro recursive_flowbite(items, user_roles, path="root") -%}
   {%- for item in items or [] -%}
     {%- set has_children = item.children is defined and item.children -%}
     {%- set allowed_self = (_allowed(item, user_roles)|string) == 'True' -%}
 
+    {# collect allowed children #}
     {%- set vc = namespace(list=[]) -%}
     {%- if has_children -%}
       {%- for c in item.children -%}
@@ -68,30 +69,46 @@
       {%- endfor -%}
     {%- endif -%}
 
+    {# slug/id helpers (no regex to stay portable) #}
+    {%- set base = (item.label|lower|replace(' ','-')|replace('&','and')|replace('/','-')|replace('.','-')|replace('#','-')) -%}
+    {%- set sid = (path ~ '-' ~ base ~ '-' ~ loop.index0)|replace('--','-') -%}
+    {%- set hid = 'acc-h-' ~ sid -%}
+    {%- set bid = 'acc-b-' ~ sid -%}
+
     {%- if has_children -%}
-      {%- if allowed_self -%}
-        <button type="button" data-toggle
-                class="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
-          <span class="flex items-center gap-3">
+      {%- if allowed_self or vc.list|length > 0 -%}
+        <h2 id="{{ hid }}">
+          <button type="button"
+                  class="w-full flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 text-white"
+                  data-accordion-target="#{{ bid }}"
+                  aria-expanded="false"
+                  aria-controls="{{ bid }}">
             {{ _icon(item.icon) }}
-            <span class="text-white">{{ item.label }}</span>
-          </span>
-          <i data-chevron class="sb-chevron fa-solid fa-chevron-down text-white transition-transform duration-200"></i>
-        </button>
-        {% if vc.list|length > 0 %}
-          <div class="submenu ml-2 mt-1 space-y-1 hidden">
-            {{ recursive_items(vc.list, user_roles) }}
+            <span class="truncate">{{ item.label }}</span>
+            <svg data-accordion-icon class="sb-chevron ml-auto w-4 h-4 text-white/80" aria-hidden="true"
+                 xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5 5 1 1 5"/>
+            </svg>
+          </button>
+        </h2>
+        <div id="{{ bid }}" class="hidden" aria-labelledby="{{ hid }}">
+          {% if vc.list|length > 0 %}
+          <div class="my-2 pl-3 border-l border-white/10"
+               data-accordion="collapse"
+               data-active-classes="bg-white/10 text-white"
+               data-inactive-classes="text-slate-300">
+            {{ recursive_flowbite(vc.list, user_roles, sid) }}
           </div>
-        {% endif %}
-      {%- elif vc.list|length > 0 -%}
-        {{ recursive_items(vc.list, user_roles) }}
+          {% endif %}
+        </div>
       {%- endif -%}
     {%- else -%}
       {%- if allowed_self -%}
         <a href="{{ item.url or '#' }}"
-           class="flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg hover:bg-white/10 focus:bg-white/10 focus:outline-none text-white">
+           class="flex items-center gap-3 px-3 py-2.5 mt-1 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white">
           {{ _icon(item.icon) }}
-          <span class="text-white">{{ item.label }}</span>
+          <span class="truncate">{{ item.label }}</span>
         </a>
       {%- endif -%}
     {%- endif -%}
@@ -115,11 +132,16 @@
 
     <nav class="p-3 text-sm text-white">
       <p class="px-2 py-2 text-xs uppercase tracking-wider text-white/60">Main</p>
-      {{ recursive_items(menu, user_roles) }}
+      <div id="portal-accordion"
+           data-accordion="collapse"
+           data-active-classes="bg-white/10 text-white"
+           data-inactive-classes="text-slate-300">
+        {{ recursive_flowbite(menu, user_roles, "root") }}
+      </div>
     </nav>
 
     <div class="mt-4 px-3 py-3 border-t border-white/10 text-xs text-white/70">
-      © <span id="year"></span> SJK Systems Design
+      © <span id="year"></span> Fire Track Pro 
     </div>
   </aside>
 {%- endmacro %}

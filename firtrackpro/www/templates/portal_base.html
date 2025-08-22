@@ -3,6 +3,11 @@
 {% block navbar %}{% endblock %}
 
 {% block head_include %}
+  {{ super() }}
+  {# Use compiled Tailwind in production (prebuilt via bench build) #}
+ <link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
+<link rel="stylesheet" href="/assets/firtrackpro/css/custom.css">
+<script defer src="/assets/firtrackpro/js/flowbite.min.js"></script>
   <style>
     :root{
       --sidebar-bg:#161616;
@@ -97,6 +102,41 @@
 
 {% block script %}
   {{ super() }}
+
+  {# Mixed-content safety: upgrade same-host http -> https for media/links #}
+  <script>
+  (function(){
+    function toHttps(u){
+      try{
+        const url = new URL(u, window.location.origin);
+        if(url.hostname === window.location.hostname && url.protocol === 'http:'){ url.protocol = 'https:'; }
+        return url.href;
+      }catch(_){ return u; }
+    }
+    function fix(container){
+      container.querySelectorAll('img[src],a[href],source[src],video[src],audio[src]').forEach(el=>{
+        const attr = el.hasAttribute('href') ? 'href' : 'src';
+        const v = el.getAttribute(attr);
+        if(!v) return;
+        const nv = toHttps(v);
+        if(nv !== v) el.setAttribute(attr, nv);
+      });
+    }
+    if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', ()=>fix(document)); }
+    else { fix(document); }
+  })();
+  </script>
+
+  {# Quiet highlight.js deprecation from Frappe's website.js #}
+  <script>
+  window.hljs = window.hljs || {};
+  if(typeof window.hljs.initHighlighting === 'function'){
+    try{ window.hljs.highlightAll && window.hljs.highlightAll(); }catch(_){}
+    window.hljs.initHighlighting = function(){ /* suppressed */ };
+  }
+  </script>
+
+  {# Sidebar accordion toggle #}
   <script>
     document.addEventListener('DOMContentLoaded', function(){
       const sidebar=document.getElementById('sidebar');

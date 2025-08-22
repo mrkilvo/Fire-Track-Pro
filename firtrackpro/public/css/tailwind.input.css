@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal helper classes that we use across portal */
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 select-none rounded-xl
+                 px-3 py-2 text-sm font-medium shadow border border-slate-300
+                 bg-white text-slate-800 hover:bg-slate-50 active:scale-[0.98]; }
+  .btn-primary { @apply bg-slate-800 text-white border-slate-700 hover:bg-slate-900; }
+  .card { @apply bg-white/90 backdrop-blur rounded-2xl shadow ring-1 ring-slate-200; }
+}

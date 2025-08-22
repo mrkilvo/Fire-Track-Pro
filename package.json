@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Fire Support System",
-
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.11",
-    "tailwindcss": "^4.1.11"
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/line-clamp": "^0.4.4",
+    "@tailwindcss/typography": "^0.5.16",
+    "autoprefixer": "^10.4.21",
+    "flowbite": "^2.5.2",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.10"
   },
   "dependencies": {
     "fullcalendar": "^6.1.19"
