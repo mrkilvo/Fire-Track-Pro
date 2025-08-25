@@ -1,160 +1,69 @@
-# firtrackpro/firtrackpro/www/portal/tasks/scheduler/index.py
-from __future__ import annotations
-
+# apps/firtrackpro/firtrackpro/www/portal/scheduler/index.py
 import frappe
+from datetime import date, timedelta
+from firtrackpro.portal_utils import build_portal_context
 
+no_cache = 1
+
+def _demo_resources():
+    # Add more techs so you can test vertical scrolling & filtering
+    base = [
+        {"id":"tech-alex","title":"Alex Lee","region":"CBD","skills":"Pumps, Panels"},
+        {"id":"tech-ava","title":"Ava Singh","region":"CBD","skills":"Sprinklers, Hydrants"},
+        {"id":"tech-liam","title":"Liam Brown","region":"North","skills":"Panels, Fault Find"},
+        {"id":"tech-sam","title":"Sam Taylor","region":"North","skills":"Sprinklers, Hydrants"},
+        {"id":"tech-jordan","title":"Jordan Patel","region":"South","skills":"Emergency Lighting"},
+        {"id":"tech-zoe","title":"Zoe Chen","region":"South","skills":"Pumps"},
+        {"id":"tech-casey","title":"Casey Nguyen","region":"West","skills":"Fault Finding"},
+        {"id":"tech-max","title":"Max Wilson","region":"West","skills":"Sprinklers"},
+    ]
+    return base
+
+def _demo_events():
+    sites = ["ACME HQ","Harbour Tower","East Mall","Airport T3","Riverside Park"]
+    times = ["08:00","09:00","10:00","12:00","14:00"]
+    statuses = ["Open","In Progress","Completed"]
+    techs = [r["id"] for r in _demo_resources()]
+    today = date.today()
+    out = []
+    for i in range(48):
+        d = (today + timedelta(days=i % 14)).strftime("%Y-%m-%d")
+        out.append({
+            "id": f"JOB-{1200+i}",
+            "title": f"Service @ {sites[i % len(sites)]}",
+            "start": f"{d}T{times[i % len(times)]}:00",
+            "end":   f"{d}T{times[(i+1) % len(times)]}:00",
+            "resourceId": techs[i % len(techs)],
+            "extendedProps": {
+                "status": statuses[i % len(statuses)],
+                "site": sites[(i*3) % len(sites)]
+            }
+        })
+    return out
+
+def _demo_backlog():
+    return [
+        {"title":"Quarterly Service – Airport T3", "site":"Airport T3", "status":"Open"},
+        {"title":"Panel Fault – East Mall", "site":"East Mall", "status":"In Progress"},
+        {"title":"Hydrant Test – Riverside", "site":"Riverside Park", "status":"Open"},
+        {"title":"Lighting Audit – Harbour Tower", "site":"Harbour Tower", "status":"Completed"},
+    ]
 
 def get_context(context):
-	# Require login
-	if frappe.session.user == "Guest":
-		frappe.local.flags.redirect_location = "/login"
-		raise frappe.Redirect
+    # Optional license key from site_config / Single doctype
+    lic = getattr(frappe.conf, "fullcalendar_license_key", None)
+    if not lic:
+        try:
+            lic = frappe.db.get_single_value("FT Settings", "fullcalendar_license_key")
+        except Exception:
+            lic = None
 
-	context.no_cache = 1
+    context.FC_LICENSE_KEY   = lic or "GPL-My-Project-Is-Open-Source"
+    context.PAGE_TITLE       = "Scheduler"
+    context.actions          = ['export']
+    context.RESOURCES        = _demo_resources()
+    context.EVENTS           = _demo_events()
+    context.BACKLOG          = _demo_backlog()
+    context.STATUS_OPTIONS   = ["Open","In Progress","Completed","Cancelled"]
 
-	# Optional: read Scheduler license key from site_config.json.
-	# Set it with:
-	# bench --site your.site set-config fullcalendar_scheduler_license_key "YOUR-LICENSE-KEY"
-	context.fc_license_key = (
-		frappe.conf.get("fullcalendar_scheduler_license_key") or "GPL-My-Project-Is-Open-Source"
-	)
-
-	# Optional: expose script URLs to the template (if you want to interpolate them)
-	context.fc_urls = {
-		"scheduler_local": "/assets/firtrackpro/js/vendor/fullcalendar-scheduler/index.global.min.js",
-		"scheduler_cdn": "https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.19/index.global.min.js",
-		"standard_local": "/assets/firtrackpro/js/vendor/fullcalendar/index.global.min.js",
-		"standard_cdn": "https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js",
-	}
-
-	# Demo tasks for sidebar
-	context.tasks = [
-		{
-			"status": "READY",
-			"type": "CALLOUT",
-			"code": "T-00304",
-			"title": "Site attendance to investigate defect relating to overheating pump.",
-			"site": "915 Collins Street, Docklands",
-			"client": "Entire Service & Maintenance Pty Ltd",
-			"duration": "2:00",
-		},
-		{
-			"status": "READY",
-			"type": "I&T",
-			"code": "T-00303",
-			"title": "PM2025/08 Servicing - Sprinkler",
-			"site": "56 Elliot St Reservoir VIC 3073",
-			"client": "Firewatch Safety Results Group",
-			"duration": "4:00",
-		},
-		{
-			"status": "IN PROGRESS",
-			"type": "MAINTENANCE",
-			"code": "T-00302",
-			"title": "Monthly Alarm System Test",
-			"site": "100 Swanston St, Melbourne",
-			"client": "ACME Holdings Pty Ltd",
-			"duration": "1:00",
-		},
-	]
-
-	# Demo resources (technicians) — note team & region for grouping
-	context.resources = [
-		{
-			"id": "tech1",
-			"title": "Alice Johnson — FPA-123",
-			"color": "#93c5fd",
-			"team": "North",
-			"region": "VIC",
-		},
-		{
-			"id": "tech2",
-			"title": "Bob Singh — FPA-456",
-			"color": "#86efac",
-			"team": "South",
-			"region": "VIC",
-		},
-		{
-			"id": "tech3",
-			"title": "Cara Lee — FPA-789",
-			"color": "#fca5a5",
-			"team": "East",
-			"region": "NSW",
-		},
-		{
-			"id": "tech4",
-			"title": "Diego Martinez — FPA-321",
-			"color": "#f9a8d4",
-			"team": "North",
-			"region": "NSW",
-		},
-		{
-			"id": "tech5",
-			"title": "Eve Chen — FPA-654",
-			"color": "#fdba74",
-			"team": "South",
-			"region": "VIC",
-		},
-		{
-			"id": "tech6",
-			"title": "Finn O'Neil — FPA-987",
-			"color": "#c4b5fd",
-			"team": "East",
-			"region": "QLD",
-		},
-		{
-			"id": "tech7",
-			"title": "Gina Rossi — FPA-111",
-			"color": "#6ee7b7",
-			"team": "West",
-			"region": "WA",
-		},
-		{
-			"id": "tech8",
-			"title": "Harry King — FPA-222",
-			"color": "#93c5fd",
-			"team": "West",
-			"region": "WA",
-		},
-		{
-			"id": "tech9",
-			"title": "Isla Patel — FPA-333",
-			"color": "#86efac",
-			"team": "North",
-			"region": "VIC",
-		},
-		{
-			"id": "tech10",
-			"title": "Jack Wong — FPA-444",
-			"color": "#fca5a5",
-			"team": "South",
-			"region": "VIC",
-		},
-	]
-
-	# Demo events
-	context.events = [
-		{
-			"id": 1,
-			"title": "Overheating pump defect",
-			"start": "2025-08-04T09:00:00",
-			"end": "2025-08-04T11:00:00",
-			"resourceId": "tech1",
-		},
-		{
-			"id": 2,
-			"title": "Sprinkler PM2025/08",
-			"start": "2025-08-05T12:00:00",
-			"end": "2025-08-05T16:00:00",
-			"resourceId": "tech2",
-		},
-		{
-			"id": 3,
-			"title": "Alarm System Test",
-			"start": "2025-08-07T10:00:00",
-			"end": "2025-08-07T11:00:00",
-			"resourceId": "tech3",
-		},
-	]
-
-	return context
+    return build_portal_context(context, page_h1="Scheduler", force_login=True)

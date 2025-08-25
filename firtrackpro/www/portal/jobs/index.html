@@ -1,0 +1,89 @@
+{% extends "firtrackpro/www/templates/portal_base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block portal_content %}
+<div class="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-4">
+  <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-xl font-semibold text-ink">Jobs</div>
+      <div class="flex items-center gap-2">
+        <input id="q" class="border px-3 py-2 rounded" placeholder="Search jobs...">
+      </div>
+    </div>
+    <table class="min-w-full table-auto">
+      <thead>
+        <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+          <th class="px-4 py-2 text-left">ID</th>
+          <th class="px-4 py-2 text-left">Title</th>
+          <th class="px-4 py-2 text-left">Assignee</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Updated</th>
+          <th class="px-4 py-2 text-left"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Job modal -->
+<div id="jobView" class="ftp-modal fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/50" data-modal-close="jobView"></div>
+  <div class="absolute inset-0 p-4 flex items-center justify-center">
+    <div class="bg-white w-full max-w-2xl rounded-2xl border border-line shadow-ft2 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b">
+        <div class="font-semibold text-ink" id="v_title">Job</div>
+        <button class="rounded-lg border px-3 py-1" data-modal-close="jobView">Close</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="text-sm text-muted" id="v_meta"></div>
+        <div class="text-sm" id="v_status"></div>
+        <div class="grid grid-cols-2 gap-3">
+          <button class="bg-brand text-white rounded-xl px-3 py-2 hover:bg-brand-600">Start</button>
+          <button class="bg-white border border-line rounded-xl px-3 py-2">Reschedule</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script src="/assets/firtrackpro/js/portal-demo.js"></script>
+<script>
+(function(){
+  const data = {{ JOBS | tojson }};
+  const rowsEl = document.getElementById('rows');
+  const q = document.getElementById('q');
+  function render(list){
+    rowsEl.innerHTML = list.map(r=>`
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2 font-mono">${r.id}</td>
+        <td class="px-4 py-2 text-ink">${r.name}</td>
+        <td class="px-4 py-2">${r.assignee}</td>
+        <td class="px-4 py-2">${FTP.badge(r.status)}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="#" class="text-blue-600 hover:underline" data-id="${r.id}" data-modal-open="jobView">Open</a>
+        </td>
+      </tr>
+    `).join('');
+  }
+  render(data);
+  q.addEventListener('input', ()=>{
+    const v = q.value.toLowerCase();
+    const f = data.filter(r => (r.id+r.name+r.assignee+r.status).toLowerCase().includes(v));
+    render(f);
+  });
+  document.addEventListener('click', (e)=>{
+    const a=e.target.closest('[data-id][data-modal-open="jobView"]'); if(!a) return;
+    e.preventDefault();
+    const id = a.getAttribute('data-id');
+    const r = data.find(x=>x.id===id); if(!r) return;
+    document.getElementById('v_title').textContent = `${r.id} — ${r.name}`;
+    document.getElementById('v_meta').textContent = `Assignee: ${r.assignee} • Updated ${r.updated}`;
+    document.getElementById('v_status').innerHTML = FTP.badge(r.status);
+  });
+})();
+</script>
+{% endblock %}

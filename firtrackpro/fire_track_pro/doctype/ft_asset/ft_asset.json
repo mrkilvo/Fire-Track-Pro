@@ -143,7 +143,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 17:57:52.831524",
+ "modified": "2025-08-24 16:31:47.906883",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Asset",
@@ -163,8 +163,10 @@
   }
  ],
  "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
- "title_field": "asset_label"
+ "title_field": "asset_label",
+ "translated_doctype": 1
 }

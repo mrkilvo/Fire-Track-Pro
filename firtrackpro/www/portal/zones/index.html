@@ -1,0 +1,85 @@
+{% extends "firtrackpro/www/templates/portal_base.html" %}
+{% block title %}{{ PAGE_TITLE or page_h1 or "Untitled" }}{% endblock %}
+{% block portal_content %}
+<div class="flex flex-col h-full">
+  <div class="flex items-center justify-between px-6 py-4 border-b bg-white sticky top-0 z-10">
+    <h1 class="text-2xl font-bold text-gray-900">{{ PAGE_TITLE or page_h1 or "Untitled" }}</h1>
+    <div class="flex gap-2">
+      {% if actions and "create" in actions %}
+      <a href="#" class="bg-brand text-white rounded-xl px-4 py-2 hover:bg-brand-600 active:bg-brand-700 shadow-ft1">+ Create</a>
+      {% endif %}
+      {% if actions and "export" in actions %}
+      <button class="bg-white border border-line text-ink rounded-xl px-3 py-2 hover:bg-panelweak shadow-ft1">Export</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center px-6 py-3 bg-gray-50 border-b">
+    <input class="border px-3 py-2 rounded w-80 mr-2" placeholder="Search {{ (PAGE_TITLE or page_h1 or "items") | lower }}...">
+    <button class="bg-white border px-3 py-2 rounded text-gray-700">Add filter</button>
+  </div>
+
+  <div class="overflow-x-auto flex-1 px-6 py-6 bg-white">
+    <table class="min-w-full table-auto">
+      <thead>
+        <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Updated</th>
+          <th class="px-4 py-2 text-left"></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <!-- Injected by demo script -->
+      </tbody>
+    </table>
+
+    <div id="empty" class="flex flex-col items-center py-20 text-gray-400 hidden">
+      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8m-4-4v8"/>
+      </svg>
+      <div class="text-lg font-medium">No {{ (PAGE_TITLE or page_h1 or "items") | lower }} found</div>
+      <div class="text-gray-500 mt-2">Try adjusting your filters or add a new item.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+(function(){
+  const rowsEl = document.getElementById('rows');
+  const emptyEl = document.getElementById('empty');
+  const data = [{"name": "Zone 6 \u2014 Building B", "status": "Inactive", "badge": "warn", "updated": "21 Aug 2025"}, {"name": "Zone 11 \u2014 Building C", "status": "Active", "badge": "ok", "updated": "28 Jul 2025"}, {"name": "Zone 3 \u2014 Building B", "status": "Active", "badge": "ok", "updated": "10 Aug 2025"}, {"name": "Zone 7 \u2014 Building B", "status": "Inactive", "badge": "warn", "updated": "01 Aug 2025"}, {"name": "Zone 7 \u2014 Building B", "status": "Inactive", "badge": "warn", "updated": "19 Aug 2025"}, {"name": "Zone 12 \u2014 Building A", "status": "Inactive", "badge": "warn", "updated": "16 Aug 2025"}, {"name": "Zone 11 \u2014 Building B", "status": "Active", "badge": "ok", "updated": "20 Aug 2025"}, {"name": "Zone 10 \u2014 Building B", "status": "Inactive", "badge": "warn", "updated": "29 Jul 2025"}];
+
+  function badgeSpan(status, cls){
+    return `<span class="` + cls + `">${status}</span>`;
+  }
+
+  function render(){
+    if(!rowsEl) return;
+    if(!data || !data.length){
+      if(emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if(emptyEl) emptyEl.classList.add('hidden');
+    rowsEl.innerHTML = data.map(r => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2"><input type="checkbox"></td>
+        <td class="px-4 py-2 text-ink font-medium">${r.name}</td>
+        <td class="px-4 py-2">${badgeSpan(r.status, r.badge_class)}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="#" class="text-blue-600 hover:underline">Open</a>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  render();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,299 @@
+{% extends "firtrackpro/www/templates/portal_base.html" %}
+{% block title %}{{ PAGE_TITLE or "Property" }}{% endblock %}
+
+{% block portal_content %}
+<div id="prop-shell" class="flex flex-col h-full" data-prop-name="{{ property_name | e }}">
+  <!-- Sticky header -->
+  <div class="px-6 py-4 bg-white border-b sticky top-0 z-10">
+    <div class="flex items-center justify-between">
+      <div>
+        <div id="prop-title" class="text-xl font-semibold">Property</div>
+        <div id="prop-sub" class="text-sm text-gray-500"></div>
+      </div>
+      <div class="flex gap-2">
+        <a class="px-3 py-2 rounded-xl bg-white border border-line text-ink hover:bg-gray-50"
+           href="/portal/sites">Back to Sites</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Details + Access -->
+  <div class="px-6 py-4 bg-white border-b">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:col-span-2">
+        <div class="text-sm font-medium text-gray-500 mb-1">Address</div>
+        <div id="prop-address" class="text-ink"></div>
+        <div id="prop-geo" class="text-gray-500 text-sm mt-1"></div>
+
+        <div class="text-sm font-medium text-gray-500 mt-4 mb-1">Notes</div>
+        <div id="prop-notes" class="text-ink"></div>
+      </div>
+
+      <div class="md:col-span-1">
+        <div class="flex items-center justify-between">
+          <div class="text-sm font-medium text-gray-500">Access Details</div>
+          <span id="access-pill" class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600">hidden</span>
+        </div>
+        <div id="access-content" class="mt-2 text-sm text-gray-600">
+          <button id="btn-reveal-access"
+                  class="w-full bg-brand text-white rounded-xl px-4 py-2 hover:bg-brand-600 active:bg-brand-700 shadow-ft1">
+            Reveal access…
+          </button>
+          <div id="access-fields" class="mt-3 hidden">
+            <div><span class="text-gray-500">Keysafe:</span> <span id="access-keysafe"></span></div>
+            <div><span class="text-gray-500">Gate Code:</span> <span id="access-gate"></span></div>
+            <div class="mt-1"><span class="text-gray-500">Alarm:</span> <span id="access-alarm"></span></div>
+            <div class="mt-1"><span class="text-gray-500">Parking:</span> <span id="access-parking"></span></div>
+            <div class="mt-1"><span class="text-gray-500">Maps/Photos:</span> <a id="access-maps" class="text-blue-600 hover:underline" target="_blank"></a></div>
+            <div class="mt-2 text-xs text-gray-500" id="access-stamp"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="px-6 bg-white border-b">
+    <nav class="flex gap-4">
+      <button class="tab-btn border-b-2 border-transparent py-3" data-tab="assets">Assets</button>
+      <button class="tab-btn border-b-2 border-transparent py-3" data-tab="history">History</button>
+      <button class="tab-btn border-b-2 border-transparent py-3" data-tab="quotes">Quotes</button>
+      <button class="tab-btn border-b-2 border-transparent py-3" data-tab="defects">Defects</button>
+    </nav>
+  </div>
+
+  <!-- Tab bodies -->
+  <div class="flex-1 overflow-auto">
+    <section id="tab-assets" class="px-6 py-4 hidden">
+      <table class="min-w-full table-auto">
+        <thead>
+          <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+            <th class="px-3 py-2 text-left">Label</th>
+            <th class="px-3 py-2 text-left">Type</th>
+            <th class="px-3 py-2 text-left">Zone</th>
+            <th class="px-3 py-2 text-left">Status</th>
+            <th class="px-3 py-2 text-left">Last Tested</th>
+            <th class="px-3 py-2 text-left">Next Due</th>
+          </tr>
+        </thead>
+        <tbody id="assets-rows"></tbody>
+      </table>
+      <div id="assets-empty" class="text-gray-500 text-sm py-6 hidden">No assets yet.</div>
+    </section>
+
+    <section id="tab-history" class="px-6 py-4 hidden">
+      <table class="min-w-full table-auto">
+        <thead>
+          <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+            <th class="px-3 py-2 text-left">Job</th>
+            <th class="px-3 py-2 text-left">Status</th>
+            <th class="px-3 py-2 text-left">Required</th>
+            <th class="px-3 py-2 text-left">Scheduled Start</th>
+            <th class="px-3 py-2 text-left">Modified</th>
+          </tr>
+        </thead>
+        <tbody id="history-rows"></tbody>
+      </table>
+      <div id="history-empty" class="text-gray-500 text-sm py-6 hidden">No recent jobs.</div>
+    </section>
+
+    <section id="tab-quotes" class="px-6 py-4 hidden">
+      <table class="min-w-full table-auto">
+        <thead>
+          <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+            <th class="px-3 py-2 text-left">Quotation</th>
+            <th class="px-3 py-2 text-left">Customer</th>
+            <th class="px-3 py-2 text-left">Date</th>
+            <th class="px-3 py-2 text-left">Valid Till</th>
+            <th class="px-3 py-2 text-left">Total</th>
+            <th class="px-3 py-2 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody id="quotes-rows"></tbody>
+      </table>
+      <div id="quotes-empty" class="text-gray-500 text-sm py-6 hidden">No quotes found.</div>
+    </section>
+
+    <section id="tab-defects" class="px-6 py-4 hidden">
+      <table class="min-w-full table-auto">
+        <thead>
+          <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+            <th class="px-3 py-2 text-left">Defect</th>
+            <th class="px-3 py-2 text-left">Severity</th>
+            <th class="px-3 py-2 text-left">Status</th>
+            <th class="px-3 py-2 text-left">Description</th>
+            <th class="px-3 py-2 text-left">Quote</th>
+            <th class="px-3 py-2 text-left">Modified</th>
+          </tr>
+        </thead>
+        <tbody id="defects-rows"></tbody>
+      </table>
+      <div id="defects-empty" class="text-gray-500 text-sm py-6 hidden">No defects recorded.</div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+(function () {
+  const shell = document.getElementById('prop-shell');
+  const propName = shell?.dataset?.propName;
+  if (!propName) return;
+
+  const $ = (sel) => document.querySelector(sel);
+  const setHidden = (el, hide=true) => el && (hide ? el.classList.add('hidden') : el.classList.remove('hidden'));
+  const csrf = () => (window.frappe && frappe.csrf_token) || document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  // --- Generic helpers ---
+  async function apiGet(method, params={}) {
+    const qs = new URLSearchParams(params);
+    const url = '/api/method/' + method + (qs.toString() ? '?' + qs : '');
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+    const j = await r.json();
+    if (!r.ok || j.exc) throw new Error(j._server_messages || j.exc || j.message || r.statusText);
+    return j.message;
+  }
+
+  // POST as form to /api/method with cmd=... (bullet-proof on website)
+  async function apiPost(method, args={}) {
+    const fd = new FormData();
+    fd.append('cmd', method);
+    Object.entries(args).forEach(([k, v]) => fd.append(k, typeof v === 'object' ? JSON.stringify(v) : v));
+    const r = await fetch('/api/method', {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Frappe-CSRF-Token': csrf(), 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    });
+    const j = await r.json();
+    if (!r.ok || j.exc) throw new Error(j._server_messages || j.exc || j.message || r.statusText);
+    return j.message;
+  }
+
+  // ----- Header + details (GET)
+  apiGet('firtrackpro.www.portal.property_api.get_property', { name: propName })
+    .then(d => {
+      $('#prop-title').textContent = d.property_name || d.name || 'Property';
+      const cust = d.customer?.customer_name || d.property_customer || '';
+      $('#prop-sub').textContent = cust ? `Customer: ${cust}` : '';
+      const a = d.address || {};
+      const addr = [a.address_line1, a.address_line2, a.city, a.state, a.pincode, a.country].filter(Boolean).join(', ');
+      $('#prop-address').textContent = addr || '—';
+      $('#prop-geo').textContent = (d.property_lat && d.property_lng) ? `Lat/Lng: ${d.property_lat}, ${d.property_lng}` : '';
+      $('#prop-notes').textContent = d.property_notes || '—';
+      $('#access-pill').textContent = d.has_access ? 'hidden' : 'none';
+      if (!d.has_access) $('#btn-reveal-access').disabled = true;
+    })
+    .catch(err => frappe?.msgprint?.(String(err.message || err)));
+
+  // ----- Reveal access (POST form -> cmd)
+  const btnReveal = $('#btn-reveal-access');
+  btnReveal?.addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      const a = await apiPost('firtrackpro.www.portal.property_api.reveal_access', { property_name: propName });
+      $('#access-keysafe').textContent = a.property_access_keysafe_code || '—';
+      $('#access-gate').textContent   = a.property_access_gate_code || '—';
+      $('#access-alarm').textContent  = a.property_access_alarm_panel || '—';
+      $('#access-parking').textContent= a.property_access_parking || '—';
+      if (a.property_access_maps) {
+        const link = $('#access-maps'); link.textContent = 'Open maps/photos'; link.href = a.property_access_maps;
+      } else { $('#access-maps').textContent = '—'; }
+      $('#access-stamp').textContent = (a.property_access_last_revealed_on)
+        ? `Last revealed on ${a.property_access_last_revealed_on} by ${a.property_access_last_revealed_by}` : '';
+      $('#access-pill').textContent = 'revealed';
+      setHidden($('#access-fields'), false);
+    } catch (err) {
+      frappe?.show_alert?.({message: 'You do not have permission to view access details', indicator: 'red'});
+      this.disabled = false;
+    }
+  });
+
+  // ----- Tabs (all GET)
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const bodies  = { assets: $('#tab-assets'), history: $('#tab-history'), quotes: $('#tab-quotes'), defects: $('#tab-defects') };
+  let loaded    = { assets: false, history: false, quotes: false, defects: false };
+
+  function activate(tab) {
+    Object.keys(bodies).forEach(k => setHidden(bodies[k], k !== tab));
+    tabBtns.forEach(b => b.classList.toggle('border-brand', b.dataset.tab === tab));
+    if (!loaded[tab]) { loadTab(tab).catch(e => frappe?.msgprint?.(String(e.message || e))); loaded[tab] = true; }
+  }
+
+  async function loadTab(tab) {
+    if (tab === 'assets') {
+      const rows = await apiGet('firtrackpro.www.portal.property_api.get_assets', { property_name: propName });
+      const tbody = document.querySelector('#assets-rows'); tbody.innerHTML = '';
+      if (!rows.length) return setHidden(document.querySelector('#assets-empty'), false);
+      rows.forEach(x => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="px-3 py-2">${x.asset_label || x.name}</td>
+          <td class="px-3 py-2">${x.asset_type || ''}</td>
+          <td class="px-3 py-2">${x.asset_zone || ''}</td>
+          <td class="px-3 py-2">${x.asset_status || ''}</td>
+          <td class="px-3 py-2">${x.asset_last_tested || ''}</td>
+          <td class="px-3 py-2">${x.asset_next_due || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    if (tab === 'history') {
+      const rows = await apiGet('firtrackpro.www.portal.property_api.get_history', { property_name: propName });
+      const tbody = document.querySelector('#history-rows'); tbody.innerHTML = '';
+      if (!rows.length) return setHidden(document.querySelector('#history-empty'), false);
+      rows.forEach(x => {
+        const tr = document.createElement('tr'); tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="px-3 py-2">${x.job_title || x.name}</td>
+          <td class="px-3 py-2">${x.job_status || ''}</td>
+          <td class="px-3 py-2">${x.job_required_date || ''}</td>
+          <td class="px-3 py-2">${x.job_scheduled_start || ''}</td>
+          <td class="px-3 py-2">${x.modified || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    if (tab === 'quotes') {
+      const rows = await apiGet('firtrackpro.www.portal.property_api.get_quotes', { property_name: propName });
+      const tbody = document.querySelector('#quotes-rows'); tbody.innerHTML = '';
+      if (!rows.length) return setHidden(document.querySelector('#quotes-empty'), false);
+      rows.forEach(x => {
+        const tr = document.createElement('tr'); tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="px-3 py-2"><a class="text-blue-600 hover:underline" href="/app/Quotation/${x.name}" target="_blank">${x.name}</a></td>
+          <td class="px-3 py-2">${x.customer_name || ''}</td>
+          <td class="px-3 py-2">${x.transaction_date || ''}</td>
+          <td class="px-3 py-2">${x.valid_till || ''}</td>
+          <td class="px-3 py-2">${x.grand_total ?? ''}</td>
+          <td class="px-3 py-2">${x.status || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    if (tab === 'defects') {
+      const rows = await apiGet('firtrackpro.www.portal.property_api.get_defects', { property_name: propName });
+      const tbody = document.querySelector('#defects-rows'); tbody.innerHTML = '';
+      if (!rows.length) return setHidden(document.querySelector('#defects-empty'), false);
+      rows.forEach(x => {
+        const tr = document.createElement('tr'); tr.className = 'hover:bg-gray-50';
+        const q = x.defect_quotation ? `<a class="text-blue-600 hover:underline" href="/app/Quotation/${x.defect_quotation}" target="_blank">${x.defect_quotation}</a>` : '';
+        tr.innerHTML = `
+          <td class="px-3 py-2">${x.name}</td>
+          <td class="px-3 py-2">${x.defect_severity || ''}</td>
+          <td class="px-3 py-2">${x.defect_status || ''}</td>
+          <td class="px-3 py-2">${x.defect_description || ''}</td>
+          <td class="px-3 py-2">${q}</td>
+          <td class="px-3 py-2">${x.modified || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => activate(b.dataset.tab)));
+  activate('assets'); // default
+})();
+</script>
+{% endblock %}
+
+

@@ -1,199 +1,85 @@
 {% extends "firtrackpro/www/templates/portal_base.html" %}
-{% block title %}Quotes{% endblock %}
+{% block title %}{{ PAGE_TITLE or page_h1 or "Untitled" }}{% endblock %}
 {% block portal_content %}
 <div class="flex flex-col h-full">
   <div class="flex items-center justify-between px-6 py-4 border-b bg-white sticky top-0 z-10">
-    <h1 class="text-2xl font-bold text-gray-900">{{ PAGE_TITLE }}</h1>
+    <h1 class="text-2xl font-bold text-gray-900">{{ PAGE_TITLE or page_h1 or "Untitled" }}</h1>
     <div class="flex gap-2">
-      {% if "export" in actions %}
-      <button id="btn_export" class="bg-gray-100 text-gray-900 rounded-xl px-3 py-2 shadow hover:bg-gray-200">Export CSV</button>
+      {% if actions and "create" in actions %}
+      <a href="#" class="bg-brand text-white rounded-xl px-4 py-2 hover:bg-brand-600 active:bg-brand-700 shadow-ft1">+ Create</a>
+      {% endif %}
+      {% if actions and "export" in actions %}
+      <button class="bg-white border border-line text-ink rounded-xl px-3 py-2 hover:bg-panelweak shadow-ft1">Export</button>
       {% endif %}
     </div>
   </div>
 
-  <div class="flex items-center gap-3 px-6 py-3 bg-gray-50 border-b">
-    <input id="q" class="border px-3 py-2 rounded-xl w-80" placeholder="Search {{ PAGE_TITLE | lower }}...">
-    <select id="status" class="border px-3 py-2 rounded-xl">
-      <option value="all">All statuses</option>
-      <option>Draft</option>
-      <option>Submitted</option>
-      <option>Open</option>
-      <option>Ordered</option>
-      <option>Expired</option>
-      <option>Lost</option>
-      <option>Cancelled</option>
-    </select>
-    <input id="date_from" type="date" class="border px-3 py-2 rounded-xl">
-    <input id="date_to" type="date" class="border px-3 py-2 rounded-xl">
-    <button id="btn_apply" class="bg-slate-800 text-white rounded-xl px-3 py-2 shadow hover:bg-slate-900">Apply</button>
-    <button id="btn_clear" class="bg-white text-gray-700 rounded-xl px-3 py-2 border hover:bg-gray-50">Clear</button>
+  <div class="flex items-center px-6 py-3 bg-gray-50 border-b">
+    <input class="border px-3 py-2 rounded w-80 mr-2" placeholder="Search {{ (PAGE_TITLE or page_h1 or "items") | lower }}...">
+    <button class="bg-white border px-3 py-2 rounded text-gray-700">Add filter</button>
   </div>
 
   <div class="overflow-x-auto flex-1 px-6 py-6 bg-white">
     <table class="min-w-full table-auto">
       <thead>
         <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
-          <th class="px-4 py-2 text-left"><input type="checkbox" id="check_all"></th>
-          {% for col in columns %}
-          <th class="px-4 py-2 text-left">{{ col }}</th>
-          {% endfor %}
+          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Updated</th>
           <th class="px-4 py-2 text-left"></th>
         </tr>
       </thead>
-      <tbody id="tbody_qt"></tbody>
+      <tbody id="rows">
+        <!-- Injected by demo script -->
+      </tbody>
     </table>
 
-    <div class="hidden flex flex-col items-center py-24 text-gray-400" id="empty-state">
-      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <div id="empty" class="flex flex-col items-center py-20 text-gray-400 hidden">
+      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
         <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8m-4-4v8"/>
       </svg>
-      <div class="text-lg font-medium">No {{ PAGE_TITLE | lower }} found</div>
-      <div class="text-gray-500 mt-2">Try adjusting your filters.</div>
-    </div>
-
-    <div class="flex items-center justify-center py-6">
-      <button id="btn_load_more" class="hidden px-4 py-2 rounded-xl border border-slate-300 bg-white text-sm shadow hover:bg-slate-50 active:scale-[0.98]">Load more</button>
-      <div id="list_status" class="ml-3 text-sm text-slate-600"></div>
+      <div class="text-lg font-medium">No {{ (PAGE_TITLE or page_h1 or "items") | lower }} found</div>
+      <div class="text-gray-500 mt-2">Try adjusting your filters or add a new item.</div>
     </div>
   </div>
 </div>
+{% endblock %}
 
+{% block script %}
+{{ super() }}
 <script>
-const CSRF = (window.frappe && frappe.csrf_token) || (window.csrf_token || "");
-const state = { q:"", status:"all", date_from:"", date_to:"", start:0, limit:25, loading:false, total:0 };
+(function(){
+  const rowsEl = document.getElementById('rows');
+  const emptyEl = document.getElementById('empty');
+  const data = [{"name": "QT-2025-001 \u2014 ACME Site 145", "status": "Draft", "badge": "warn", "updated": "29 Jul 2025"}, {"name": "QT-2025-002 \u2014 ACME Site 175", "status": "Sent", "badge": "warn", "updated": "09 Aug 2025"}, {"name": "QT-2025-003 \u2014 ACME Site 181", "status": "Draft", "badge": "warn", "updated": "16 Aug 2025"}, {"name": "QT-2025-004 \u2014 ACME Site 127", "status": "Accepted", "badge": "ok", "updated": "25 Jul 2025"}, {"name": "QT-2025-005 \u2014 ACME Site 153", "status": "Draft", "badge": "warn", "updated": "17 Aug 2025"}, {"name": "QT-2025-006 \u2014 ACME Site 165", "status": "Accepted", "badge": "ok", "updated": "15 Aug 2025"}, {"name": "QT-2025-007 \u2014 ACME Site 140", "status": "Draft", "badge": "warn", "updated": "25 Jul 2025"}, {"name": "QT-2025-008 \u2014 ACME Site 173", "status": "Draft", "badge": "warn", "updated": "01 Aug 2025"}];
 
-function cleanServerMsg(e){
-  try{
-    if(e && e._server_messages){
-      const arr = JSON.parse(e._server_messages);
-      if(Array.isArray(arr)&&arr.length){ const inner = JSON.parse(arr[0]); return inner.message||inner.title||"Error"; }
-    }
-  }catch(_){}
-  return (e && (e.message||e.exception||e.statusText)) || "Error";
-}
-
-function api(method, args){
-  return new Promise((resolve,reject)=>{
-    if(window.frappe && frappe.call){
-      frappe.call({ method, args: args||{}, type:"POST",
-        callback:r=>resolve((r && r.message!==undefined)?r.message:(r && r.docs!==undefined?r.docs:r)||{}),
-        error:err=>reject(new Error(cleanServerMsg(err)||"Request failed"))
-      });
-    } else {
-      fetch(`/api/method/${method}`, { method:"POST", headers:{"Content-Type":"application/json","X-Frappe-CSRF-Token":CSRF}, body:JSON.stringify(args||{}) })
-      .then(async r=>{ const j=await r.json().catch(()=>({})); if(!r.ok) throw j; return (j.message!==undefined)?j.message:(j.docs!==undefined?j.docs:j); })
-      .then(resolve).catch(e=>reject(new Error(cleanServerMsg(e))));
-    }
-  });
-}
-
-function money(v,c){ try{ return new Intl.NumberFormat('en-AU',{style:'currency',currency:c||'AUD'}).format(Number(v||0)); }catch{ return (c||'AUD')+' '+Number(v||0).toFixed(2); } }
-function fmtDate(d){ if(!d) return ""; return new Date(d+"T00:00:00").toLocaleDateString(); }
-
-function badgeClass(s){
-  switch(s){
-    case "Open": return "border-blue-200 bg-blue-50 text-blue-700";
-    case "Ordered": return "border-green-200 bg-green-50 text-green-700";
-    case "Expired": return "border-amber-200 bg-amber-50 text-amber-700";
-    case "Lost": return "border-gray-200 bg-gray-50 text-gray-600";
-    case "Cancelled": return "border-rose-200 bg-rose-50 text-rose-700";
-    case "Draft": return "border-slate-200 bg-slate-50 text-slate-700";
-    case "Submitted": return "border-indigo-200 bg-indigo-50 text-indigo-700";
-    default: return "border-slate-200 bg-white text-slate-700";
+  function badgeSpan(status, cls){
+    return `<span class="` + cls + `">${status}</span>`;
   }
-}
 
-function row(qt){
-  const tr = document.createElement("tr");
-  tr.className = "border-b last:border-0 hover:bg-gray-50";
-  tr.innerHTML = `
-    <td class="px-4 py-2"><input type="checkbox" data-id="${qt.name}"></td>
-    <td class="px-4 py-2"><a href="/app/quotation/${qt.name}" target="_blank" class="text-slate-900 font-medium hover:underline">${qt.name}</a></td>
-    <td class="px-4 py-2">${fmtDate(qt.transaction_date)}</td>
-    <td class="px-4 py-2">${qt.party_name || ""}</td>
-    <td class="px-4 py-2"><span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${badgeClass(qt.status)}">${qt.status}</span></td>
-    <td class="px-4 py-2">${money(qt.grand_total, qt.currency)}</td>
-    <td class="px-4 py-2">${fmtDate(qt.valid_till)}</td>
-    <td class="px-4 py-2"><a href="/app/quotation/${qt.name}" target="_blank" class="text-blue-600 hover:underline">Open</a></td>
-  `;
-  return tr;
-}
-
-function render(items, append=false){
-  const tbody = document.getElementById("tbody_qt");
-  if(!append) tbody.innerHTML = "";
-  items.forEach(i=>tbody.appendChild(row(i)));
-  document.getElementById("empty-state").classList.toggle("hidden", (state.start + items.length) > 0);
-}
-
-function setStatusText(txt){
-  const el = document.getElementById("list_status");
-  if(txt){ el.textContent = txt; return; }
-  el.textContent = state.total ? `${Math.min(state.start, state.total)} of ${state.total}` : "";
-}
-
-async function load(reset=false){
-  if(state.loading) return;
-  if(reset){ state.start=0; state.total=0; setStatusText(""); }
-  state.loading = true; setStatusText("Loading...");
-  try{
-    const res = await api("firtrackpro.api.quotations.list_quotations", {
-      q: state.q || null,
-      status: state.status || "all",
-      date_from: state.date_from || null,
-      date_to: state.date_to || null,
-      limit_start: state.start,
-      limit: state.limit
-    });
-    const items = res.items || [];
-    state.total = Number(res.total || 0);
-    render(items, !reset);
-    state.start += items.length;
-    setStatusText();
-    document.getElementById("btn_load_more").classList.toggle("hidden", state.start >= state.total);
-  }catch(e){
-    setStatusText(String(e.message||e)||"Error");
-    document.getElementById("btn_load_more").classList.add("hidden");
-  }finally{
-    state.loading = false;
+  function render(){
+    if(!rowsEl) return;
+    if(!data || !data.length){
+      if(emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if(emptyEl) emptyEl.classList.add('hidden');
+    rowsEl.innerHTML = data.map(r => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2"><input type="checkbox"></td>
+        <td class="px-4 py-2 text-ink font-medium">${r.name}</td>
+        <td class="px-4 py-2">${badgeSpan(r.status, r.badge_class)}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="#" class="text-blue-600 hover:underline">Open</a>
+        </td>
+      </tr>
+    `).join('');
   }
-}
 
-function exportCSV(){
-  const header = ["Quote #","Date","Party","Status","Grand Total","Valid Till"];
-  const rows = [header.join(",")].concat(
-    Array.from(document.querySelectorAll("#tbody_qt tr")).map(tr=>{
-      const t = tr.querySelectorAll("td");
-      const arr = [
-        t[1]?.innerText?.trim()||"", t[2]?.innerText?.trim()||"",
-        t[3]?.innerText?.trim()||"", t[4]?.innerText?.trim()||"",
-        t[5]?.innerText?.trim()||"", t[6]?.innerText?.trim()||""
-      ];
-      return arr.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
-    })
-  );
-  const blob = new Blob([rows.join("\n")], {type:"text/csv;charset=utf-8;"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "quotes.csv"; a.click(); URL.revokeObjectURL(a.href);
-}
-
-document.addEventListener("DOMContentLoaded", ()=>{
-  document.getElementById("btn_apply").addEventListener("click", ()=>{
-    state.q = document.getElementById("q").value.trim();
-    state.status = document.getElementById("status").value;
-    state.date_from = document.getElementById("date_from").value;
-    state.date_to = document.getElementById("date_to").value;
-    load(true);
-  });
-  document.getElementById("btn_clear").addEventListener("click", ()=>{
-    document.getElementById("q").value=""; document.getElementById("status").value="all";
-    document.getElementById("date_from").value=""; document.getElementById("date_to").value="";
-    state.q=""; state.status="all"; state.date_from=""; state.date_to=""; load(true);
-  });
-  document.getElementById("btn_load_more").addEventListener("click", ()=>load(false));
-  const exportBtn = document.getElementById("btn_export"); if(exportBtn) exportBtn.addEventListener("click", exportCSV);
-  const qInput = document.getElementById("q"); qInput.addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("btn_apply").click(); });
-  load(true);
-});
+  render();
+})();
 </script>
 {% endblock %}

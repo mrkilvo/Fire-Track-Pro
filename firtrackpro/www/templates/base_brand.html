@@ -8,8 +8,11 @@
 {% block head %}
   {{ super() }}
 
+  <!-- Mobile viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <!-- Tailwind (browser build) -->
-<link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
+  <link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
 
   <!-- Inter (crisp UI font) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,6 +41,7 @@
       -moz-osx-font-smoothing:grayscale;
       text-rendering:optimizeLegibility;
       font-synthesis-weight:none; /* prevent fake bold */
+      background:#f8fafc; /* subtle page bg */
     }
 
     ::-webkit-scrollbar{width:8px}

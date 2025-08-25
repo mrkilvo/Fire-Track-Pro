@@ -1,13 +1,19 @@
 {% extends "firtrackpro/www/templates/base_brand.html" %}
 {% block title %}Portal{% endblock %}
 {% block navbar %}{% endblock %}
+{% if frappe.session.user == "Guest" %}
+  <script>window.location.href = "/login";</script>
+{% endif %}
 
 {% block head_include %}
   {{ super() }}
-  {# Use compiled Tailwind in production (prebuilt via bench build) #}
- <link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
-<link rel="stylesheet" href="/assets/firtrackpro/css/custom.css">
-<script defer src="/assets/firtrackpro/js/flowbite.min.js"></script>
+  <meta name="csrf-token" content="{{ frappe.session.csrf_token }}">
+
+  <!-- Compiled Tailwind + custom -->
+  <link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
+  <link rel="stylesheet" href="/assets/firtrackpro/css/custom.css">
+  <script defer src="/assets/firtrackpro/js/flowbite.min.js"></script>
+
   <style>
     :root{
       --sidebar-bg:#161616;
@@ -16,7 +22,7 @@
       --brand-accent-600:#be123c;
 
       /* ========= SCALING CONTROLS ========= */
-      --topbar-scale:1.45;                 /* 25% size — tweak per page if needed */
+      --topbar-scale:1.2;                 /* base — lowered a touch for small screens */
       --topbar-base-height:40px;
       --topbar-base-icon:14px;
       --topbar-base-avatar:24px;
@@ -33,7 +39,22 @@
       --topbar-xpad:calc(var(--topbar-base-xpad)*var(--topbar-scale));
       --topbar-button-size:calc(var(--topbar-height) - 2px);
     }
-    /* Sidebar icon sizes (kept from earlier) */
+
+    /* Up-scale on md+ screens */
+    @media (min-width: 768px){
+      :root{
+        --topbar-scale:1.45;
+        --topbar-height:calc(var(--topbar-base-height)*var(--topbar-scale));
+        --topbar-icon-size:calc(var(--topbar-base-icon)*var(--topbar-scale));
+        --topbar-avatar-size:calc(var(--topbar-base-avatar)*var(--topbar-scale));
+        --topbar-title-size:calc(var(--topbar-base-title)*var(--topbar-scale));
+        --topbar-gap:calc(var(--topbar-base-gap)*var(--topbar-scale));
+        --topbar-xpad:calc(var(--topbar-base-xpad)*var(--topbar-scale));
+        --topbar-button-size:calc(var(--topbar-height) - 2px);
+      }
+    }
+
+    /* Sidebar icon sizes */
     --sidebar-icon-size:22px;
     --sidebar-chevron-size:18px;
     .sb-icon{font-size:var(--sidebar-icon-size);width:1.6em;height:1.6em;display:inline-flex;align-items:center;justify-content:center;line-height:1}
@@ -52,18 +73,29 @@
 
 {% block page_content %}
 <div class="min-h-screen flex bg-gray-50">
+  <meta name="csrf-token" content="{{ frappe.session.csrf_token }}">
 
-  {# Sidebar (template-driven RBAC) #}
   {% import "firtrackpro/www/templates/includes/portal_menu_data.html" as DATA %}
   {% import "firtrackpro/www/templates/includes/portal_sidebar_macros.html" as SB %}
+
+  <!-- Sidebar (template-driven RBAC) -->
   {{ DATA.render_with_sidebar(SB, user_roles or []) }}
+
+  <!-- Scrim for mobile sidebar -->
+  <div id="sb-scrim" class="fixed inset-0 bg-black/40 z-30 hidden md:hidden"></div>
 
   <main class="flex-1">
 
-    {# ===== Compact Top Bar (flush-left beside sidebar) ===== #}
-    <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-200">
+    <!-- Top Bar -->
+    <header class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-gray-200">
       <div class="tb tb-wrap w-full flex items-center justify-between">
-        <div class="min-w-0 flex items-center">
+        <div class="min-w-0 flex items-center gap-2">
+          <!-- Mobile hamburger -->
+          <button id="sb-toggle"
+                  class="tb-btn inline-flex md:hidden items-center justify-center rounded-full hover:bg-gray-100 focus:bg-gray-100"
+                  title="Menu" aria-label="Menu">
+            <i class="fa-solid fa-bars tb-icon text-slate-700"></i>
+          </button>
           <h1 class="tb-title font-semibold text-slate-900 truncate">
             {{ page_h1 or "Untitled" }}
           </h1>
@@ -93,9 +125,8 @@
       </div>
     </header>
 
-    {# ==== PAGE BODY SLOT (override in child pages) ==== #}
+    <!-- Page body -->
     {% block portal_content %}{% endblock %}
-
   </main>
 </div>
 {% endblock %}
@@ -103,7 +134,7 @@
 {% block script %}
   {{ super() }}
 
-  {# Mixed-content safety: upgrade same-host http -> https for media/links #}
+  <!-- Mixed-content safety -->
   <script>
   (function(){
     function toHttps(u){
@@ -127,7 +158,7 @@
   })();
   </script>
 
-  {# Quiet highlight.js deprecation from Frappe's website.js #}
+  <!-- Quiet highlight.js deprecation from Frappe's website.js -->
   <script>
   window.hljs = window.hljs || {};
   if(typeof window.hljs.initHighlighting === 'function'){
@@ -136,22 +167,54 @@
   }
   </script>
 
-  {# Sidebar accordion toggle #}
+  <!-- Sidebar accordion + mobile drawer -->
   <script>
     document.addEventListener('DOMContentLoaded', function(){
       const sidebar=document.getElementById('sidebar');
-      if(!sidebar) return;
-      sidebar.addEventListener('click',function(e){
-        const btn=e.target.closest('[data-toggle]');
-        if(!btn||!sidebar.contains(btn)) return;
-        e.preventDefault();
-        const panel=btn.nextElementSibling;
-        if(!panel||!panel.classList.contains('submenu')) return;
-        const isOpen=!panel.classList.contains('hidden');
-        panel.classList.toggle('hidden');
-        const chev=btn.querySelector('[data-chevron]');
-        if(chev) chev.style.transform=isOpen?'rotate(0deg)':'rotate(180deg)';
-      });
+      const scrim=document.getElementById('sb-scrim');
+      const toggle=document.getElementById('sb-toggle');
+
+      // Legacy accordion support
+      if(sidebar){
+        sidebar.addEventListener('click',function(e){
+          const btn=e.target.closest('[data-toggle]');
+          if(!btn||!sidebar.contains(btn)) return;
+          e.preventDefault();
+          const panel=btn.nextElementSibling;
+          if(!panel||!panel.classList.contains('submenu')) return;
+          const isOpen=!panel.classList.contains('hidden');
+          panel.classList.toggle('hidden');
+          const chev=btn.querySelector('[data-chevron]');
+          if(chev) chev.style.transform=isOpen?'rotate(0deg)':'rotate(180deg)';
+        });
+      }
+
+      // Drawer helpers
+      function openSidebar(){
+        if(!sidebar) return;
+        sidebar.classList.add('open');
+        if(scrim){ scrim.classList.remove('hidden'); }
+        document.body.style.overflow='hidden';
+      }
+      function closeSidebar(){
+        if(!sidebar) return;
+        sidebar.classList.remove('open');
+        if(scrim){ scrim.classList.add('hidden'); }
+        document.body.style.overflow='';
+      }
+
+      if(toggle){ toggle.addEventListener('click', openSidebar); }
+      if(scrim){ scrim.addEventListener('click', closeSidebar); }
+
+      // Close on nav click (mobile)
+      if(sidebar){
+        sidebar.querySelectorAll('a[href]').forEach(a=>{
+          a.addEventListener('click', ()=>{ if(window.innerWidth < 768) closeSidebar(); });
+        });
+      }
+
+      // Close on escape
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSidebar(); });
     });
   </script>
 {% endblock %}

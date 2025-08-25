@@ -1,239 +1,101 @@
 {% extends "firtrackpro/www/templates/portal_base.html" %}
 {% block title %}Invoices{% endblock %}
 {% block portal_content %}
-<div class="flex flex-col h-full">
-
-
-
-  <!-- Filters -->
-  <div class="flex items-center gap-3 px-6 py-3 bg-gray-50 border-b">
-    <input id="q" class="border px-3 py-2 rounded-xl w-80" placeholder="Search {{ PAGE_TITLE | lower }}...">
-    <select id="status" class="border px-3 py-2 rounded-xl">
-      <option value="all">All statuses</option>
-      <option value="Draft">Draft</option>
-      <option value="Unpaid">Unpaid</option>
-      <option value="Overdue">Overdue</option>
-      <option value="Paid">Paid</option>
-      <option value="Cancelled">Cancelled</option>
-      <option value="Return">Return</option>
-      <option value="Submitted">Submitted</option>
-    </select>
-    <input id="date_from" type="date" class="border px-3 py-2 rounded-xl">
-    <input id="date_to" type="date" class="border px-3 py-2 rounded-xl">
-    <button id="btn_apply" class="bg-slate-800 text-white rounded-xl px-3 py-2 shadow hover:bg-slate-900">Apply</button>
-    <button id="btn_clear" class="bg-white text-gray-700 rounded-xl px-3 py-2 border hover:bg-gray-50">Clear</button>
-  </div>
-
-  <!-- Table -->
-  <div class="overflow-x-auto flex-1 px-6 py-6 bg-white">
+<div class="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-4">
+  <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-xl font-semibold text-ink">Invoices</div>
+      <div class="flex items-center gap-2">
+        <input id="q" class="border px-3 py-2 rounded" placeholder="Search invoices...">
+      </div>
+    </div>
     <table class="min-w-full table-auto">
       <thead>
         <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
-          <th class="px-4 py-2 text-left"><input type="checkbox" id="check_all"></th>
-          {% for col in columns %}
-          <th class="px-4 py-2 text-left">{{ col }}</th>
-          {% endfor %}
+          <th class="px-4 py-2 text-left">Invoice</th>
+          <th class="px-4 py-2 text-left">Customer</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Total</th>
+          <th class="px-4 py-2 text-left">Updated</th>
           <th class="px-4 py-2 text-left"></th>
         </tr>
       </thead>
-      <tbody id="tbody_invoices"></tbody>
+      <tbody id="rows"></tbody>
     </table>
-
-    <!-- Empty State -->
-    <div class="hidden flex flex-col items-center py-24 text-gray-400" id="empty-state">
-      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8m-4-4v8"/>
-      </svg>
-      <div class="text-lg font-medium">No {{ PAGE_TITLE | lower }} found</div>
-      <div class="text-gray-500 mt-2">Try adjusting your filters.</div>
-    </div>
-
-    <!-- Load more -->
-    <div class="flex items-center justify-center py-6">
-      <button id="btn_load_more" class="hidden px-4 py-2 rounded-xl border border-slate-300 bg-white text-sm shadow hover:bg-slate-50 active:scale-[0.98]">
-        Load more
-      </button>
-      <div id="list_status" class="ml-3 text-sm text-slate-600"></div>
-    </div>
   </div>
 </div>
 
+<!-- Slide-over drawer -->
+<div id="invDrawer" class="fixed inset-y-0 right-0 w-full max-w-md bg-white border-l border-line shadow-ft2 translate-x-full transition-transform duration-200 z-50" aria-hidden="true">
+  <div class="h-full flex flex-col">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <div class="font-semibold text-ink" id="d_title">Invoice</div>
+      <button class="rounded-lg border px-3 py-1" data-drawer-close="invDrawer">Close</button>
+    </div>
+    <div class="p-4 space-y-3 flex-1 overflow-auto">
+      <div class="text-sm text-muted" id="d_meta"></div>
+      <div class="text-sm" id="d_status"></div>
+      <div class="bg-panelweak rounded-xl p-3 border border-line">
+        <div class="text-sm font-semibold mb-1">Line items</div>
+        <ul id="d_lines" class="text-sm list-disc pl-5"></ul>
+      </div>
+      <div>
+        <button class="bg-brand text-white rounded-xl px-3 py-2 hover:bg-brand-600">Send/Resend</button>
+        <button class="bg-white border border-line rounded-xl px-3 py-2 ml-2">Download PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script src="/assets/firtrackpro/js/portal-demo.js"></script>
 <script>
-const CSRF = (window.frappe && frappe.csrf_token) || (window.csrf_token || "");
-const state = { q:"", status:"all", date_from:"", date_to:"", start:0, limit:25, loading:false, total:0, items:[] };
+(function(){
+  const data = {{ INVOICES | tojson }};
+  const rowsEl = document.getElementById('rows');
+  const q = document.getElementById('q');
 
-function cleanServerMsg(e){
-  try{
-    if (e && e._server_messages){
-      const arr = JSON.parse(e._server_messages);
-      if (Array.isArray(arr) && arr.length){
-        const inner = JSON.parse(arr[0]);
-        return inner.message || inner.title || "Error";
-      }
-    }
-  }catch(_){}
-  return (e && (e.message || e.exception || e.statusText)) || "Error";
-}
-
-function api(method, args){
-  return new Promise((resolve, reject)=>{
-    if (window.frappe && frappe.call){
-      frappe.call({
-        method,
-        args: args || {},
-        type: "POST",
-        callback: r=>{
-          const out = (r && r.message!==undefined) ? r.message : (r && r.docs!==undefined ? r.docs : r);
-          resolve(out || {});
-        },
-        error: err=>reject(new Error(cleanServerMsg(err) || "Request failed"))
-      });
-    } else {
-      fetch(`/api/method/${method}`, {
-        method:"POST",
-        headers:{"Content-Type":"application/json","X-Frappe-CSRF-Token":CSRF},
-        body: JSON.stringify(args||{})
-      })
-      .then(async r=>{
-        const j = await r.json().catch(()=>({}));
-        if (!r.ok) throw j;
-        return (j.message!==undefined) ? j.message : (j.docs!==undefined ? j.docs : j);
-      })
-      .then(resolve)
-      .catch(e=>reject(new Error(cleanServerMsg(e))));
-    }
-  });
-}
-
-function money(v,c){
-  try{ return new Intl.NumberFormat('en-AU',{style:'currency',currency:c||'AUD'}).format(Number(v||0)); }
-  catch{ return (c||'AUD')+' '+Number(v||0).toFixed(2); }
-}
-function fmtDate(d){ if(!d) return ""; return new Date(d+"T00:00:00").toLocaleDateString(); }
-function badgeClass(s){
-  switch(s){
-    case "Paid": return "border-green-200 bg-green-50 text-green-700";
-    case "Overdue": return "border-rose-200 bg-rose-50 text-rose-700";
-    case "Unpaid": return "border-amber-200 bg-amber-50 text-amber-700";
-    case "Draft": return "border-slate-200 bg-slate-50 text-slate-700";
-    case "Cancelled": return "border-gray-200 bg-gray-50 text-gray-600";
-    case "Return": return "border-purple-200 bg-purple-50 text-purple-700";
-    case "Submitted": return "border-blue-200 bg-blue-50 text-blue-700";
-    default: return "border-slate-200 bg-white text-slate-700";
+  function render(list){
+    rowsEl.innerHTML = list.map(r=>`
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2 font-mono">${r.id}</td>
+        <td class="px-4 py-2">${r.customer}</td>
+        <td class="px-4 py-2">${FTP.badge(r.status)}</td>
+        <td class="px-4 py-2 text-right tabular-nums">${r.total}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="#" class="text-blue-600 hover:underline" data-id="${r.id}" data-drawer-open="invDrawer">View</a>
+        </td>
+      </tr>`).join('');
   }
-}
+  render(data);
 
-function row(inv){
-  const tr = document.createElement("tr");
-  tr.className = "border-b last:border-0 hover:bg-gray-50";
-  tr.innerHTML = `
-    <td class="px-4 py-2"><input type="checkbox" data-id="${inv.name}"></td>
-    <td class="px-4 py-2">
-      <a href="/app/sales-invoice/${inv.name}" target="_blank" class="text-slate-900 font-medium hover:underline">${inv.name}</a>
-    </td>
-    <td class="px-4 py-2">${fmtDate(inv.posting_date)}</td>
-    <td class="px-4 py-2">${inv.customer_name || inv.customer || ""}</td>
-    <td class="px-4 py-2">
-      <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${badgeClass(inv.status)}">${inv.status}</span>
-    </td>
-    <td class="px-4 py-2">${money(inv.grand_total, inv.currency)}</td>
-    <td class="px-4 py-2">${money(inv.outstanding_amount, inv.currency)}</td>
-    <td class="px-4 py-2">${fmtDate(inv.due_date)}</td>
-    <td class="px-4 py-2">
-      <a href="/app/sales-invoice/${inv.name}" target="_blank" class="text-blue-600 hover:underline">Open</a>
-    </td>
-  `;
-  return tr;
-}
-
-function render(items, append=false){
-  const tbody = document.getElementById("tbody_invoices");
-  if (!append) tbody.innerHTML = "";
-  items.forEach(i=>tbody.appendChild(row(i)));
-  document.getElementById("empty-state").classList.toggle("hidden", (state.start + items.length) > 0);
-}
-
-function setStatusText(txt){
-  const el = document.getElementById("list_status");
-  if (txt){ el.textContent = txt; return; }
-  el.textContent = state.total ? `${Math.min(state.start, state.total)} of ${state.total}` : "";
-}
-
-async function load(reset=false){
-  if (state.loading) return;
-  if (reset){ state.start=0; state.total=0; state.items=[]; setStatusText(""); }
-  state.loading = true; setStatusText("Loading...");
-  try{
-    const res = await api("firtrackpro.api.invoices.list_invoices", {
-      q: state.q || null,
-      status: state.status || "all",
-      date_from: state.date_from || null,
-      date_to: state.date_to || null,
-      limit_start: state.start,
-      limit: state.limit
-    });
-    const items = res.items || [];
-    state.total = Number(res.total || 0);
-    render(items, !reset);
-    state.start += items.length;
-    setStatusText();
-    document.getElementById("btn_load_more").classList.toggle("hidden", state.start >= state.total);
-  }catch(e){
-    setStatusText(String(e.message || e) || "Error");
-    document.getElementById("btn_load_more").classList.add("hidden");
-  }finally{
-    state.loading = false;
-  }
-}
-
-function exportCSV(){
-  const header = ["Invoice #","Date","Customer","Status","Grand Total","Outstanding","Due Date"];
-  const rows = [header.join(",")].concat(
-    Array.from(document.querySelectorAll("#tbody_invoices tr")).map(tr=>{
-      const t = tr.querySelectorAll("td");
-      const arr = [
-        t[1]?.innerText?.trim() || "",
-        t[2]?.innerText?.trim() || "",
-        t[3]?.innerText?.trim() || "",
-        t[4]?.innerText?.trim() || "",
-        t[5]?.innerText?.trim() || "",
-        t[6]?.innerText?.trim() || "",
-        t[7]?.innerText?.trim() || ""
-      ];
-      return arr.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",");
-    })
-  );
-  const blob = new Blob([rows.join("\n")], {type:"text/csv;charset=utf-8;"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "invoices.csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-document.addEventListener("DOMContentLoaded", ()=>{
-  document.getElementById("btn_apply").addEventListener("click", ()=>{
-    state.q = document.getElementById("q").value.trim();
-    state.status = document.getElementById("status").value;
-    state.date_from = document.getElementById("date_from").value;
-    state.date_to = document.getElementById("date_to").value;
-    load(true);
+  q.addEventListener('input', ()=>{
+    const v=q.value.toLowerCase();
+    render(data.filter(r => (r.id+r.customer+r.status).toLowerCase().includes(v)));
   });
-  document.getElementById("btn_clear").addEventListener("click", ()=>{
-    document.getElementById("q").value = "";
-    document.getElementById("status").value = "all";
-    document.getElementById("date_from").value = "";
-    document.getElementById("date_to").value = "";
-    state.q=""; state.status="all"; state.date_from=""; state.date_to="";
-    load(true);
+
+  document.addEventListener('click', (e)=>{
+    const a = e.target.closest('[data-drawer-open="invDrawer"][data-id]');
+    if(!a) return;
+    e.preventDefault();
+    const id = a.getAttribute('data-id');
+    const r = data.find(x=>x.id===id); if(!r) return;
+    document.getElementById('d_title').textContent = r.id + ' — ' + r.customer;
+    document.getElementById('d_meta').textContent = `Total ${r.total} • Updated ${r.updated}`;
+    document.getElementById('d_status').innerHTML = FTP.badge(r.status);
+    const L = document.getElementById('d_lines');
+    L.innerHTML = '';
+    const items = [
+      'Labour — Technician (2h)',
+      'Fire Panel Testing — Callout',
+      'Consumables — Fuses & Cable',
+      'Travel — Zone 2'
+    ];
+    items.forEach(x => { const li=document.createElement('li'); li.textContent=x; L.appendChild(li); });
   });
-  const qInput = document.getElementById("q");
-  qInput.addEventListener("keydown", (e)=>{ if (e.key==="Enter") document.getElementById("btn_apply").click(); });
-  document.getElementById("btn_load_more").addEventListener("click", ()=>load(false));
-  const exportBtn = document.getElementById("btn_export");
-  if (exportBtn) exportBtn.addEventListener("click", exportCSV);
-  load(true);
-});
+})();
 </script>
 {% endblock %}

@@ -1,0 +1,521 @@
+{% extends "firtrackpro/www/templates/portal_base.html" %}
+{% block title %}New Site{% endblock %}
+
+{% block portal_content %}
+<div class="max-w-5xl mx-auto bg-white rounded-xl shadow p-6">
+  <h1 class="text-2xl font-semibold mb-6">Create New Site</h1>
+
+  <!-- Property -->
+  <section class="mb-8">
+    <h2 class="text-lg font-medium mb-3">Property</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Display Name (property_name)</label>
+        <input id="property_name" class="w-full border rounded px-3 py-2" placeholder="e.g. Harbour Tower – 12 Smith St">
+      </div>
+
+      <!-- Customer picker with autocomplete and + New -->
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Customer (property_customer)</label>
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <input id="property_customer_input" class="w-full border rounded px-3 py-2" placeholder="Type to search customers…">
+            <input type="hidden" id="property_customer"> {# will hold Customer.name when chosen #}
+            <div id="cust_results" class="hidden absolute left-0 right-0 bg-white border rounded shadow mt-1 max-h-64 overflow-auto z-20"></div>
+          </div>
+          <button id="btn_new_customer" type="button" class="border border-line rounded px-3 py-2">+ New</button>
+        </div>
+        <div class="text-xs text-gray-400 mt-1">Pick an existing Customer or create a new one.</div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">AS1851 Edition (property_as1851_edition)</label>
+        <select id="property_as1851_edition" class="w-full border rounded px-3 py-2">
+          <option value="2021">2021</option>
+          <option value="2018">2018</option>
+          <option value="2012">2012</option>
+          <option value="2005">2005</option>
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Notes (property_notes)</label>
+        <textarea id="property_notes" class="w-full border rounded px-3 py-2" rows="3" placeholder="Any site-wide notes..."></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- Address -->
+  <section class="mb-8">
+    <h2 class="text-lg font-medium mb-3">Address</h2>
+    <div class="mb-3 flex gap-2">
+      <input id="addr_search" class="flex-1 border rounded px-3 py-2" placeholder="Search address (powered by Nominatim)">
+      <button id="btn_lookup" class="bg-brand text-white rounded px-4 py-2">Lookup</button>
+    </div>
+    <div id="addr_results" class="hidden border rounded p-2 mb-3 bg-white"></div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Address Line 1</label>
+        <input id="address_line1" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Address Line 2</label>
+        <input id="address_line2" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">City/Suburb</label>
+        <input id="city" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">State</label>
+        <input id="state" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Postcode</label>
+        <input id="pincode" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Country</label>
+        <input id="country" class="w-full border rounded px-3 py-2" value="Australia">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Latitude</label>
+        <input id="lat" class="w-full border rounded px-3 py-2" placeholder="-33.86">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Longitude</label>
+        <input id="lng" class="w-full border rounded px-3 py-2" placeholder="151.20">
+      </div>
+    </div>
+  </section>
+
+  <!-- Access Details -->
+  <section class="mb-8">
+    <h2 class="text-lg font-medium mb-3">Access Details</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Keysafe Code (property_access_keysafe_code)</label>
+        <input id="access_keysafe_code" type="text" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Gate Code (property_access_gate_code)</label>
+        <input id="access_gate_code" type="text" class="w-full border rounded px-3 py-2">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Alarm Panel Notes (property_access_alarm_panel)</label>
+        <textarea id="access_alarm_panel" class="w-full border rounded px-3 py-2" rows="2"></textarea>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Parking Notes (property_access_parking)</label>
+        <textarea id="access_parking" class="w-full border rounded px-3 py-2" rows="2"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contacts -->
+  <section class="mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-medium">Contacts</h2>
+      <button id="btn_add_contact" class="bg-white border border-line rounded px-3 py-1">+ Add Contact</button>
+    </div>
+    <div id="contacts_list" class="space-y-3"></div>
+    <template id="contact_tpl">
+      <div class="border rounded-lg p-3 grid grid-cols-1 md:grid-cols-6 gap-3 items-start">
+        <input class="c_full_name md:col-span-2 border rounded px-3 py-2" placeholder="Full name">
+        <input class="c_email border rounded px-3 py-2" placeholder="Email">
+        <input class="c_phone border rounded px-3 py-2" placeholder="Phone">
+        <select class="c_role border rounded px-3 py-2">
+          <option value="building_manager">building_manager</option>
+          <option value="security">security</option>
+          <option value="after_hours">after_hours</option>
+          <option value="reception">reception</option>
+          <option value="tenant_rep">tenant_rep</option>
+          <option value="other">other</option>
+        </select>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="c_primary"> <span class="text-sm text-gray-600">Primary</span>
+        </label>
+        <button type="button" class="c_remove text-red-600 text-sm">Remove</button>
+      </div>
+    </template>
+  </section>
+
+  <div class="flex gap-3">
+    <button id="btn_save" class="bg-brand text-white rounded px-5 py-2">Create Site</button>
+    <a href="/portal/sites" class="border rounded px-5 py-2">Cancel</a>
+  </div>
+
+  <div id="msg" class="mt-4 text-sm"></div>
+</div>
+
+<!-- New Customer Modal -->
+<div id="customer_modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow max-w-lg w-full p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold">New Customer</h3>
+      <button id="cust_modal_close" class="text-gray-500 hover:text-gray-700">✕</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Customer Name</label>
+        <input id="cust_name" class="w-full border rounded px-3 py-2" placeholder="e.g. ACME Pty Ltd">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Customer Type</label>
+        <select id="cust_type" class="w-full border rounded px-3 py-2">
+          <option value="Company">Company</option>
+          <option value="Individual">Individual</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Email (optional)</label>
+        <input id="cust_email" class="w-full border rounded px-3 py-2" placeholder="accounts@example.com">
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm text-gray-600 mb-1">Phone (optional)</label>
+        <input id="cust_phone" class="w-full border rounded px-3 py-2" placeholder="+61 ...">
+      </div>
+    </div>
+    <div class="mt-6 flex justify-end gap-2">
+      <button id="cust_modal_cancel" class="border rounded px-4 py-2">Cancel</button>
+      <button id="cust_modal_save" class="bg-brand text-white rounded px-4 py-2">Create Customer</button>
+    </div>
+    <div id="cust_modal_msg" class="mt-3 text-sm"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<script>
+(function(){
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || (window.frappe && frappe.csrf_token) || '';
+  const $ = (sel, el=document) => el.querySelector(sel);
+  const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+  const show = (el)=>el.classList.remove('hidden');
+  const hide = (el)=>el.classList.add('hidden');
+
+  // ---------- Customer autocomplete ----------
+  async function apiGet(method, params={}){
+    const qs = new URLSearchParams(params);
+    const url = '/api/method/' + method + (qs.toString() ? '?' + qs : '');
+    const r = await fetch(url, { method:'GET', headers:{'Accept':'application/json','X-Frappe-CSRF-Token':csrf}, credentials:'same-origin' });
+    const j = await r.json();
+    if(!r.ok || j.exc){ throw new Error(j._server_messages || j.message || 'Request failed'); }
+    return j.message;
+  }
+  async function apiPost(method, args={}){
+    const fd = new FormData();
+    fd.append('cmd', method);
+    Object.entries(args).forEach(([k,v])=>fd.append(k, typeof v==='object' ? JSON.stringify(v) : v));
+    const r = await fetch('/api/method', { method:'POST', body:fd, headers:{'X-Frappe-CSRF-Token':csrf,'Accept':'application/json'}, credentials:'same-origin' });
+    const j = await r.json();
+    if(!r.ok || j.exc){ throw new Error(j._server_messages || j.message || 'Request failed'); }
+    return j.message;
+  }
+
+  const custInput = $('#property_customer_input');
+  const custHidden = $('#property_customer');
+  const custResults = $('#cust_results');
+  let custTimer = null;
+
+  function renderCustomerResults(rows){
+    if(!rows || !rows.length){ custResults.innerHTML = '<div class="px-3 py-2 text-sm text-gray-500">No matches</div>'; show(custResults); return; }
+    custResults.innerHTML = rows.map(r => `
+      <button type="button" data-name="${r.name}" data-label="${r.customer_name || r.name}"
+              class="block w-full text-left px-3 py-2 hover:bg-gray-50">
+        ${r.customer_name || r.name} <span class="text-xs text-gray-500">(${r.customer_type || 'Customer'})</span>
+      </button>
+    `).join('');
+    show(custResults);
+  }
+
+  custInput?.addEventListener('input', () => {
+    custHidden.value = '';
+    const q = (custInput.value || '').trim();
+    if(q.length < 2){ hide(custResults); custResults.innerHTML=''; return; }
+    clearTimeout(custTimer);
+    custTimer = setTimeout(async () => {
+      try{
+        const rows = await apiGet('firtrackpro.www.portal.sites.api.search_customer', { q, limit: 8 });
+        renderCustomerResults(rows);
+      }catch(e){
+        custResults.innerHTML = '<div class="px-3 py-2 text-sm text-red-600">Search failed</div>'; show(custResults);
+      }
+    }, 250);
+  });
+
+  custResults?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-name]');
+    if(!btn) return;
+    custHidden.value = btn.getAttribute('data-name');
+    custInput.value = btn.getAttribute('data-label');
+    hide(custResults);
+  });
+  document.addEventListener('click', (e) => { if(!custResults.contains(e.target) && e.target !== custInput) hide(custResults); });
+
+  // ---------- New Customer modal ----------
+  const modal = $('#customer_modal');
+  const openModal = () => { $('#cust_name').value=''; $('#cust_email').value=''; $('#cust_phone').value=''; $('#cust_modal_msg').textContent=''; show(modal); };
+  const closeModal = () => hide(modal);
+
+  $('#btn_new_customer')?.addEventListener('click', openModal);
+  $('#cust_modal_close')?.addEventListener('click', closeModal);
+  $('#cust_modal_cancel')?.addEventListener('click', closeModal);
+  $('#cust_modal_save')?.addEventListener('click', async () => {
+    const name = $('#cust_name').value.trim();
+    const type = $('#cust_type').value || 'Company';
+    const email = $('#cust_email').value.trim();
+    const phone = $('#cust_phone').value.trim();
+    const msg = $('#cust_modal_msg');
+    msg.textContent = '';
+
+    if(!name){ msg.textContent = 'Customer Name is required.'; return; }
+    try{
+      msg.textContent = 'Creating...';
+      const c = await apiPost('firtrackpro.www.portal.sites.api.create_customer', { customer_name: name, customer_type: type, email, phone });
+      msg.textContent = 'Created.';
+      custHidden.value = c.name;
+      custInput.value = c.customer_name || c.name;
+      closeModal();
+    }catch(e){
+      msg.textContent = 'Create failed: ' + (e.message || e);
+    }
+  });
+
+  // ---------- Address lookup (Nominatim) ----------
+  async function lookupAddress(q){
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', q);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('addressdetails', '1'); // ensure address object present
+    url.searchParams.set('countrycodes', 'au');
+    url.searchParams.set('limit', '8');
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if(!res.ok) throw new Error('Address lookup failed');
+    return res.json();
+  }
+
+  function partsFromDisplay(display_name){
+    if(!display_name) return [];
+    return display_name.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function pickThoroughfare(a){
+    return a.road || a.residential || a.pedestrian || a.footway || a.path || a.cycleway ||
+           a.highway || a.primary || a.primary_link || a.secondary || a.secondary_link ||
+           a.tertiary || a.tertiary_link || a.service || a.street || a.place ||
+           a.track || a.unclassified || a.trunk || a.trunk_link || a.motorway || a.motorway_link ||
+           a.route || a.state_route || a.drive || a.boulevard || a.avenue || a.parade ||
+           a.crescent || a.circuit || a.close || a.court || a.esplanade || null;
+  }
+
+  function extractAUPostcode(parts){
+    for (const p of parts) {
+      const m = p.match(/\b(\d{4})\b/);
+      if (m) return m[1];
+    }
+    return '';
+  }
+
+  function findStateIndex(parts, state){
+    if (state) {
+      const idx = parts.findIndex(p => p.toLowerCase() === String(state).toLowerCase());
+      if (idx >= 0) return idx;
+    }
+    const abbrev = ['NSW','VIC','QLD','WA','SA','TAS','ACT','NT'];
+    for (let i=0;i<parts.length;i++){
+      if (abbrev.includes(parts[i].toUpperCase())) return i;
+    }
+    const fulls = ['New South Wales','Victoria','Queensland','Western Australia','South Australia','Tasmania','Australian Capital Territory','Northern Territory'];
+    for (let i=0;i<parts.length;i++){
+      if (fulls.includes(parts[i])) return i;
+    }
+    return -1;
+  }
+
+  function inferAUSuburbFromParts(parts, a){
+    const direct = a.suburb || a.city_suburb || a.village || a.town || a.locality || a.hamlet;
+    if (direct) return direct;
+
+    const cityCandidates = [a.city,'Melbourne','Sydney','Brisbane','Perth','Adelaide','Hobart','Darwin','Canberra','Gold Coast','Newcastle','Wollongong','Geelong']
+      .filter(Boolean)
+      .map(s => String(s).toLowerCase());
+
+    let cityIdx = -1;
+    for (const token of cityCandidates) {
+      const idx = parts.findIndex(p => p.toLowerCase() === token);
+      if (idx > -1) { cityIdx = idx; break; }
+    }
+    if (cityIdx > 1) {
+      return parts[cityIdx - 1]; // suburb before major city token
+    }
+
+    const stateIdx = findStateIndex(parts, a.state || a.state_district);
+    const postcodeIdx = parts.findIndex(p => /\b\d{4}\b/.test(p));
+    let end = stateIdx > -1 ? stateIdx - 1 : (postcodeIdx > -1 ? postcodeIdx - 1 : parts.length - 1);
+
+    for (let i=end; i>=2; i--){
+      const t = parts[i];
+      if (/^(City|Shire|Regional|County|Council)\b/i.test(t)) continue; // skip LGA
+      if (/^\d{1,5}$/.test(t)) continue;                 // numbers/postcodes
+      if (/^\d+[A-Za-z\-]*$/.test(t)) continue;          // street numbers
+      return t;
+    }
+    return parts[2] || parts[1] || '';
+  }
+
+  function fillAddressChoice(choice){
+    const a = choice.address || {};
+    const parts = partsFromDisplay(choice.display_name || '');
+
+    // Line 1
+    const th = pickThoroughfare(a);
+    let line1 = '';
+    if (a.house_number && th) line1 = `${a.house_number} ${th}`.trim();
+    else if (th) line1 = th;
+    else {
+      if (parts.length >= 2 && /^\d+[A-Za-z\-]*$/.test(parts[0])) line1 = `${parts[0]} ${parts[1]}`.trim();
+      else line1 = parts[0] || '';
+    }
+
+    // Line 2
+    const line2 = [a.unit, a.level, a.building].filter(Boolean).join(', ');
+
+    // City/Suburb
+    let city = inferAUSuburbFromParts(parts, a);
+
+    // State
+    let state = a.state || a.state_district || '';
+    if (!state) {
+      const sIdx = findStateIndex(parts, '');
+      if (sIdx > -1) state = parts[sIdx];
+    }
+
+    // Postcode
+    let pincode = a.postcode || extractAUPostcode(parts) || '';
+
+    // Country
+    const country = a.country || 'Australia';
+
+    // Lat / Lng
+    const lat = choice.lat || '';
+    const lng = choice.lon || '';
+
+    // Assign
+    $('#address_line1').value = line1;
+    $('#address_line2').value = line2;
+    $('#city').value = city || '';
+    $('#state').value = state || '';
+    $('#pincode').value = pincode || '';
+    $('#country').value = country || 'Australia';
+    $('#lat').value = lat;
+    $('#lng').value = lng;
+  }
+
+  $('#btn_lookup')?.addEventListener('click', async () => {
+    const q = $('#addr_search').value.trim();
+    const box = $('#addr_results');
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    if(!q) return;
+    try{
+      const items = await lookupAddress(q);
+      if(!items?.length){
+        box.innerHTML = '<div class="text-sm text-gray-500 px-2 py-1">No matches</div>';
+        box.classList.remove('hidden');
+        return;
+      }
+      box.classList.remove('hidden');
+      items.forEach((it) => {
+        const a = document.createElement('a');
+        a.href = '#';
+        a.className = 'block px-2 py-1 hover:bg-gray-50 rounded';
+        a.textContent = it.display_name;
+        a.addEventListener('click', (e)=>{ e.preventDefault(); fillAddressChoice(it); box.classList.add('hidden'); });
+        box.appendChild(a);
+      });
+    }catch(err){
+      box.innerHTML = '<div class="text-sm text-red-600 px-2 py-1">Lookup failed</div>';
+      box.classList.remove('hidden');
+    }
+  });
+
+  // ---------- Contacts UI ----------
+  const contactsList = $('#contacts_list');
+  $('#btn_add_contact')?.addEventListener('click', () => {
+    const frag = document.importNode($('#contact_tpl').content, true);
+    frag.querySelector('.c_remove').addEventListener('click', (e) => e.target.closest('.border').remove());
+    contactsList.appendChild(frag);
+  });
+
+  // ---------- Gather & submit ----------
+  function collectPayload(){
+    const prop = {
+      property_name: $('#property_name').value.trim(),
+      property_customer: $('#property_customer').value.trim() || $('#property_customer_input').value.trim(),
+      property_as1851_edition: $('#property_as1851_edition').value,
+      property_notes: $('#property_notes').value.trim()
+    };
+    const address = {
+      address_line1: $('#address_line1').value.trim(),
+      address_line2: $('#address_line2').value.trim(),
+      city: $('#city').value.trim(),
+      state: $('#state').value.trim(),
+      pincode: $('#pincode').value.trim(),
+      country: $('#country').value.trim() || 'Australia',
+      lat: parseFloat($('#lat').value || '0') || null,
+      lng: parseFloat($('#lng').value || '0') || null
+    };
+    const access = {
+      property_access_keysafe_code: $('#access_keysafe_code').value,
+      property_access_gate_code: $('#access_gate_code').value,
+      property_access_alarm_panel: $('#access_alarm_panel').value.trim(),
+      property_access_parking: $('#access_parking').value.trim()
+    };
+    const rows = [];
+    $$('#contacts_list .border').forEach(row => {
+      rows.push({
+        full_name: row.querySelector('.c_full_name').value.trim(),
+        email: row.querySelector('.c_email').value.trim(),
+        phone: row.querySelector('.c_phone').value.trim(),
+        role: row.querySelector('.c_role').value,
+        is_primary: row.querySelector('.c_primary').checked
+      });
+    });
+    return { property: prop, address, access, contacts: rows };
+  }
+
+  async function apiCreateProperty(payload){
+    const res = await fetch('/api/method/firtrackpro.www.portal.sites.api.create_property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Frappe-CSRF-Token': csrf },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if(!res.ok || json.exc){ throw new Error(json._server_messages || json.message || 'Create failed'); }
+    return json.message;
+  }
+
+  $('#btn_save')?.addEventListener('click', async () => {
+    const msg = $('#msg'); msg.textContent = '';
+    const payload = collectPayload();
+    if(!payload.property.property_name){ msg.textContent = 'Please enter a Display Name.'; return; }
+    if(!payload.property.property_customer){ msg.textContent = 'Please select or enter a Customer.'; return; }
+    if(!payload.address.address_line1 || !payload.address.city || !payload.address.state || !payload.address.pincode){
+      msg.textContent = 'Please complete the address (Line 1, City, State, Postcode).'; return;
+    }
+    try{
+      msg.textContent = 'Creating...';
+      const result = await apiCreateProperty(payload);
+      msg.textContent = 'Created.';
+      if(result && result.view_url) window.location.href = result.view_url;
+    }catch(err){
+      console.error(err);
+      msg.textContent = 'Create failed: ' + (err.message || err);
+    }
+  });
+})();
+</script>
+{% endblock %}

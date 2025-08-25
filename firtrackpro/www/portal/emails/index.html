@@ -1,312 +1,85 @@
 {% extends "firtrackpro/www/templates/portal_base.html" %}
-{% block title %}Emails{% endblock %}
+{% block title %}{{ PAGE_TITLE or page_h1 or "Untitled" }}{% endblock %}
 {% block portal_content %}
-<div class="w-full max-w-none px-4 md:px-8 py-8 space-y-6">
-
-  <div class="bg-white/90 backdrop-blur rounded-2xl shadow ring-1 ring-slate-200 p-5 md:p-6">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div class="space-y-1">
-        <div class="text-2xl font-semibold text-slate-900">Emails</div>
-        <div class="text-sm text-slate-600">View inbox and sent mail from your connected accounts.</div>
-      </div>
-      <div class="flex items-center gap-2 w-full md:w-auto">
-        <input id="search_q" type="text" placeholder="Search subject, sender, recipients"
-               class="w-full md:w-[28rem] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-slate-200 focus:border-slate-400">
-        <button id="btn_search"
-                class="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm shadow hover:bg-slate-900 active:scale-[0.98]">
-          Search
-        </button>
-      </div>
+<div class="flex flex-col h-full">
+  <div class="flex items-center justify-between px-6 py-4 border-b bg-white sticky top-0 z-10">
+    <h1 class="text-2xl font-bold text-gray-900">{{ PAGE_TITLE or page_h1 or "Untitled" }}</h1>
+    <div class="flex gap-2">
+      {% if actions and "create" in actions %}
+      <a href="#" class="bg-brand text-white rounded-xl px-4 py-2 hover:bg-brand-600 active:bg-brand-700 shadow-ft1">+ Create</a>
+      {% endif %}
+      {% if actions and "export" in actions %}
+      <button class="bg-white border border-line text-ink rounded-xl px-3 py-2 hover:bg-panelweak shadow-ft1">Export</button>
+      {% endif %}
     </div>
   </div>
 
-  <div class="bg-white/90 backdrop-blur rounded-2xl shadow ring-1 ring-slate-200 p-5 md:p-6">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="flex flex-col gap-2">
-        <label for="email_account" class="text-sm font-medium text-slate-700">Account</label>
-        <select id="email_account"
-                class="w-full md:w-[26rem] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-slate-200 focus:border-slate-400"></select>
-      </div>
-      <div class="lg:col-span-2 flex items-end">
-        <div class="inline-flex rounded-xl bg-slate-100 p-1 shadow-inner ring-1 ring-slate-200">
-          <button data-mailbox="all"
-                  class="tab-mailbox px-4 py-2 text-sm rounded-lg text-slate-700 hover:bg-white transition">
-            All
-          </button>
-          <button data-mailbox="inbox"
-                  class="tab-mailbox px-4 py-2 text-sm rounded-lg bg-white text-slate-900 shadow">
-            Inbox
-          </button>
-          <button data-mailbox="sent"
-                  class="tab-mailbox px-4 py-2 text-sm rounded-lg text-slate-700 hover:bg-white transition">
-            Sent
-          </button>
-        </div>
-      </div>
-    </div>
+  <div class="flex items-center px-6 py-3 bg-gray-50 border-b">
+    <input class="border px-3 py-2 rounded w-80 mr-2" placeholder="Search {{ (PAGE_TITLE or page_h1 or "items") | lower }}...">
+    <button class="bg-white border px-3 py-2 rounded text-gray-700">Add filter</button>
   </div>
 
-  <div id="email_list" class="bg-white/90 backdrop-blur rounded-2xl shadow ring-1 ring-slate-200 divide-y"></div>
+  <div class="overflow-x-auto flex-1 px-6 py-6 bg-white">
+    <table class="min-w-full table-auto">
+      <thead>
+        <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Updated</th>
+          <th class="px-4 py-2 text-left"></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <!-- Injected by demo script -->
+      </tbody>
+    </table>
 
-  <div id="list_footer" class="flex items-center justify-center py-6">
-    <button id="btn_load_more"
-            class="hidden px-4 py-2 rounded-xl border border-slate-300 bg-white text-sm shadow hover:bg-slate-50 active:scale-[0.98]">
-      Load more
-    </button>
-    <div id="list_status" class="ml-3 text-sm text-slate-600"></div>
-  </div>
-</div>
-
-<div id="email_modal" class="fixed inset-0 hidden z-50">
-  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
-  <div class="absolute inset-0 flex items-center justify-center p-4">
-    <div class="w-full max-w-5xl bg-white rounded-2xl shadow-2xl ring-1 ring-slate-200 overflow-hidden">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-        <div class="text-lg font-semibold text-slate-900" id="m_subject"></div>
-        <button id="m_close" class="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-sm shadow hover:bg-slate-50 active:scale-[0.98]">
-          Close
-        </button>
-      </div>
-      <div class="px-5 py-4 space-y-3 border-b border-slate-200">
-        <div class="text-sm text-slate-700" id="m_meta"></div>
-        <div id="m_attachments" class="flex flex-wrap gap-2"></div>
-      </div>
-      <div class="px-5 py-5">
-        <div id="m_content" class="prose prose-slate max-w-none"></div>
-      </div>
+    <div id="empty" class="flex flex-col items-center py-20 text-gray-400 hidden">
+      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8m-4-4v8"/>
+      </svg>
+      <div class="text-lg font-medium">No {{ (PAGE_TITLE or page_h1 or "items") | lower }} found</div>
+      <div class="text-gray-500 mt-2">Try adjusting your filters or add a new item.</div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
 <script>
-let state = { account: null, mailbox: "inbox", q: "", start: 0, limit: 30, loading: false, total: 0 };
+(function(){
+  const rowsEl = document.getElementById('rows');
+  const emptyEl = document.getElementById('empty');
+  const data = [{"name": "Inbox \u2014 support@client.com", "status": "Connected", "badge": "ok", "updated": "10 Aug 2025"}, {"name": "Inbox \u2014 admin@acme.com", "status": "Action Needed", "badge": "warn", "updated": "21 Aug 2025"}, {"name": "Inbox \u2014 support@client.com", "status": "Action Needed", "badge": "warn", "updated": "22 Aug 2025"}, {"name": "Inbox \u2014 admin@acme.com", "status": "Connected", "badge": "ok", "updated": "15 Aug 2025"}, {"name": "Inbox \u2014 support@client.com", "status": "Connected", "badge": "ok", "updated": "14 Aug 2025"}, {"name": "Inbox \u2014 support@client.com", "status": "Connected", "badge": "ok", "updated": "16 Aug 2025"}, {"name": "Inbox \u2014 admin@acme.com", "status": "Connected", "badge": "ok", "updated": "07 Aug 2025"}, {"name": "Inbox \u2014 admin@acme.com", "status": "Action Needed", "badge": "warn", "updated": "29 Jul 2025"}];
 
-function api(method, args) {
-  return new Promise((resolve, reject) => {
-    (window.frappe && frappe.call ? frappe.call({
-      method,
-      args: args || {},
-      type: "POST"
-    }) : fetch(`/api/method/${method}`, {
-      method: "POST",
-      headers: {"Content-Type":"application/json","X-Frappe-CSRF-Token": (window.frappe && frappe.csrf_token) || (window.csrf_token || "")},
-      body: JSON.stringify(args || {})
-    }).then(r => r.json())).then(r => {
-      const res = r && r.message !== undefined ? r.message : (r && r.docs !== undefined ? r.docs : r);
-      resolve(res);
-    }).catch(err => {
-      let msg = "";
-      try {
-        if (err && err._server_messages) msg = JSON.parse(err._server_messages).join("\n");
-        else if (err && err.message) msg = err.message;
-        else msg = String(err);
-      } catch { msg = String(err && err.message || "Error"); }
-      reject(new Error(msg.replace(/<[^>]+>/g, "")));
-    });
-  });
-}
-
-function el(tag, cls, html) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (html !== undefined) e.innerHTML = html;
-  return e;
-}
-
-function setMailboxActive() {
-  document.querySelectorAll(".tab-mailbox").forEach(b => {
-    if (b.dataset.mailbox === state.mailbox) b.classList.add("bg-gray-100");
-    else b.classList.remove("bg-gray-100");
-  });
-}
-
-function renderItem(it) {
-  const row = el("div", "p-4 hover:bg-gray-50 cursor-pointer");
-  const a = el("div", "flex items-start justify-between gap-3");
-  const left = el("div", "flex-1 space-y-1");
-  const subj = el("div", "font-medium text-gray-900 text-sm", it.subject || "(no subject)");
-  const meta = el("div", "text-xs text-gray-600", `${it.sender || ""} → ${it.recipients || ""}`);
-  const prev = el("div", "text-sm text-gray-700 line-clamp-2", it.preview || "");
-  left.appendChild(subj); left.appendChild(meta); left.appendChild(prev);
-  const when = el("div", "text-xs text-gray-500 whitespace-nowrap", new Date(it.communication_date).toLocaleString());
-  a.appendChild(left); a.appendChild(when);
-  row.appendChild(a);
-  row.addEventListener("click", () => openEmail(it.name));
-  return row;
-}
-
-function setListStatus(text) {
-  const st = document.getElementById("list_status");
-  const more = document.getElementById("btn_load_more");
-  if (text) { st.textContent = text; more.classList.add("hidden"); return; }
-  if (state.loading) { st.textContent = "Loading..."; more.classList.add("hidden"); return; }
-  const shown = Math.min(state.start, state.total);
-  if (shown >= state.total) { st.textContent = `${state.total} emails`; more.classList.add("hidden"); return; }
-  st.textContent = `${shown} of ${state.total}`;
-  more.classList.remove("hidden");
-}
-
-async function loadAccounts() {
-  const sel = document.getElementById("email_account");
-  sel.innerHTML = "";
-  let accounts = [];
-  try {
-    accounts = await api("firtrackpro.api.emails.get_email_accounts");
-  } catch (e) {
-    const o = document.createElement("option");
-    o.value = "";
-    o.textContent = ("" + e.message || "Failed to load accounts").replace(/<[^>]+>/g, "");
-    sel.appendChild(o);
-    document.getElementById("email_list").innerHTML = "";
-    setListStatus("");
-    return;
+  function badgeSpan(status, cls){
+    return `<span class="` + cls + `">${status}</span>`;
   }
-  if (!accounts.length) {
-    const o = document.createElement("option");
-    o.value = ""; o.textContent = "No Email Accounts found";
-    sel.appendChild(o);
-    document.getElementById("email_list").innerHTML = "";
-    setListStatus("");
-    return;
-  }
-  accounts.forEach(a => {
-    const o = document.createElement("option");
-    o.value = a.name;
-    o.textContent = `${a.name} <${a.email_id || ""}>`;
-    sel.appendChild(o);
-  });
-  state.account = accounts[0].name;
-  sel.value = state.account;
-  await resetAndLoad();
-}
 
-async function loadEmails(append = false) {
-  if (!state.account || state.loading) return;
-  state.loading = true;
-  setListStatus();
-  let res;
-  try {
-    res = await api("firtrackpro.api.emails.get_emails", {
-      email_account: state.account,
-      mailbox: state.mailbox,
-      q: state.q || null,
-      limit_start: state.start,
-      limit: state.limit
-    });
-  } catch (e) {
-    state.loading = false;
-    setListStatus(("" + e.message).replace(/<[^>]+>/g, ""));
-    return;
-  }
-  const list = document.getElementById("email_list");
-  if (!append) list.innerHTML = "";
-  res.items.forEach(it => list.appendChild(renderItem(it)));
-  state.start += res.items.length;
-  state.total = res.total;
-  state.loading = false;
-  setListStatus();
-}
-
-async function resetAndLoad() {
-  state.start = 0;
-  state.total = 0;
-  await loadEmails(false);
-}
-
-function toHttpsIfSameHost(u) {
-  try {
-    const url = new URL(u, window.location.origin);
-    if (url.hostname === window.location.hostname && url.protocol === "http:") url.protocol = "https:";
-    return url.href;
-  } catch { return u; }
-}
-
-function rewriteMixedContent(container) {
-  container.querySelectorAll("img").forEach(img => {
-    img.src = toHttpsIfSameHost(img.getAttribute("src") || "");
-  });
-  container.querySelectorAll("a").forEach(a => {
-    const href = a.getAttribute("href");
-    if (href) a.href = toHttpsIfSameHost(href);
-  });
-}
-
-async function openEmail(name) {
-  let d;
-  try {
-    d = await api("firtrackpro.api.emails.get_email", { name });
-  } catch (e) {
-    const modal = document.getElementById("email_modal");
-    document.getElementById("m_subject").textContent = "Error";
-    document.getElementById("m_meta").textContent = ("" + e.message).replace(/<[^>]+>/g, "");
-    document.getElementById("m_attachments").innerHTML = "";
-    document.getElementById("m_content").textContent = "";
-    modal.classList.remove("hidden");
-    return;
-  }
-  document.getElementById("m_subject").textContent = d.subject || "(no subject)";
-  const meta = [];
-  if (d.sender) meta.push(`From: ${d.sender}`);
-  if (d.recipients) meta.push(`To: ${d.recipients}`);
-  if (d.cc) meta.push(`Cc: ${d.cc}`);
-  if (d.bcc) meta.push(`Bcc: ${d.bcc}`);
-  if (d.communication_date) meta.push(new Date(d.communication_date).toLocaleString());
-  document.getElementById("m_meta").textContent = meta.join(" | ");
-  const atc = document.getElementById("m_attachments");
-  atc.innerHTML = "";
-  if (d.attachments && d.attachments.length) {
-    d.attachments.forEach(f => {
-      const a = el("a", "px-2 py-1 rounded border text-xs", f.file_name);
-      a.href = toHttpsIfSameHost(f.file_url || "");
-      a.target = "_blank";
-      atc.appendChild(a);
-    });
-  }
-  const contentHost = document.getElementById("m_content");
-  const safeHtml = (d.content || "").replaceAll(`http://${window.location.hostname}`, `https://${window.location.hostname}`);
-  contentHost.innerHTML = safeHtml;
-  rewriteMixedContent(contentHost);
-  document.getElementById("email_modal").classList.remove("hidden");
-}
-
-function initEvents() {
-  document.getElementById("email_account").addEventListener("change", async e => {
-    state.account = e.target.value;
-    await resetAndLoad();
-  });
-  document.querySelectorAll(".tab-mailbox").forEach(b => {
-    b.addEventListener("click", async () => {
-      state.mailbox = b.dataset.mailbox;
-      setMailboxActive();
-      await resetAndLoad();
-    });
-  });
-  document.getElementById("btn_search").addEventListener("click", async () => {
-    state.q = document.getElementById("search_q").value.trim();
-    await resetAndLoad();
-  });
-  document.getElementById("btn_load_more").addEventListener("click", async () => {
-    await loadEmails(true);
-  });
-  document.getElementById("m_close").addEventListener("click", () => {
-    document.getElementById("email_modal").classList.add("hidden");
-  });
-  const sentinel = document.getElementById("list_footer");
-  const io = new IntersectionObserver(async entries => {
-    for (const ent of entries) {
-      if (ent.isIntersecting && !state.loading && state.start < state.total) {
-        await loadEmails(true);
-      }
+  function render(){
+    if(!rowsEl) return;
+    if(!data || !data.length){
+      if(emptyEl) emptyEl.classList.remove('hidden');
+      return;
     }
-  }, { rootMargin: "200px" });
-  io.observe(sentinel);
-}
+    if(emptyEl) emptyEl.classList.add('hidden');
+    rowsEl.innerHTML = data.map(r => `
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-2"><input type="checkbox"></td>
+        <td class="px-4 py-2 text-ink font-medium">${r.name}</td>
+        <td class="px-4 py-2">${badgeSpan(r.status, r.badge_class)}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="#" class="text-blue-600 hover:underline">Open</a>
+        </td>
+      </tr>
+    `).join('');
+  }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  setMailboxActive();
-  initEvents();
-  await loadAccounts();
-});
+  render();
+})();
 </script>
-
-
 {% endblock %}

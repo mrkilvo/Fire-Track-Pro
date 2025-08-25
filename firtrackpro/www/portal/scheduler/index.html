@@ -1,491 +1,462 @@
-{% extends "firtrackpro/www/templates/portal_template.html" %}
+{% extends "firtrackpro/www/templates/portal_base.html" %}
 {% block title %}Scheduler{% endblock %}
 
-{% block header %}
-{{ super() }}
-<style>
-  /* ---------- Global rounding that RESPECTS explicit Tailwind rounded-* ---------- */
-  :root { --ftp-radius: .75rem; } /* tweak once to change default */
+{% block portal_content %}
+<div class="w-full max-w-[1400px] mx-auto px-4 md:px-6 py-6 space-y-4">
 
-  /* Apply default radius only if the element DOESN'T already have a rounded-* class */
-  :where(
-    button, .btn, .view-btn, .calendar-today, .calendar-prev, .calendar-next,
-    input[type="text"], input[type="search"], input[type="email"], input[type="number"], textarea,
-    select,
-    .sidebar-link, .submenu-toggle,
-    .external-task, .context-menu, .modal-card
-  ):not([class*="rounded-"]) { border-radius: var(--ftp-radius); }
-
-  /* Keep pills truly pill */
-  .rounded-full, [class*="rounded-full"] { border-radius: 9999px !important; }
-
-  /* FullCalendar bits */
-  .fc .fc-button        { border-radius: var(--ftp-radius); }
-  .fc .fc-event,
-  .fc .fc-v-event,
-  .fc .fc-h-event       { border-radius: var(--ftp-radius); overflow: hidden; }
-  .fc .fc-popover       { border-radius: var(--ftp-radius); }
-
-  /* Context menu */
-  .context-menu {
-    position:absolute; z-index:60; background:#fff; border:1px solid #e5e7eb;
-    border-radius: var(--ftp-radius);
-    box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);
-    min-width:180px;
-  }
-  .context-menu-list{ list-style:none; margin:0; padding:6px; }
-  .context-menu-list li{ padding:8px 10px; font-size:14px; border-radius:.5rem; cursor:pointer; }
-  .context-menu-list li:hover{ background:#f3f4f6; }
-
-  /* Modal */
-  .modal { position:fixed; inset:0; z-index:70; display:none; }
-  .modal.open { display:flex; }
-  .modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.4); }
-  .modal-card {
-    position:relative; margin:auto; width:100%; max-width:720px; background:#fff;
-    border-radius: var(--ftp-radius);
-    box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);
-  }
-
-  /* Ensure timeline scroller shows when content overflows horizontally */
-  #calendar .fc-scroller { overflow: auto !important; }
-
-  /* Ensure the tech chips are pills even without the global rule */
-  #selected_tech_chips button { border-radius:9999px; }
-</style>
-{% endblock %}
-
-{% block page_content %}
-<div class="flex flex-row w-full h-full bg-gray-50" style="min-height:calc(100vh - 56px)">
-
-  <!-- LEFT: Task lane / filters -->
-  <aside class="w-[390px] flex-shrink-0 bg-white border-r flex flex-col h-full max-h-[calc(100vh-60px)]">
-    <div class="px-5 py-4 border-b flex items-center gap-2">
-      <input id="task_search" type="text"
-             class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-3 py-2 w-full text-sm rounded-xl"
-             placeholder="Search tasks...">
-      <button class="bg-gray-100 px-3 py-2 rounded-full text-gray-700 text-sm hover:bg-gray-200">Filter</button>
-      <button class="bg-gray-100 px-3 py-2 rounded-full text-gray-700 text-sm hover:bg-gray-200">★</button>
-    </div>
-
-    <div class="px-5 pt-4 pb-1 flex gap-2 border-b">
-      <select class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-sm w-28 rounded-xl">
-        <option>Status: Ready</option>
-        <option>Status: In Progress</option>
-        <option>Status: Complete</option>
-      </select>
-      <select class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-sm w-20 rounded-xl">
-        <option>Active: Yes</option>
-        <option>Active: No</option>
-      </select>
-    </div>
-
-    <!-- Selected-tech chips + manage button -->
-    <div class="px-5 py-3 border-b space-y-2">
-      <div class="flex items-center justify-between">
-        <div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Technicians</div>
-        <div class="flex items-center gap-2">
-          <select id="group_by" class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 px-2 py-2 text-xs rounded-xl">
-            <option value="none">Group: None</option>
-            <option value="team">Group: Team</option>
-            <option value="region">Group: Region</option>
-          </select>
-          <button id="btn_manage_techs" class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Manage</button>
-        </div>
+  <!-- Toolbar -->
+  <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <!-- left: nav -->
+      <div class="flex items-center gap-2">
+        <button id="btn_prev"  class="bg-white border border-line rounded-xl px-3 py-2">Prev</button>
+        <button id="btn_today" class="bg-white border border-line rounded-xl px-3 py-2">Today</button>
+        <button id="btn_next"  class="bg-white border border-line rounded-xl px-3 py-2">Next</button>
       </div>
-      <div id="selected_tech_chips" class="flex gap-1 overflow-x-auto"></div>
-    </div>
 
-    <!-- Draggable tasks -->
-    <div class="flex-1 overflow-y-auto p-3 bg-gray-50" id="external-tasks">
-      {% for task in tasks %}
-      <div class="external-task bg-white border rounded-xl shadow-sm mb-3 p-3 hover:shadow-md cursor-move transition-all group"
-           data-title="{{ task.title }}"
-           data-duration="{{ task.duration or '1:00' }}"
-           data-task-id="{{ task.code }}"
-           style="user-select:none">
-        <div class="flex gap-2 items-center mb-1">
-          <span class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{{ task.status }}</span>
-          <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">{{ task.type }}</span>
-          <span class="ml-2 text-xs text-gray-500">{{ task.code }}</span>
-        </div>
-        <div class="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-700">{{ task.title }}</div>
-        <div class="text-xs text-gray-600 mt-0.5 truncate">{{ task.site }}</div>
-        <div class="text-xs text-gray-500 flex gap-2 mt-1">
-          <span><i data-feather="users" class="inline w-4 h-4"></i> {{ task.client }}</span>
-          <span><i data-feather="clock" class="inline w-4 h-4"></i> {{ task.duration }}</span>
-        </div>
-        <div class="mt-1 flex flex-wrap gap-1">
-          <span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">NR</span>
-          <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full text-xs">NOTE</span>
-          <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">NORMAL</span>
-        </div>
+      <!-- centre: view switcher (includes all core Scheduler views you’ll likely use) -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button data-view="resourceTimelineDay"   class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Timeline Day</button>
+        <button data-view="resourceTimelineWeek"  class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Timeline Week</button>
+        <button data-view="resourceTimelineMonth" class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Timeline Month</button>
+        <button data-view="resourceTimeGridDay"   class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Grid Day</button>
+        <button data-view="resourceTimeGridWeek"  class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Grid Week</button>
+        <button data-view="dayGridMonth"          class="viewbtn bg-white border border-line rounded-xl px-3 py-2">Month</button>
       </div>
-      {% else %}
-      <div class="text-gray-400 italic mt-8 text-center">No tasks found.</div>
-      {% endfor %}
-    </div>
-  </aside>
 
-  <!-- RIGHT: Calendar -->
-  <main class="flex-1 flex flex-col h-full overflow-hidden">
-    <div class="px-6 py-3 bg-white border-b flex flex-wrap items-center gap-2">
-      <!-- Use rounded-full to make pills -->
-      <button class="view-btn px-4 py-2 rounded-full bg-blue-100 text-blue-800" data-view="timeGridDay">Day</button>
-      <button class="view-btn px-4 py-2 rounded-full bg-blue-600 text-white font-semibold" data-view="timeGridWeek">Week</button>
-      <button class="view-btn px-4 py-2 rounded-full bg-blue-100 text-blue-800" data-view="dayGridMonth">Month</button>
+      <!-- right: filters & new -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- quick resource filter (multi-select) -->
+        <div class="relative">
+          <button id="tech_filter_btn" class="bg-white border border-line rounded-xl px-3 py-2 min-w-[160px] text-left">
+            <span class="align-middle">Filter technicians…</span>
+          </button>
+          <div id="tech_filter_menu" class="hidden absolute right-0 mt-1 z-20 bg-white border border-line rounded-xl shadow-ft2 w-64 max-h-72 overflow-auto p-2">
+            <div class="mb-1 px-1 text-xs text-muted">Show in timeline</div>
+            <div id="tech_checklist" class="space-y-1"></div>
+            <div class="mt-2 flex justify-end gap-2">
+              <button id="tech_filter_clear" class="bg-white border border-line rounded-lg px-2 py-1 text-sm">Clear</button>
+              <button id="tech_filter_apply" class="bg-brand text-white rounded-lg px-2.5 py-1 text-sm hover:bg-brand-600">Apply</button>
+            </div>
+          </div>
+        </div>
 
-      <span id="tech_views_label" class="ml-3 text-xs text-gray-500">Tech views</span>
-      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimeGridDay">Tech Day</button>
-      <button class="view-btn px-4 py-2 rounded-full bg-purple-600 text-white font-semibold" data-view="resourceTimeGridWeek">Tech Week</button>
-      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimelineDay">Tech Timeline (Day)</button>
-      <button class="view-btn px-4 py-2 rounded-full bg-purple-100 text-purple-800" data-view="resourceTimelineWeek">Tech Timeline (Week)</button>
-
-      <button class="calendar-today px-4 py-2 rounded-full bg-gray-100 text-gray-800 ml-3">Today</button>
-      <button class="calendar-prev px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="chevron-left" class="inline w-4 h-4"></i></button>
-      <button class="calendar-next px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="chevron-right" class="inline w-4 h-4"></i></button>
-      <span class="ml-2 font-semibold text-gray-700" id="calendarDateLabel"></span>
-
-      <button class="ml-4 px-4 py-2 rounded-full bg-gray-100 text-gray-800">Send Notifications</button>
-      <button class="px-4 py-2 rounded-full bg-gray-100 text-gray-800">+ Create non-task event</button>
-      <button class="ml-auto px-3 py-2 rounded-full bg-gray-100 text-gray-800"><i data-feather="maximize-2" class="inline w-4 h-4"></i></button>
-    </div>
-
-    <div class="flex-1 p-4 bg-gray-100 overflow-auto">
-      <div class="bg-white rounded-2xl shadow h-full w-full overflow-hidden">
-        <div id="calendar" style="height: 640px;"></div>
+        <select id="status_filter" class="border rounded px-3 py-2">
+          <option value="">All statuses</option>
+          {% for s in STATUS_OPTIONS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+        <button id="btn_new" class="bg-brand text-white rounded-xl px-3 py-2 hover:bg-brand-600">New Job</button>
       </div>
     </div>
-    <div id="fc-context-menu" class="hidden context-menu"></div>
-  </main>
+
+    <div class="mt-2 text-xs text-muted">
+      Tip: in <strong>Timeline</strong> views you can scroll horizontally. Use trackpad/Shift+wheel to pan time.
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <!-- Backlog (external drag source) -->
+    <div class="lg:col-span-3">
+      <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
+        <div class="font-semibold text-ink mb-2">Unassigned</div>
+        <div id="backlog" class="space-y-2">
+          {% for b in BACKLOG %}
+          <div class="ext-event border border-line rounded-lg p-2 cursor-move bg-panelweak"
+               data-title="{{ b.title }}" data-status="{{ b.status }}" data-site="{{ b.site }}">
+            <div class="text-sm font-medium text-ink">{{ b.title }}</div>
+            <div class="text-xs text-muted">{{ b.site }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <p class="text-xs text-muted mt-2">Drag onto a lane/time to schedule</p>
+      </div>
+    </div>
+
+    <!-- Calendar -->
+    <div class="lg:col-span-9">
+      <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
+        <div id="calendar" class="rounded-xl overflow-hidden border border-line"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- Manage Techs Modal -->
-<div id="tech_modal" class="modal items-center justify-center">
-  <div class="modal-backdrop"></div>
-  <div class="modal-card p-5">
-    <div class="flex items-center justify-between mb-3">
-      <div class="text-lg font-semibold">Manage Technicians</div>
-      <button id="tech_modal_close" class="px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 text-sm">Close</button>
+<!-- Event modal (create / edit) -->
+<div id="eventModal" class="ftp-modal fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/50" data-modal-close="eventModal"></div>
+  <div class="absolute inset-0 p-4 flex items-center justify-center">
+    <div class="bg-white w-full max-w-xl rounded-2xl border border-line shadow-ft2 overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 border-b">
+        <div class="font-semibold text-ink" id="em_title">Job</div>
+        <div class="flex items-center gap-2">
+          <button id="em_delete" class="bg-white border border-line rounded-xl px-3 py-1.5 text-red-600">Delete</button>
+          <button class="rounded-lg border px-3 py-1.5" data-modal-close="eventModal">Close</button>
+        </div>
+      </div>
+      <div class="p-4 space-y-3">
+        <input type="hidden" id="em_id">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-muted">Title</label>
+            <input id="em_title_input" class="border rounded px-3 py-2 w-full" placeholder="Service @ Site">
+          </div>
+          <div>
+            <label class="text-xs text-muted">Technician</label>
+            <select id="em_tech" class="border rounded px-3 py-2 w-full">
+              {% for r in RESOURCES %}
+              <option value="{{ r.id }}">{{ r.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-muted">Start</label>
+            <input id="em_start" type="datetime-local" class="border rounded px-3 py-2 w-full">
+          </div>
+          <div>
+            <label class="text-xs text-muted">End</label>
+            <input id="em_end" type="datetime-local" class="border rounded px-3 py-2 w-full">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-muted">Status</label>
+            <select id="em_status" class="border rounded px-3 py-2 w-full">
+              {% for s in STATUS_OPTIONS %}
+              <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-muted">Site</label>
+            <input id="em_site" class="border rounded px-3 py-2 w-full" placeholder="Harbour Tower">
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center gap-2">
+          <button id="em_save" class="bg-brand text-white rounded-xl px-3 py-2 hover:bg-brand-600">Save</button>
+          <button id="em_dup"  class="bg-white border border-line rounded-xl px-3 py-2">Duplicate</button>
+        </div>
+      </div>
     </div>
-    <div class="flex items-center gap-2">
-      <input id="tech_search" type="text"
-             class="border ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-500/40 rounded-xl px-3 py-2 w-full text-sm"
-             placeholder="Search by name, team, region...">
-      <button id="tech_select_all"  class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Select all</button>
-      <button id="tech_select_none" class="text-xs px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200">Select none</button>
-    </div>
-    <div id="tech_modal_list" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto"></div>
-    <div class="flex justify-end gap-2 mt-4">
-      <button id="tech_modal_save" class="px-4 py-2 rounded-full bg-blue-600 text-white text-sm">Apply</button>
-    </div>
+  </div>
+</div>
+
+<!-- Right-click context menu -->
+<div id="ctxMenu" class="fixed z-50 hidden">
+  <div class="bg-white border border-line rounded-xl shadow-ft2 min-w-[180px] overflow-hidden">
+    <button data-cmd="open"  class="w-full text-left px-3 py-2 hover:bg-panelweak">Open / Edit</button>
+    <button data-cmd="dup"   class="w-full text-left px-3 py-2 hover:bg-panelweak">Duplicate</button>
+    <button data-cmd="del"   class="w-full text-left px-3 py-2 text-red-600 hover:bg-panelweak">Delete</button>
   </div>
 </div>
 {% endblock %}
 
-{% block footer %}
+{% block script %}
 {{ super() }}
-<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+<!-- Scheduler bundle (core + interaction + resource-timegrid + resource-timeline + daygrid) -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler/index.global.min.js"></script>
+<script src="/assets/firtrackpro/js/portal-demo.js"></script>
 <script>
 (function(){
-  function loadScript(src){
-    return new Promise(function(resolve,reject){
-      var s=document.createElement('script');
-      s.src=src; s.async=true; s.onload=function(){resolve(src)}; s.onerror=function(){reject(src)};
-      document.head.appendChild(s);
-    });
-  }
-  function hasFC(){ return !!(window.FullCalendar && FullCalendar.Calendar); }
+  const FC_LICENSE_KEY = {{ FC_LICENSE_KEY | tojson }};
+  const RESOURCES = {{ RESOURCES | tojson }};
+  const EVENTS    = {{ EVENTS    | tojson }};
 
-  // Try premium Scheduler (local → CDN), else fallback to standard (free)
-  function loadScheduler(){
-    return loadScript("/assets/firtrackpro/js/vendor/fullcalendar-scheduler/index.global.min.js")
-      .catch(function(){ return loadScript("https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.19/index.global.min.js"); });
-  }
-  function loadStandard(){
-    return loadScript("/assets/firtrackpro/js/vendor/fullcalendar/index.global.min.js")
-      .catch(function(){ return loadScript("https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"); });
+  // ---------- helpers ----------
+  const fmtLocal = (d)=> new Date(d).toISOString().slice(0,16);
+  let currentEvent = null;
+  function toast(msg){
+    const t=document.createElement('div');
+    t.className='fixed top-4 right-4 bg-black/80 text-white text-sm px-3 py-2 rounded-lg z-[60]';
+    t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),1500);
   }
 
-  function toast(msg,bg){ if(window.Toastify) Toastify({ text:msg, duration:3000, style:{ background:bg }}).showToast(); }
-
-  function startPage(){
-    if(window.feather) feather.replace();
-
-    const demoResources = {{ (resources or [
-      {"id":"tech1","title":"Alice Johnson — FPA-123","color":"#93c5fd","team":"North","region":"VIC"},
-      {"id":"tech2","title":"Bob Singh — FPA-456","color":"#86efac","team":"South","region":"VIC"},
-      {"id":"tech3","title":"Cara Lee — FPA-789","color":"#fca5a5","team":"East","region":"NSW"},
-      {"id":"tech4","title":"Diego Martinez — FPA-321","color":"#f9a8d4","team":"North","region":"NSW"},
-      {"id":"tech5","title":"Eve Chen — FPA-654","color":"#fdba74","team":"South","region":"VIC"},
-      {"id":"tech6","title":"Finn O'Neil — FPA-987","color":"#c4b5fd","team":"East","region":"QLD"},
-      {"id":"tech7","title":"Gina Rossi — FPA-111","color":"#6ee7b7","team":"West","region":"WA"},
-      {"id":"tech8","title":"Harry King — FPA-222","color":"#93c5fd","team":"West","region":"WA"},
-      {"id":"tech9","title":"Isla Patel — FPA-333","color":"#86efac","team":"North","region":"VIC"},
-      {"id":"tech10","title":"Jack Wong — FPA-444","color":"#fca5a5","team":"South","region":"VIC"}
-    ]) | tojson }};
-    const demoEvents = {{ (events or [
-      {"id":1,"title":"Overheating pump defect","start":"2025-08-04T09:00:00","end":"2025-08-04T11:00:00","resourceId":"tech1"},
-      {"id":2,"title":"Sprinkler PM2025/08","start":"2025-08-05T12:00:00","end":"2025-08-05T16:00:00","resourceId":"tech2"},
-      {"id":3,"title":"Alarm System Test","start":"2025-08-07T10:00:00","end":"2025-08-07T11:00:00","resourceId":"tech3"}
-    ]) | tojson }};
-
-    const contextMenuEl = document.getElementById('fc-context-menu');
-    function hideMenu(){ contextMenuEl.classList.add('hidden'); contextMenuEl.innerHTML=''; }
-    function showMenu(options, ev){
-      hideMenu();
-      const ul=document.createElement('ul'); ul.className='context-menu-list';
-      options.forEach(opt=>{ const li=document.createElement('li'); li.textContent=opt.text; li.onclick=()=>{opt.onClick(); hideMenu();}; ul.appendChild(li); });
-      contextMenuEl.appendChild(ul);
-      contextMenuEl.style.top=ev.pageY+'px'; contextMenuEl.style.left=ev.pageX+'px';
-      contextMenuEl.classList.remove('hidden');
-    }
-
-    if (window.FullCalendar && window.FullCalendar.Draggable) {
-      new FullCalendar.Draggable(document.getElementById('external-tasks'), {
-        itemSelector: '.external-task',
-        eventData: el => ({
-          title: el.getAttribute('data-title'),
-          duration: el.getAttribute('data-duration') || '01:00',
-          extendedProps: { taskId: el.getAttribute('data-task-id') }
-        })
-      });
-    }
-
-    const calendarEl = document.getElementById('calendar');
-
-    const STORAGE_KEY_SEL = 'ftp_sched_selected_techs';
-    const STORAGE_KEY_GRP = 'ftp_sched_group_by';
-
-    const allResources = demoResources.slice();
-    let selectedIds = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_SEL) || '[]'));
-    if (selectedIds.size === 0) { allResources.forEach(r => selectedIds.add(r.id)); }
-    let groupBy = localStorage.getItem(STORAGE_KEY_GRP) || 'none';
-
-    const groupSelect = document.getElementById('group_by');
-    groupSelect.value = groupBy;
-
-    const chipsWrap = document.getElementById('selected_tech_chips');
-
-    function getSelectedResources() { return allResources.filter(r => selectedIds.has(r.id)); }
-
-    function renderChips(){
-      const sel = getSelectedResources();
-      chipsWrap.innerHTML = sel.map(r => `
-        <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-xs"
-                title="${r.title}">
-          <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${r.color || '#9ca3af'}"></span>
-          <span class="truncate max-w-[120px]">${(r.title || '').split('—')[0]}</span>
-        </button>
-      `).join('');
-    }
-
-    function refetchResources(){
-      calendar.refetchResources && calendar.refetchResources();
-      renderChips();
-      localStorage.setItem(STORAGE_KEY_SEL, JSON.stringify(Array.from(selectedIds)));
-      localStorage.setItem(STORAGE_KEY_GRP, groupBy);
-    }
-
-    function resourceSource(_info, success){ success(getSelectedResources()); }
-    function eventSource(_info, success){ success(demoEvents); }
-
-    function ensureDateLabelEl(){
-      let el = document.getElementById('calendarDateLabel');
-      if (!el) {
-        const header = document.querySelector('.px-6.py-3');
-        if (header) {
-          el = document.createElement('span');
-          el.id = 'calendarDateLabel';
-          el.className = 'ml-2 font-semibold text-gray-700';
-          header.appendChild(el);
-        }
+  // ---------- external drag (backlog) ----------
+  new FullCalendar.Draggable(document.getElementById('backlog'), {
+    itemSelector: '.ext-event',
+    eventData: (el)=> ({
+      title: el.getAttribute('data-title') || 'Unassigned Task',
+      extendedProps: {
+        status: el.getAttribute('data-status') || 'Open',
+        site: el.getAttribute('data-site') || ''
       }
-      return el;
-    }
-    function setDateLabel(s, e){
-      const el = ensureDateLabelEl();
-      if (!el) return;
-      el.textContent =
-        s.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'}) +
-        ' – ' +
-        new Date(e.getTime()-86400000).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
-    }
+    })
+  });
 
-    let calendar;
-    let usingScheduler = true;
-    try {
-      calendar = new FullCalendar.Calendar(calendarEl, {
-        schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
-        initialView: 'resourceTimelineWeek',
-        height: '100%',
-        allDaySlot: false,
-        nowIndicator: true,
-        editable: true,
-        droppable: true,
-        selectable: true,
-        resourceAreaHeaderContent: 'Technician',
-        resourceAreaWidth: '260px',
-        resourceGroupField: groupBy === 'none' ? null : groupBy,
-        resources: resourceSource,
-        events: eventSource,
-        eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-        slotEventOverlap: false,
-        slotDuration: '00:30',
-        slotMinWidth: 110,
-        stickyHeaderDates: true,
+  // ---------- calendar ----------
+  const calEl = document.getElementById('calendar');
+  const calendar = new FullCalendar.Calendar(calEl, {
+    schedulerLicenseKey: FC_LICENSE_KEY || 'GPL-My-Project-Is-Open-Source',
 
-        eventReceive: function(info){
-          const res = info.event.getResource && info.event.getResource();
-          const who = res ? (' → ' + (res.title || res.id)) : '';
-          toast('Task scheduled: ' + info.event.title + who, '#22c55e');
-        },
-        eventDrop: function(info){
-          const res = info.event.getResource && info.event.getResource();
-          const moved = res ? (' → ' + (res.title || res.id)) : '';
-          toast('Event moved: ' + info.event.title + moved, '#0ea5e9');
-        },
-        eventDidMount: function(info){
-          const res = info.event.getResource && info.event.getResource();
-          if(res && res.extendedProps && res.extendedProps.color){
-            info.el.style.backgroundColor = res.extendedProps.color;
-            info.el.style.borderColor = res.extendedProps.color;
-          }
-          info.el.addEventListener('contextmenu', function(ev){
-            ev.preventDefault();
-            showMenu([
-              { text:'Edit Event', onClick: function(){} },
-              { text:'Reassign…', onClick: function(){
-                  if(!res) return;
-                  const idx = allResources.findIndex(r => r.id === res.id);
-                  const next = allResources[(idx+1)%allResources.length];
-                  info.event.setProp('resourceId', next.id);
-                } },
-              { text:'Delete Event', onClick: function(){ info.event.remove(); } },
-              { text:'View Details', onClick: function(){ alert(info.event.title); } }
-            ], ev);
-          });
-        },
-        dayCellDidMount: function(info){
-          info.el.addEventListener('contextmenu', function(ev){
-            ev.preventDefault();
-            showMenu([
-              { text:'Create Event', onClick: function(){
-                  calendar.addEvent({
-                    title:'New Event',
-                    start: info.date,
-                    end: new Date(info.date.getTime()+60*60*1000),
-                    resourceId: (info.resource && info.resource.id) || null
-                  });
-                }},
-              { text:'Go to Day View', onClick: function(){ calendar.changeView('timeGridDay', info.date); } }
-            ], ev);
-          });
-        },
-        datesSet: function(){
-          const s=this.view.currentStart, e=this.view.currentEnd;
-          setDateLabel(s, e);
-        }
+    // Put the laneway (resources) on the left, time on the right
+    initialView: 'resourceTimelineWeek',
+    headerToolbar: false,
+    nowIndicator: true,
+
+    // Dimensions & scrolling
+    height: 780,                  // vertical height; enables vertical scroll for many techs
+    stickyHeaderDates: true,
+    slotMinTime: '06:00:00',
+    slotMaxTime: '20:00:00',
+    slotDuration: '00:30:00',
+    snapDuration: '00:15:00',
+    scrollTime: '08:00:00',
+    scrollTimeReset: false,
+
+    // Timeline-specific: make days wide enough + allow horizontal scroll
+    dayMinWidth: 180,             // 👈 key: week stays readable; horizontal scroll kicks in
+    slotLabelInterval: { hours: 1 },
+
+    // Work hours & constraints
+    businessHours: { daysOfWeek:[1,2,3,4,5], startTime:'07:00', endTime:'17:00' },
+    eventConstraint: 'businessHours',
+
+    // Resources (lanes) on the left
+    resources: RESOURCES,
+    resourceAreaWidth: '18rem',
+    resourceGroupField: 'region',
+    resourceOrder: 'region,title',
+    resourceAreaHeaderContent: 'Technicians',
+    resourceAreaColumns: [
+      { field: 'title',  headerContent: 'Technician' },
+      { field: 'skills', headerContent: 'Skills' }
+    ],
+
+    // Data
+    events: EVENTS,
+
+    // Interactions
+    editable: true,
+    eventStartEditable: true,
+    eventDurationEditable: true,
+    eventResourceEditable: true,
+
+    selectable: true,
+    selectMirror: true,
+
+    // External backlog drops
+    droppable: true,
+    dropAccept: '.ext-event',
+    eventReceive(info){
+      if(!info.event.id){ info.event.setProp('id', 'JOB-' + Math.floor(1000 + Math.random()*9000)); }
+      toast('Scheduled from backlog');
+    },
+
+    select(info){
+      openModal({
+        id: '',
+        title: 'Service @ Site',
+        start: info.start,
+        end: info.end,
+        resourceId: info.resource ? info.resource.id : null,
+        extendedProps: { status:'Open', site:'', customer:'' }
+      }, true);
+      calendar.unselect();
+    },
+
+    eventDrop:   (i)=> toast(`${i.event.id} moved`),
+    eventResize: (i)=> toast(`${i.event.id} resized`),
+
+    // Event decoration & quick actions
+    eventDidMount(arg){
+      arg.el.addEventListener('contextmenu', (ev)=>{
+        ev.preventDefault(); showCtxMenu(ev.pageX, ev.pageY, arg.event);
       });
-      calendar.render();
-      setDateLabel(calendar.view.currentStart, calendar.view.currentEnd);
-    } catch (e) {
-      console.warn('Scheduler not available, falling back to standard:', e);
-      usingScheduler = false;
-      calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
-        height: '100%',
-        allDaySlot: false,
-        nowIndicator: true,
-        editable: true,
-        droppable: true,
-        selectable: true,
-        events: demoEvents,
-        eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
-        datesSet: function(){
-          const s=this.view.currentStart, e=this.view.currentEnd;
-          setDateLabel(s, e);
-        }
+      arg.el.addEventListener('dblclick', (ev)=>{
+        ev.preventDefault(); openModal(arg.event, false);
       });
-      calendar.render();
-      setDateLabel(calendar.view.currentStart, calendar.view.currentEnd);
-      document.querySelectorAll('[data-view^="resource"]').forEach(function(btn){ btn.style.display='none'; });
-      var label = document.getElementById('tech_views_label'); if(label) label.style.display='none';
+      const ep = arg.event.extendedProps || {};
+      arg.el.title = `${arg.event.title}\n${ep.site || ''} • ${ep.status || ''}`;
+    },
+    eventContent(arg){
+      const s = (arg.event.extendedProps && arg.event.extendedProps.status) || 'Open';
+      const cls = s==='Completed' ? 'badge--ok' : s==='In Progress' ? 'badge--warn' : 'badge--warn';
+      const chip = `<span class="text-[10px] px-1.5 py-0.5 rounded-full border mr-1 ${cls}">${s}</span>`;
+      return { html: chip + `<span>${arg.event.title}</span>` };
     }
+  });
 
-    renderChips();
+  calendar.render();
 
-    // View buttons styling + switch
-    document.querySelectorAll('.view-btn').forEach(btn=>{
-      btn.onclick=()=>{
-        document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('bg-blue-600','text-white','font-semibold','bg-purple-600'));
-        if(btn.dataset.view.startsWith('resource')) btn.classList.add('bg-purple-600','text-white','font-semibold');
-        else btn.classList.add('bg-blue-600','text-white','font-semibold');
-        try { calendar.changeView(btn.dataset.view); } catch(_) {}
+  // ---------- toolbar wiring ----------
+  document.getElementById('btn_prev').onclick  = ()=>calendar.prev();
+  document.getElementById('btn_today').onclick = ()=>calendar.today();
+  document.getElementById('btn_next').onclick  = ()=>calendar.next();
+
+  document.querySelectorAll('.viewbtn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const v = btn.getAttribute('data-view');
+      calendar.changeView(v);
+      if (v.includes('TimeGrid')) { calendar.scrollToTime('08:00:00'); }
+    });
+  });
+
+  // New button
+  document.getElementById('btn_new').addEventListener('click', ()=>{
+    const start = new Date(); start.setMinutes(0,0,0); start.setHours(start.getHours()+1);
+    const end = new Date(start.getTime()+60*60*1000);
+    openModal({
+      id: '', title: 'Service @ Site', start, end,
+      resourceId: (calendar.getResources()[0]||{}).id,
+      extendedProps: { status:'Open', site:'', customer:'' }
+    }, true);
+  });
+
+  // Status filter (hides events)
+  document.getElementById('status_filter').addEventListener('change', (e)=>{
+    const s = e.target.value;
+    calendar.getEvents().forEach(ev=>{
+      const evs = (ev.extendedProps && ev.extendedProps.status) || '';
+      ev.setProp('display', (!s || evs === s) ? 'auto' : 'none');
+    });
+  });
+
+  // ---------- technician (resource) multi-filter ----------
+  const techBtn = document.getElementById('tech_filter_btn');
+  const techMenu = document.getElementById('tech_filter_menu');
+  const techList = document.getElementById('tech_checklist');
+  const applyBtn = document.getElementById('tech_filter_apply');
+  const clearBtn = document.getElementById('tech_filter_clear');
+
+  function renderTechChecklist() {
+    techList.innerHTML = '';
+    RESOURCES.forEach(r=>{
+      const id = `tech_${r.id}`;
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-2 px-1 py-1 rounded hover:bg-panelweak cursor-pointer';
+      row.innerHTML = `<input type="checkbox" id="${id}" value="${r.id}" class="accent-[#0f172a]">
+                       <span class="text-sm">${r.title}</span>
+                       <span class="ml-auto text-xs text-muted">${r.skills||''}</span>`;
+      techList.appendChild(row);
+    });
+  }
+  renderTechChecklist();
+
+  techBtn.addEventListener('click', ()=> techMenu.classList.toggle('hidden'));
+  document.addEventListener('click', (e)=> {
+    if(!e.target.closest('#tech_filter_menu') && !e.target.closest('#tech_filter_btn')){
+      techMenu.classList.add('hidden');
+    }
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    techList.querySelectorAll('input[type="checkbox"]').forEach(cb=> cb.checked=false);
+  });
+
+  applyBtn.addEventListener('click', ()=>{
+    const selected = Array.from(techList.querySelectorAll('input[type="checkbox"]:checked')).map(cb=>cb.value);
+    // Show only selected resources (rows). If none selected, show all.
+    calendar.batchRendering(()=>{
+      calendar.getResources().forEach(res=>{
+        const show = (selected.length===0) || selected.includes(res.id);
+        // hide by toggling a CSS class on the row element
+        const rowEl = calendar.el.querySelector(`[data-resource-id="${res.id}"]`);
+        if(rowEl){ rowEl.style.display = show ? '' : 'none'; }
+      });
+    });
+    techMenu.classList.add('hidden');
+  });
+
+  // ---------- context menu ----------
+  const ctx = document.getElementById('ctxMenu');
+  let ctxEvt = null;
+  function showCtxMenu(x,y,eventApi){ ctxEvt = eventApi; ctx.style.left = x+'px'; ctx.style.top = y+'px'; ctx.classList.remove('hidden'); }
+  function hideCtxMenu(){ ctx.classList.add('hidden'); }
+  document.addEventListener('click', (e)=>{ if(!e.target.closest('#ctxMenu')) hideCtxMenu(); });
+  ctx.addEventListener('click', (e)=>{
+    const cmd = e.target.getAttribute('data-cmd'); if(!cmd) return;
+    hideCtxMenu(); if(!ctxEvt) return;
+    if(cmd==='open'){ openModal(ctxEvt, false); }
+    else if(cmd==='dup'){
+      const copy = {
+        id: ctxEvt.id + '-COPY',
+        title: ctxEvt.title,
+        start: ctxEvt.start,
+        end: ctxEvt.end || new Date(ctxEvt.start.getTime()+60*60*1000),
+        resourceId: ctxEvt.getResources()[0]?.id,
+        extendedProps: Object.assign({}, ctxEvt.extendedProps)
       };
-    });
-    document.querySelector('.calendar-today').onclick=()=>calendar.today();
-    document.querySelector('.calendar-prev').onclick=()=>calendar.prev();
-    document.querySelector('.calendar-next').onclick=()=>calendar.next();
+      calendar.addEvent(copy); toast('Duplicated');
+    }else if(cmd==='del'){ ctxEvt.remove(); toast('Deleted'); }
+  });
 
-    // Context menu hide on outside click
-    document.addEventListener('click', (ev)=>{ const m=document.getElementById('fc-context-menu'); if(m && !m.contains(ev.target)) hideMenu(); });
+  // ---------- modal ----------
+  function openModal(source, isNew){
+    const isApi = !!(source && source.setProp);
+    currentEvent = isApi ? source : null;
+    const ep = (isApi ? source.extendedProps : source.extendedProps) || {};
+    document.getElementById('em_id').value = isApi ? source.id : '';
+    document.getElementById('em_title').textContent = isApi ? source.id : 'New Job';
+    document.getElementById('em_title_input').value = source.title || '';
+    document.getElementById('em_tech').value =
+      source.resourceId || (isApi && source.getResources()[0]?.id) || (RESOURCES[0] && RESOURCES[0].id) || '';
+    document.getElementById('em_start').value = fmtLocal(source.start || (isApi && source.start));
+    document.getElementById('em_end').value   = fmtLocal(source.end   || (isApi && source.end) || new Date((source.start || source.startStr || new Date()).getTime() + 60*60*1000));
+    document.getElementById('em_status').value = ep.status || 'Open';
+    document.getElementById('em_site').value   = ep.site   || '';
+    document.getElementById('em_delete').style.display = currentEvent ? '' : 'none';
+    FTP.modal.open('eventModal');
 
-    // ----- Manage Techs Modal -----
-    const techModal = document.getElementById('tech_modal');
-    const modalList = document.getElementById('tech_modal_list');
-    const techSearch = document.getElementById('tech_search');
-    function openModal(){ techModal.classList.add('open'); }
-    function closeModal(){ techModal.classList.remove('open'); }
-    document.getElementById('btn_manage_techs').addEventListener('click', ()=>{ buildModalList(''); openModal(); });
-    document.getElementById('tech_modal_close').addEventListener('click', closeModal);
+    document.getElementById('em_save').onclick = ()=>{
+      const v = readForm();
+      if(currentEvent){
+        currentEvent.setProp('title', v.title);
+        currentEvent.setStart(v.start, { maintainDuration: false });
+        currentEvent.setEnd(v.end);
+        const res = calendar.getResourceById(v.resourceId);
+        if(res){
+          const payload = {
+            id: currentEvent.id, title: v.title,
+            start: v.start, end: v.end,
+            resourceId: res.id, extendedProps: Object.assign({}, currentEvent.extendedProps)
+          };
+          currentEvent.remove(); calendar.addEvent(payload);
+        }
+        const e2 = calendar.getEventById(v.id) || calendar.getEvents().slice(-1)[0];
+        e2.setExtendedProp('status', v.status);
+        e2.setExtendedProp('site', v.site);
+        toast('Saved changes');
+      }else{
+        calendar.addEvent({
+          id: makeId(), title: v.title, start: v.start, end: v.end,
+          resourceId: v.resourceId, extendedProps: { status: v.status, site: v.site, customer: '' }
+        });
+        toast('Created');
+      }
+      FTP.modal.close('eventModal');
+    };
 
-    function buildModalList(q){
-      const query = (q||'').toLowerCase();
-      const rows = allResources.filter(r=>{
-        const hay = `${r.title} ${r.team||''} ${r.region||''}`.toLowerCase();
-        return hay.includes(query);
-      }).map(r=>`
-        <label class="flex items-center gap-2 border rounded-xl px-3 py-2">
-          <input type="checkbox" class="modal-tech" data-id="${r.id}" ${selectedIds.has(r.id)?'checked':''}>
-          <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${r.color||'#9ca3af'}"></span>
-          <div class="flex-1">
-            <div class="text-sm font-medium">${r.title}</div>
-            <div class="text-[11px] text-gray-500">Team: ${r.team||'-'} · Region: ${r.region||'-'}</div>
-          </div>
-        </label>
-      `).join('');
-      modalList.innerHTML = rows || '<div class="text-sm text-gray-500 p-3">No matches.</div>';
-    }
-    techSearch.addEventListener('input', ()=>buildModalList(techSearch.value));
-    document.getElementById('tech_select_all').addEventListener('click', ()=>{ allResources.forEach(r=>selectedIds.add(r.id)); buildModalList(techSearch.value); });
-    document.getElementById('tech_select_none').addEventListener('click', ()=>{ selectedIds.clear(); buildModalList(techSearch.value); });
-    document.getElementById('tech_modal_save').addEventListener('click', ()=>{
-      Array.from(modalList.querySelectorAll('.modal-tech')).forEach(cb=>{
-        const id = cb.dataset.id;
-        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+    document.getElementById('em_dup').onclick = ()=>{
+      const v = readForm();
+      calendar.addEvent({
+        id: makeId(), title: v.title, start: v.start, end: v.end,
+        resourceId: v.resourceId, extendedProps: { status: v.status, site: v.site, customer: '' }
       });
-      refetchResources();
-      closeModal();
-    });
+      toast('Duplicated'); FTP.modal.close('eventModal');
+    };
+
+    document.getElementById('em_delete').onclick = ()=>{
+      if(currentEvent){ currentEvent.remove(); toast('Deleted'); }
+      FTP.modal.close('eventModal');
+    };
   }
 
-  async function run(){
-    try {
-      await loadScheduler();
-      if(!hasFC()) throw new Error('Scheduler script failed to register');
-    } catch {
-      await loadStandard();
-    }
-    if(!hasFC()) {
-      console.error('FullCalendar not loaded');
-      toast('Could not load calendar library', '#ef4444');
-      return;
-    }
-    startPage();
+  function readForm(){
+    return {
+      id: document.getElementById('em_id').value,
+      title: document.getElementById('em_title_input').value || 'Service @ Site',
+      resourceId: document.getElementById('em_tech').value,
+      start: new Date(document.getElementById('em_start').value),
+      end:   new Date(document.getElementById('em_end').value),
+      status: document.getElementById('em_status').value,
+      site:   document.getElementById('em_site').value
+    };
   }
-
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+  function makeId(){ return 'JOB-' + Math.floor(1000 + Math.random()*9000); }
 })();
 </script>
 {% endblock %}

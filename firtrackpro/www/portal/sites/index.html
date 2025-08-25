@@ -1,0 +1,210 @@
+{% extends "firtrackpro/www/templates/portal_base.html" %}
+{% block title %}{{ PAGE_TITLE or page_h1 or "Untitled" }}{% endblock %}
+{% block portal_content %}
+
+<div class="flex flex-col h-full">
+  <div class="flex items-center justify-between px-6 py-4 border-b bg-white sticky top-0 z-10">
+    <div class="flex gap-2">
+      {% if actions and "create" in actions %}
+      <a href="/portal/sites/new" class="bg-brand text-white rounded-xl px-4 py-2 hover:bg-brand-600 active:bg-brand-700 shadow-ft1">
+        + New Site
+      </a>
+      {% endif %}
+      {% if actions and "export" in actions %}
+      <button class="bg-white border border-line text-ink rounded-xl px-3 py-2 hover:bg-panelweak shadow-ft1">Export</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center px-6 py-3 bg-gray-50 border-b">
+    <input class="border px-3 py-2 rounded w-80 mr-2" placeholder="Search {{ (PAGE_TITLE or page_h1 or "items") | lower }}...">
+    <button class="bg-white border px-3 py-2 rounded text-gray-700">Add filter</button>
+  </div>
+
+  <div class="overflow-x-auto flex-1 px-6 py-6 bg-white">
+    <table class="min-w-full table-auto">
+      <thead>
+        <tr class="bg-gray-100 text-xs text-gray-700 uppercase">
+          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left">Name</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Updated</th>
+          <th class="px-4 py-2 text-left"></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <!-- Injected by script -->
+      </tbody>
+    </table>
+
+    <div id="empty" class="flex flex-col items-center py-20 text-gray-400 hidden">
+      <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8m-4-4v8"/>
+      </svg>
+      <div class="text-lg font-medium">No {{ (PAGE_TITLE or page_h1 or "items") | lower }} found</div>
+      <div class="text-gray-500 mt-2">
+        Try adjusting your filters or
+        <a href="/portal/sites/new" class="text-blue-600 hover:underline">add a new site</a>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ super() }}
+<style>
+  /* lightweight context menu styling */
+  .ft-context {
+    position: fixed; z-index: 9999; min-width: 180px;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    box-shadow: 0 10px 20px rgba(0,0,0,.08);
+    padding: 6px; display: none;
+  }
+  .ft-context a, .ft-context button {
+    display: block; width: 100%; text-align: left;
+    padding: 8px 12px; border-radius: 8px; font-size: 14px;
+  }
+  .ft-context a:hover, .ft-context button:hover { background: #f3f4f6; }
+  .ft-context hr { border: 0; border-top: 1px solid #eee; margin: 6px 0; }
+</style>
+
+<!-- context menu container -->
+<div id="ftCtx" class="ft-context">
+  <button type="button" data-action="new">➕ Add New Property</button>
+  <button type="button" data-action="view">👁️ View Property</button>
+  <hr>
+  <button type="button" data-action="delete" style="color:#b91c1c">🗑️ Delete Property</button>
+</div>
+
+<script>
+(function(){
+  const rowsEl = document.getElementById('rows');
+  const emptyEl = document.getElementById('empty');
+  const data = {{ (SITES or []) | tojson | safe }};
+  const ctx = document.getElementById('ftCtx');
+  let current; // currently targeted record
+
+  // --- CSRF + API helper ---
+  function csrf() {
+    if (window.frappe && frappe.csrf_token) return frappe.csrf_token;
+    const m = document.querySelector('meta[name="csrf-token"]'); if (m?.content) return m.content;
+    const h = document.querySelector('input[name="csrf_token"]'); if (h?.value) return h.value;
+    return '';
+  }
+  async function apiPost(method, args = {}) {
+    const fd = new FormData();
+    fd.append('cmd', method);
+    for (const [k,v] of Object.entries(args)) fd.append(k, typeof v === 'object' ? JSON.stringify(v) : v);
+    const r = await fetch('/api/method', {
+      method: 'POST',
+      body: fd,
+      headers: { 'X-Frappe-CSRF-Token': csrf(), 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    });
+    const j = await r.json();
+    if (!r.ok || j.exc) {
+      const msg = j._server_messages ? JSON.parse(j._server_messages).join('\n') : (j.exc || j.message || r.statusText);
+      throw new Error(msg);
+    }
+    return j.message;
+  }
+
+  function badgeSpan(text){
+    const cls = text && text !== "No assets"
+      ? "bg-green-100 text-green-800 px-2 py-1 rounded"
+      : "bg-yellow-100 text-yellow-800 px-2 py-1 rounded";
+    return `<span class="${cls}">${text || "No assets"}</span>`;
+  }
+
+  function rowHtml(r){
+    return `
+      <tr class="hover:bg-gray-50" data-name="${r.name}">
+        <td class="px-4 py-2"><input type="checkbox"></td>
+        <td class="px-4 py-2">
+          <div class="font-medium text-ink">${r.display_name}</div>
+          <div class="text-sm text-gray-500">${r.address || ""}</div>
+          <div class="text-xs text-gray-400">${r.customer || ""}</div>
+        </td>
+        <td class="px-4 py-2">${badgeSpan(r.assets > 0 ? (r.assets + " assets") : "No assets")}</td>
+        <td class="px-4 py-2 text-muted">${r.updated}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="/portal/sites/view?name=${encodeURIComponent(r.name)}" class="text-blue-600 hover:underline">Open</a>
+        </td>
+      </tr>
+    `;
+  }
+
+  function render(){
+    if(!rowsEl) return;
+    if(!data || !data.length){
+      if(emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if(emptyEl) emptyEl.classList.add('hidden');
+    rowsEl.innerHTML = data.map(rowHtml).join('');
+  }
+
+  // Context menu logic
+  function showMenu(x, y){
+    ctx.style.left = x + 'px';
+    ctx.style.top = y + 'px';
+    ctx.style.display = 'block';
+  }
+  function hideMenu(){ ctx.style.display = 'none'; current = null; }
+
+  rowsEl?.addEventListener('contextmenu', (e) => {
+    const tr = e.target.closest('tr[data-name]');
+    if(!tr) return;
+    e.preventDefault();
+    current = tr.getAttribute('data-name');
+    showMenu(e.pageX, e.pageY);
+  });
+
+  document.addEventListener('click', (e) => {
+    if(!ctx.contains(e.target)) hideMenu();
+  });
+  window.addEventListener('scroll', hideMenu);
+
+  ctx.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    const action = btn.getAttribute('data-action');
+    hideMenu();
+
+    if(action === 'new'){
+      window.location.href = '/portal/sites/new';
+      return;
+    }
+    if(action === 'view'){
+      if(!current) return;
+      window.location.href = '/portal/sites/view?name='+encodeURIComponent(current);
+      return;
+    }
+    if(action === 'delete'){
+      if(!current) return;
+      const ok = confirm('Delete this property? This cannot be undone.');
+      if(!ok) return;
+      try {
+        const msg = await apiPost('firtrackpro.www.portal.sites.api.delete_property', { name: current });
+        if(msg === 'ok'){
+          const esc = window.CSS && CSS.escape ? CSS.escape(current) : current.replace(/"/g, '\\"');
+          const tr = rowsEl.querySelector(`tr[data-name="${esc}"]`);
+          tr?.remove();
+          if(!rowsEl.querySelector('tr')) emptyEl?.classList.remove('hidden');
+        } else {
+          alert('Delete failed.');
+        }
+      } catch(err){
+        alert('Delete failed: ' + (err?.message || err));
+      }
+      return;
+    }
+  });
+
+  render();
+})();
+</script>
+{% endblock %}
+a

@@ -81,6 +81,7 @@
    "label": "Notes"
   },
   {
+   "description": "Require for visits, e.g police check, Flu Vaccine",
    "fieldname": "property_credentials",
    "fieldtype": "Table",
    "label": "Property Credentials",
@@ -90,7 +91,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 17:47:17.717484",
+ "modified": "2025-08-24 16:27:45.868819",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Property",
