@@ -1,9 +1,118 @@
 import frappe
+
 from firtrackpro.portal_utils import build_portal_context
 
 no_cache = 1
+
+
 def get_context(context):
-    context.PAGE_TITLE = "Jobs"
-    context.actions = ['create','export']
-    context.JOBS = [{"id": "JOB-1001", "name": "Pump Service @ Site 71", "status": "Open", "assignee": "Jordan Patel", "updated": "15 Aug 2025"}, {"id": "JOB-1002", "name": "Pump Service @ Site 74", "status": "Open", "assignee": "Casey Nguyen", "updated": "12 Aug 2025"}, {"id": "JOB-1003", "name": "Pump Service @ Site 40", "status": "Completed", "assignee": "Jordan Patel", "updated": "21 Aug 2025"}, {"id": "JOB-1004", "name": "Pump Service @ Site 53", "status": "Completed", "assignee": "Alex Lee", "updated": "14 Aug 2025"}, {"id": "JOB-1005", "name": "Pump Service @ Site 53", "status": "In Progress", "assignee": "Jordan Patel", "updated": "20 Aug 2025"}, {"id": "JOB-1006", "name": "Pump Service @ Site 61", "status": "Open", "assignee": "Casey Nguyen", "updated": "19 Aug 2025"}, {"id": "JOB-1007", "name": "Pump Service @ Site 41", "status": "In Progress", "assignee": "Casey Nguyen", "updated": "15 Aug 2025"}, {"id": "JOB-1008", "name": "Pump Service @ Site 66", "status": "Completed", "assignee": "Casey Nguyen", "updated": "20 Aug 2025"}, {"id": "JOB-1009", "name": "Pump Service @ Site 63", "status": "In Progress", "assignee": "Casey Nguyen", "updated": "15 Aug 2025"}, {"id": "JOB-1010", "name": "Pump Service @ Site 52", "status": "Completed", "assignee": "Alex Lee", "updated": "15 Aug 2025"}, {"id": "JOB-1011", "name": "Pump Service @ Site 42", "status": "In Progress", "assignee": "Jordan Patel", "updated": "22 Aug 2025"}, {"id": "JOB-1012", "name": "Pump Service @ Site 48", "status": "In Progress", "assignee": "Alex Lee", "updated": "17 Aug 2025"}, {"id": "JOB-1013", "name": "Pump Service @ Site 43", "status": "In Progress", "assignee": "Alex Lee", "updated": "12 Aug 2025"}, {"id": "JOB-1014", "name": "Pump Service @ Site 56", "status": "Completed", "assignee": "Sam Taylor", "updated": "16 Aug 2025"}, {"id": "JOB-1015", "name": "Pump Service @ Site 51", "status": "Completed", "assignee": "Casey Nguyen", "updated": "14 Aug 2025"}]
-    return build_portal_context(context, page_h1="Jobs", force_login=True)
+	context.PAGE_TITLE = "Jobs"
+	context.actions = ["create", "export"]
+	context.JOBS = [
+		{
+			"id": "JOB-1001",
+			"name": "Pump Service @ Site 71",
+			"status": "Open",
+			"assignee": "Jordan Patel",
+			"updated": "15 Aug 2025",
+		},
+		{
+			"id": "JOB-1002",
+			"name": "Pump Service @ Site 74",
+			"status": "Open",
+			"assignee": "Casey Nguyen",
+			"updated": "12 Aug 2025",
+		},
+		{
+			"id": "JOB-1003",
+			"name": "Pump Service @ Site 40",
+			"status": "Completed",
+			"assignee": "Jordan Patel",
+			"updated": "21 Aug 2025",
+		},
+		{
+			"id": "JOB-1004",
+			"name": "Pump Service @ Site 53",
+			"status": "Completed",
+			"assignee": "Alex Lee",
+			"updated": "14 Aug 2025",
+		},
+		{
+			"id": "JOB-1005",
+			"name": "Pump Service @ Site 53",
+			"status": "In Progress",
+			"assignee": "Jordan Patel",
+			"updated": "20 Aug 2025",
+		},
+		{
+			"id": "JOB-1006",
+			"name": "Pump Service @ Site 61",
+			"status": "Open",
+			"assignee": "Casey Nguyen",
+			"updated": "19 Aug 2025",
+		},
+		{
+			"id": "JOB-1007",
+			"name": "Pump Service @ Site 41",
+			"status": "In Progress",
+			"assignee": "Casey Nguyen",
+			"updated": "15 Aug 2025",
+		},
+		{
+			"id": "JOB-1008",
+			"name": "Pump Service @ Site 66",
+			"status": "Completed",
+			"assignee": "Casey Nguyen",
+			"updated": "20 Aug 2025",
+		},
+		{
+			"id": "JOB-1009",
+			"name": "Pump Service @ Site 63",
+			"status": "In Progress",
+			"assignee": "Casey Nguyen",
+			"updated": "15 Aug 2025",
+		},
+		{
+			"id": "JOB-1010",
+			"name": "Pump Service @ Site 52",
+			"status": "Completed",
+			"assignee": "Alex Lee",
+			"updated": "15 Aug 2025",
+		},
+		{
+			"id": "JOB-1011",
+			"name": "Pump Service @ Site 42",
+			"status": "In Progress",
+			"assignee": "Jordan Patel",
+			"updated": "22 Aug 2025",
+		},
+		{
+			"id": "JOB-1012",
+			"name": "Pump Service @ Site 48",
+			"status": "In Progress",
+			"assignee": "Alex Lee",
+			"updated": "17 Aug 2025",
+		},
+		{
+			"id": "JOB-1013",
+			"name": "Pump Service @ Site 43",
+			"status": "In Progress",
+			"assignee": "Alex Lee",
+			"updated": "12 Aug 2025",
+		},
+		{
+			"id": "JOB-1014",
+			"name": "Pump Service @ Site 56",
+			"status": "Completed",
+			"assignee": "Sam Taylor",
+			"updated": "16 Aug 2025",
+		},
+		{
+			"id": "JOB-1015",
+			"name": "Pump Service @ Site 51",
+			"status": "Completed",
+			"assignee": "Casey Nguyen",
+			"updated": "14 Aug 2025",
+		},
+	]
+	return build_portal_context(context, page_h1="Jobs", force_login=True)
