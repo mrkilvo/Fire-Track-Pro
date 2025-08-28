@@ -81,10 +81,8 @@ def create_customer(
 	email: str | None = None,
 	phone: str | None = None,
 ):
-	"""Create a minimal Customer (Company/Individual) with safe defaults."""
 	require_login()
 
-	# Read from form or JSON
 	if not customer_name:
 		payload = _json_request()
 		customer_name = payload.get("customer_name")
@@ -106,20 +104,10 @@ def create_customer(
 			"customer_type": (customer_type or "Company"),
 			"customer_group": _default_customer_group(),
 			"territory": _default_territory(),
+			"email_id": (email or "").strip() or None,
+			"mobile_no": (phone or "").strip() or None,
 		}
 	)
-	# Optional hints; ERPNext stores contacts separately, but keeping hints is fine if fields exist
-	if email:
-		try:
-			doc.db_set("email_id", email, update_modified=False)
-		except Exception:
-			pass
-	if phone:
-		try:
-			doc.db_set("mobile_no", phone, update_modified=False)
-		except Exception:
-			pass
-
 	doc.insert(ignore_permissions=False)
 	return {"name": doc.name, "customer_name": doc.customer_name, "customer_type": doc.customer_type}
 

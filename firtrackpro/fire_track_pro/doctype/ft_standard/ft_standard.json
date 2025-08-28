@@ -1,6 +1,5 @@
 {
  "actions": [],
- "allow_rename": 1,
  "creation": "2025-08-11 18:58:27.114675",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -41,7 +40,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 19:00:00.607085",
+ "modified": "2025-08-28 09:08:20.495872",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Standard",
@@ -61,7 +60,10 @@
   }
  ],
  "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "standard_label",
+ "translated_doctype": 1
 }
