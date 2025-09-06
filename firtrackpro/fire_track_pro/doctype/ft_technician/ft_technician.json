@@ -60,7 +60,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 15:12:33.153222",
+ "modified": "2025-09-05 15:27:15.538251",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Technician",
@@ -80,7 +80,10 @@
   }
  ],
  "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "user",
+ "translated_doctype": 1
 }

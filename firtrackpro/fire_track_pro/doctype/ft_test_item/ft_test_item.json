@@ -19,12 +19,14 @@
   {
    "fieldname": "test_item_code",
    "fieldtype": "Data",
-   "label": "Step Code"
+   "label": "Step Code",
+   "length": 250
   },
   {
    "fieldname": "test_item_description",
    "fieldtype": "Data",
-   "label": "Description"
+   "label": "Description",
+   "length": 350
   },
   {
    "default": "0",
@@ -64,7 +66,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-08-11 19:11:43.401168",
+ "modified": "2025-09-05 17:20:43.587543",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Test Item",

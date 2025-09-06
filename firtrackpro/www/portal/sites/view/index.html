@@ -4,17 +4,28 @@
 {% block portal_content %}
 <div id="prop-shell" class="flex flex-col h-full" data-prop-name="{{ property_name | e }}">
   <!-- Header -->
-  <div class="px-6 py-4 bg-white border-b sticky top-0 z-10">
-    <div class="flex items-center justify-between gap-4">
+<div class="px-6 py-4 bg-white border-b sticky top-0 z-10">
+  <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
       <div>
         <div id="prop-title" class="text-xl font-semibold">Property</div>
         <div id="prop-sub" class="text-sm text-gray-500"></div>
       </div>
-      <div class="flex gap-2">
-        <a href="/portal/sites" class="px-3 py-2 rounded-xl bg-white border border-line text-ink hover:bg-gray-50">Back to Sites</a>
-      </div>
+
+      <!-- Fire Link badge -->
+      <span id="firelink-pill"
+            class="hidden inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-red-600 text-white shadow"
+            title="This site is connected to Fire Link™">
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-white/90"></span>
+        Fire Link Active
+      </span>
+    </div>
+
+    <div class="flex gap-2">
+      <a href="/portal/sites" class="px-3 py-2 rounded-xl bg-white border border-line text-ink hover:bg-gray-50">Back to Sites</a>
     </div>
   </div>
+</div>
 
   <!-- Details + Access + Contacts -->
   <div class="px-6 py-6 bg-white border-b">
@@ -571,7 +582,12 @@
     $('#prop-title').textContent = d.property?.property_name || d.property?.name || 'Property';
     const cust = d.customer?.customer_name || d.property?.property_customer || '';
     $('#prop-sub').textContent = cust ? `Customer: ${cust}` : '';
-
+const fl = d.property?.firelink_uid || d.property?.property_firelink_uid;
+if (fl) {
+  show($('#firelink-pill'));
+} else {
+  hide($('#firelink-pill'));
+}
     // Basics read
     $('#read_property_name').textContent = d.property?.property_name || d.property?.name || '—';
     $('#read_property_customer').textContent = cust || '—';

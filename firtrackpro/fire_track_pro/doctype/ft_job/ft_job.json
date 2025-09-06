@@ -40,7 +40,7 @@
    "fieldname": "job_status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nPlanned\nScheduled\nIn Progress\nComplete\nOffice Review\nInvoiced\nClosed"
+   "options": "Draft\nPlanned\nScheduled\nIn Progress\nComplete\nOffice Review\nInvoiced\nClosed\nFinalised"
   },
   {
    "fieldname": "job_contract",
@@ -171,7 +171,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 17:34:10.855586",
+ "modified": "2025-09-05 19:40:38.734691",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Job",
@@ -186,6 +186,18 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
    "share": 1,
    "write": 1
   }

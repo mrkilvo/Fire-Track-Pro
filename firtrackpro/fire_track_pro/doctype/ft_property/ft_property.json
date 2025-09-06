@@ -13,6 +13,7 @@
   "property_as1851_edition",
   "property_standards",
   "property_credentials",
+  "ft_property_contacts",
   "property_zone_root",
   "property_access",
   "firelink_uid",
@@ -86,12 +87,19 @@
    "fieldtype": "Table",
    "label": "Property Credentials",
    "options": "FT Property Credential Requirement"
+  },
+  {
+   "description": "Require for visits, e.g police check, Flu Vaccine",
+   "fieldname": "ft_property_contacts",
+   "fieldtype": "Table",
+   "label": "Property Contacts",
+   "options": "FT Property Contact"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-24 16:27:45.868819",
+ "modified": "2025-09-02 21:06:56.657718",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Property",

@@ -44,9 +44,9 @@
   },
   {
    "fieldname": "defect_severity",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "label": "Severity",
-   "options": "Low\nMedium\nHigh\nCritical"
+   "options": "FT Severity"
   },
   {
    "fieldname": "defect_description",
@@ -89,7 +89,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 21:17:44.095753",
+ "modified": "2025-09-02 22:56:14.275314",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Defect",
@@ -109,7 +109,10 @@
   }
  ],
  "row_format": "Dynamic",
+ "show_title_field_in_link": 1,
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "title_field": "defect_job",
+ "translated_doctype": 1
 }
