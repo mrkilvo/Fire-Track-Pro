@@ -54,18 +54,22 @@ jobs:
         working-directory: frappe_docker
         env:
           DOCKER_BUILDKIT: "1"
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${{ secrets.GHCR_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          cp images/custom/Containerfile images/custom/Containerfile.firetrack
+
+          sed -i 's|RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 \\|RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000 \\|g' images/custom/Containerfile.firetrack
+
+          sed -i 's|export APP_INSTALL_ARGS="" && \\|export GIT_TOKEN="$(cat /opt/frappe/git_token)" \&\& git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "https://github.com/" \&\& export APP_INSTALL_ARGS="" \&\& \\|g' images/custom/Containerfile.firetrack
 
           docker build \
             --secret id=apps_json,src=apps.json \
+            --secret id=git_token,env=GHCR_TOKEN \
             --build-arg FRAPPE_BRANCH=version-16 \
-            --file images/custom/Containerfile \
+            --file images/custom/Containerfile.firetrack \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             .
-
-          git config --global --unset-all url."https://x-access-token:${{ secrets.GHCR_TOKEN }}@github.com/".insteadOf || true
 
       - name: Push image
         run: |
