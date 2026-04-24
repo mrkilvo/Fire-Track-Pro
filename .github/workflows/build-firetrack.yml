@@ -23,7 +23,7 @@ jobs:
 
       - name: Create apps.json
         run: |
-          cat > frappe_docker/apps.json <<EOF
+          cat > frappe_docker/apps.json <<'EOF'
           [
             {
               "url": "https://github.com/frappe/erpnext",
@@ -34,7 +34,7 @@ jobs:
               "branch": "version-16"
             },
             {
-              "url": "https://x-access-token:${{ secrets.GHCR_TOKEN }}@github.com/mrkilvo/Fire-Track-Pro.git",
+              "url": "https://github.com/mrkilvo/Fire-Track-Pro.git",
               "branch": "main"
             }
           ]
@@ -54,12 +54,20 @@ jobs:
         working-directory: frappe_docker
         env:
           DOCKER_BUILDKIT: "1"
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
+          cp images/custom/Containerfile images/custom/Containerfile.firetrack
+
+          sed -i 's|RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 \\|RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000 \\|g' images/custom/Containerfile.firetrack
+
+          sed -i 's|export APP_INSTALL_ARGS="" && \\|export GIT_ASKPASS=/bin/echo \&\& export GIT_USERNAME=x-access-token \&\& export GIT_PASSWORD="$(cat /opt/frappe/git_token)" \&\& git config --global credential.helper store \&\& printf "https://%s:%s@github.com\n" "$GIT_USERNAME" "$GIT_PASSWORD" > ~/.git-credentials \&\& export APP_INSTALL_ARGS="" \&\& \\|g' images/custom/Containerfile.firetrack
+
           docker build \
             --progress=plain \
             --secret id=apps_json,src=apps.json \
+            --secret id=git_token,env=GHCR_TOKEN \
             --build-arg FRAPPE_BRANCH=version-16 \
-            --file images/custom/Containerfile \
+            --file images/custom/Containerfile.firetrack \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             .
