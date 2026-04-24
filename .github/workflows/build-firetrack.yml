@@ -102,3 +102,4 @@ PY
           echo "Built and pushed:"
           echo "${IMAGE_NAME}:${BUILD_TAG}"
           echo "${IMAGE_NAME}:latest"
+
