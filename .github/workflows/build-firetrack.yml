@@ -50,24 +50,45 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
 
-      - name: Inject git credentials into Dockerfile
+      - name: Patch Dockerfile for private repo clone
         working-directory: frappe_docker
         run: |
           cp images/custom/Containerfile images/custom/Containerfile.firetrack
 
-          sed -i '/bench init/i \
-          RUN git config --global credential.helper store && \
-              echo "https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com" > /root/.git-credentials \
-          ' images/custom/Containerfile.firetrack
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("images/custom/Containerfile.firetrack")
+          text = path.read_text()
+
+          old_mount = 'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 \\\\'
+          new_mount = 'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000 \\\\'
+
+          old_cmd = '  export APP_INSTALL_ARGS="" && \\\\'
+          new_cmd = '  export GIT_TOKEN="$(tr -d \\'[:space:]\\' < /opt/frappe/git_token)" && git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/mrkilvo/Fire-Track-Pro.git".insteadOf "https://github.com/mrkilvo/Fire-Track-Pro.git" && export APP_INSTALL_ARGS="" && \\\\'
+
+          if old_mount not in text:
+              raise SystemExit("Could not find apps_json mount line")
+
+          if old_cmd not in text:
+              raise SystemExit("Could not find APP_INSTALL_ARGS line")
+
+          text = text.replace(old_mount, new_mount, 1)
+          text = text.replace(old_cmd, new_cmd, 1)
+
+          path.write_text(text)
+          PY
 
       - name: Build image
         working-directory: frappe_docker
         env:
           DOCKER_BUILDKIT: "1"
+          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
         run: |
           docker build \
             --progress=plain \
             --secret id=apps_json,src=apps.json \
+            --secret id=git_token,env=GIT_TOKEN \
             --build-arg FRAPPE_BRANCH=version-16 \
             --file images/custom/Containerfile.firetrack \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
