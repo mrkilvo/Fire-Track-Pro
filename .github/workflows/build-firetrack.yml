@@ -53,11 +53,16 @@ jobs:
       - name: Build image
         working-directory: frappe_docker
         run: |
-          export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
+          echo "apps.json contents:"
+          cat apps.json
+
+          echo "apps.json base64 preview:"
+          base64 -w 0 apps.json | cut -c1-120
+          echo
 
           docker build \
             --build-arg FRAPPE_BRANCH=version-16 \
-            --build-arg APPS_JSON_BASE64="$APPS_JSON_BASE64" \
+            --build-arg APPS_JSON_BASE64="$(base64 -w 0 apps.json)" \
             --file images/custom/Containerfile \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
