@@ -63,6 +63,7 @@ jobs:
           sed -i 's|export APP_INSTALL_ARGS="" && \\|export GIT_TOKEN="$(cat /opt/frappe/git_token)" \&\& git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "https://github.com/" \&\& export APP_INSTALL_ARGS="" \&\& \\|g' images/custom/Containerfile.firetrack
 
           docker build \
+            --progress=plain \
             --secret id=apps_json,src=apps.json \
             --secret id=git_token,env=GHCR_TOKEN \
             --build-arg FRAPPE_BRANCH=version-16 \
