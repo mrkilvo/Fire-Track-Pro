@@ -23,7 +23,7 @@ jobs:
 
       - name: Create apps.json
         run: |
-          cat > frappe_docker/apps.json <<'EOF'
+          cat > frappe_docker/apps.json <<EOF
           [
             {
               "url": "https://github.com/frappe/erpnext",
@@ -34,7 +34,7 @@ jobs:
               "branch": "version-16"
             },
             {
-              "url": "https://github.com/mrkilvo/Fire-Track-Pro",
+              "url": "https://x-access-token:${{ secrets.GHCR_TOKEN }}@github.com/mrkilvo/Fire-Track-Pro.git",
               "branch": "main"
             }
           ]
@@ -55,9 +55,6 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
         run: |
-          echo "apps.json contents:"
-          cat apps.json
-
           docker build \
             --secret id=apps_json,src=apps.json \
             --build-arg FRAPPE_BRANCH=version-16 \
@@ -65,6 +62,7 @@ jobs:
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             .
+
       - name: Push image
         run: |
           docker push "${IMAGE_NAME}:${BUILD_TAG}"
