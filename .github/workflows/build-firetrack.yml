@@ -50,34 +50,19 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
 
-      - name: Patch Dockerfile for private repo clone
+      - name: Patch Dockerfile for private repo
         working-directory: frappe_docker
         run: |
           cp images/custom/Containerfile images/custom/Containerfile.firetrack
 
-          python3 - <<'PY'
-          from pathlib import Path
+          # Add git_token secret mount
+          sed -i 's|id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000|id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000|g' images/custom/Containerfile.firetrack
 
-          path = Path("images/custom/Containerfile.firetrack")
-          text = path.read_text()
-
-          old_mount = 'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 \\\\'
-          new_mount = 'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000 \\\\'
-
-          old_cmd = '  export APP_INSTALL_ARGS="" && \\\\'
-          new_cmd = '  export GIT_TOKEN="$(tr -d \\'[:space:]\\' < /opt/frappe/git_token)" && git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/mrkilvo/Fire-Track-Pro.git".insteadOf "https://github.com/mrkilvo/Fire-Track-Pro.git" && export APP_INSTALL_ARGS="" && \\\\'
-
-          if old_mount not in text:
-              raise SystemExit("Could not find apps_json mount line")
-
-          if old_cmd not in text:
-              raise SystemExit("Could not find APP_INSTALL_ARGS line")
-
-          text = text.replace(old_mount, new_mount, 1)
-          text = text.replace(old_cmd, new_cmd, 1)
-
-          path.write_text(text)
-          PY
+          # Inject git auth BEFORE bench init
+          sed -i '/export APP_INSTALL_ARGS=/a\
+          export GIT_TOKEN=$(cat /opt/frappe/git_token | tr -d "\\r\\n") && \
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/mrkilvo/Fire-Track-Pro.git".insteadOf "https://github.com/mrkilvo/Fire-Track-Pro.git" && \
+          ' images/custom/Containerfile.firetrack
 
       - name: Build image
         working-directory: frappe_docker
