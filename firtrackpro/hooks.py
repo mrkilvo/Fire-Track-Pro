@@ -9,6 +9,10 @@ app_license = "mit"
 
 app_include_css = "assets/firtrackpro/css/brand.css"
 
+home_page = "index"
+get_website_user_home_page = "firtrackpro.portal_utils.get_website_user_home_page"
+after_install = "firtrackpro.api.site_info.apply_portal_site_defaults"
+after_migrate = "firtrackpro.api.site_info.apply_portal_site_defaults"
 
 website_route_rules = [
 	{"from_route": "/", "to_route": "index"},
@@ -21,6 +25,9 @@ website_route_rules = [
 
 
 doc_events = {
+	"User": {
+		"validate": "firtrackpro.api.users.enforce_user_seat_limit",
+	},
 	"FT Job": {
 		"after_insert": "firtrackpro.events.jobs.emit_job_inserted",
 		"on_update": "firtrackpro.events.jobs.emit_job_updated",

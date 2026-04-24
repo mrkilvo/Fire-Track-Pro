@@ -101,7 +101,7 @@
    "fieldname": "property_inductions",
    "fieldtype": "Table",
    "label": "Property Inductions",
-   "options": "FT Property Credential Requirement"
+   "options": "FT Property Induction Requirement"
   }
  ],
  "grid_page_length": 50,

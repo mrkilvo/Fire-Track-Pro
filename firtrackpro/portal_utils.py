@@ -5,6 +5,8 @@ from urllib.parse import quote
 import frappe
 from frappe.utils import get_fullname, get_url
 
+ONBOARDING_DEFAULT_KEY = "firtrackpro:portal_onboarding_complete"
+
 
 def _redirect_to_login(target: str):
 	frappe.local.flags.redirect_location = f"/portal/login?redirect-to={quote(target)}"
@@ -24,6 +26,26 @@ def _best_user_image_url(user: str) -> str:
 		except Exception:
 			pass
 	return _gravatar(user, 64) or "/assets/frappe/images/avatar.svg"
+
+
+def _portal_onboarding_completed() -> bool:
+	value = str(frappe.db.get_default(ONBOARDING_DEFAULT_KEY) or "").strip().lower()
+	return value in {"1", "true", "yes", "on"}
+
+
+def get_website_user_home_page(user: str):
+	if not user or user == "Guest":
+		return None
+
+	try:
+		user_doc = frappe.get_cached_doc("User", user)
+	except Exception:
+		return "portal"
+
+	if not user_doc.has_desk_access():
+		return None
+
+	return "portal" if _portal_onboarding_completed() else "portal/onboarding"
 
 
 def build_portal_context(
