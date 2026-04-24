@@ -58,22 +58,22 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("images/custom/Containerfile.firetrack")
-          text = path.read_text()
+          p = Path("images/custom/Containerfile.firetrack")
+          t = p.read_text()
 
-          text = text.replace(
+          t = t.replace(
               'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 \\',
               'RUN --mount=type=secret,id=apps_json,target=/opt/frappe/apps.json,uid=1000,gid=1000 --mount=type=secret,id=git_token,target=/opt/frappe/git_token,uid=1000,gid=1000 \\',
               1
           )
 
-          text = text.replace(
+          t = t.replace(
               '  export APP_INSTALL_ARGS="" && \\',
-              '  export GIT_TOKEN="$(cat /opt/frappe/git_token | tr -d \\"\\\\r\\\\n\\")" && git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/mrkilvo/Fire-Track-Pro.git".insteadOf "https://github.com/mrkilvo/Fire-Track-Pro.git" && export APP_INSTALL_ARGS="" && \\',
+              '  export GIT_TOKEN="$(cat /opt/frappe/git_token | tr -d "\\r\\n")" && git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "https://github.com/" && export APP_INSTALL_ARGS="" && \\',
               1
           )
 
-          path.write_text(text)
+          p.write_text(t)
           PY
 
       - name: Build image
