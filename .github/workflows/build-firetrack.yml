@@ -27,11 +27,11 @@ jobs:
           [
             {
               "url": "https://github.com/frappe/erpnext",
-              "branch": "version-15"
+              "branch": "version-16"
             },
             {
               "url": "https://github.com/frappe/hrms",
-              "branch": "version-15"
+              "branch": "version-16"
             },
             {
               "url": "https://github.com/mrkilvo/Fire-Track-Pro",
@@ -56,7 +56,7 @@ jobs:
           export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
 
           docker build \
-            --build-arg FRAPPE_BRANCH=version-15 \
+            --build-arg FRAPPE_BRANCH=version-16 \
             --build-arg APPS_JSON_BASE64="$APPS_JSON_BASE64" \
             --file images/layered/Containerfile \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
