@@ -1,0 +1,174 @@
+diff --git a/c:\Users\freef\dev\firetrack-front\root-homepage.html b/c:\Users\freef\dev\firetrack-front\root-homepage.html
+new file mode 100644
+--- /dev/null
++++ b/c:\Users\freef\dev\firetrack-front\root-homepage.html
+@@ -0,0 +1,169 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>FireTrack Pro</title>
++    <meta
++      name="description"
++      content="FireTrack Pro operations portal for scheduling, jobs, customers, suppliers, and accounting."
++    />
++    <style>
++      :root {
++        --bg: #f4f8ff;
++        --ink: #10203a;
++        --muted: #4a5d7c;
++        --card: #ffffff;
++        --line: #d9e3f3;
++        --brand: #1d4ed8;
++        --brand-2: #1e40af;
++      }
++
++      * {
++        box-sizing: border-box;
++      }
++
++      html,
++      body {
++        margin: 0;
++        padding: 0;
++        min-height: 100%;
++        font-family: "Segoe UI", Roboto, Arial, sans-serif;
++        color: var(--ink);
++        background:
++          radial-gradient(circle at 80% 10%, #dbeafe 0%, transparent 30%),
++          radial-gradient(circle at 10% 90%, #dbeafe 0%, transparent 35%),
++          var(--bg);
++      }
++
++      .wrap {
++        max-width: 980px;
++        margin: 0 auto;
++        padding: 48px 20px 64px;
++      }
++
++      .hero {
++        border: 1px solid var(--line);
++        border-radius: 24px;
++        background: var(--card);
++        box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
++        overflow: hidden;
++      }
++
++      .hero-top {
++        padding: 40px 34px 24px;
++        background: linear-gradient(135deg, #eff6ff, #ffffff 60%);
++        border-bottom: 1px solid var(--line);
++      }
++
++      h1 {
++        margin: 0;
++        font-size: clamp(1.9rem, 3.5vw, 2.8rem);
++        line-height: 1.1;
++        letter-spacing: 0.01em;
++      }
++
++      .brand {
++        color: var(--brand);
++      }
++
++      .sub {
++        margin-top: 12px;
++        color: var(--muted);
++        max-width: 60ch;
++        font-size: 1rem;
++      }
++
++      .links {
++        display: grid;
++        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
++        gap: 14px;
++        padding: 24px 24px 28px;
++      }
++
++      .card-link {
++        display: block;
++        text-decoration: none;
++        color: inherit;
++        border: 1px solid var(--line);
++        border-radius: 14px;
++        padding: 16px;
++        background: #fff;
++        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
++      }
++
++      .card-link:hover {
++        transform: translateY(-2px);
++        border-color: #bfdbfe;
++        box-shadow: 0 10px 24px rgba(29, 78, 216, 0.12);
++      }
++
++      .card-link strong {
++        display: block;
++        font-size: 1rem;
++      }
++
++      .card-link span {
++        display: block;
++        margin-top: 6px;
++        color: var(--muted);
++        font-size: 0.92rem;
++      }
++
++      .cta {
++        margin-top: 22px;
++        display: inline-block;
++        text-decoration: none;
++        color: #fff;
++        background: linear-gradient(135deg, var(--brand), var(--brand-2));
++        border: 1px solid #1e3a8a;
++        border-radius: 12px;
++        padding: 10px 16px;
++        font-weight: 600;
++      }
++
++      footer {
++        margin-top: 20px;
++        color: var(--muted);
++        font-size: 0.86rem;
++      }
++    </style>
++  </head>
++  <body>
++    <main class="wrap">
++      <section class="hero">
++        <div class="hero-top">
++          <h1>FireTrack<span class="brand">Pro</span></h1>
++          <p class="sub">
++            Field operations, scheduling, compliance, and accounting in one connected platform.
++          </p>
++          <a class="cta" href="/portal/">Open Portal</a>
++        </div>
++
++        <div class="links">
++          <a class="card-link" href="/portal/">
++            <strong>Portal</strong>
++            <span>Jobs, Scheduler, Customers, Suppliers, and Configuration.</span>
++          </a>
++          <a class="card-link" href="/app">
++            <strong>ERP Workspace</strong>
++            <span>Standard ERPNext desk and modules.</span>
++          </a>
++          <a class="card-link" href="/login">
++            <strong>Sign In</strong>
++            <span>Direct login route if required by your setup.</span>
++          </a>
++        </div>
++      </section>
++
++      <footer>
++        FireTrack Pro
++        <span id="year"></span>
++      </footer>
++    </main>
++    <script>
++      document.getElementById("year").textContent = " - " + new Date().getFullYear();
++    </script>
++  </body>
++</html>
++

@@ -1,32 +1,40 @@
 # apps/firtrackpro/firtrackpro/events/jobs.py
 import frappe
-from frappe.realtime import publish_realtime, get_site_room
 
-def _emit(event: str, docname: str, doc=None):
-    payload = {"doctype": "FT Job", "name": docname}
-    if doc:
-        # Add a few useful hints for the mobile list to optionally use
-        for src, dest in [
-            ("job_status", "job_status"),
-            ("scheduled", "scheduled"),
-            ("job_scheduled_start", "scheduled"),
-            ("property", "property"),
-            ("job_property", "property"),
-            ("subject", "subject"),
-            ("job_title", "subject"),
-        ]:
-            val = getattr(doc, src, None)
-            if val and dest not in payload:
-                payload[dest] = val
 
-    # Broadcast to everyone connected on this site
-    publish_realtime(event, payload, room=get_site_room(), after_commit=True)
+def _emit(event, payload, doctype=None, docname=None):
+	if doctype:
+		frappe.publish_realtime(event, payload, doctype=doctype, after_commit=True)
+	if doctype and docname:
+		frappe.publish_realtime(event, payload, doctype=doctype, docname=docname, after_commit=True)
 
-def emit_job_inserted(doc, method=None):
-    _emit("ft_job_inserted", doc.name, doc)
+	# Fallback broadcast path (mobile subscribes to "all")
+	frappe.publish_realtime(event, payload, room="all", after_commit=True)
 
-def emit_job_updated(doc, method=None):
-    _emit("ft_job_updated", doc.name, doc)
 
-def emit_job_deleted(doc, method=None):
-    _emit("ft_job_deleted", doc.name)
+def emit_job_inserted(doc, _event):
+	payload = {"doctype": "FT Job", "name": doc.name, "action": "inserted"}
+	_emit("ft_job:new", payload, doctype="FT Job", docname=doc.name)
+	_emit("ft_job_updated", payload, doctype="FT Job")
+
+
+def emit_job_updated(doc, _event):
+	payload = {"doctype": "FT Job", "name": doc.name, "action": "updated"}
+	_emit("ft_job:update", payload, doctype="FT Job", docname=doc.name)
+	_emit("ft_job_updated", payload, doctype="FT Job")
+
+
+def emit_job_deleted(doc, _event):
+	payload = {"doctype": "FT Job", "name": doc.name, "action": "deleted"}
+	_emit("ft_job:deleted", payload, doctype="FT Job")
+	_emit("ft_job_updated", payload, doctype="FT Job")
+
+
+def emit_schedule_inserted(doc, _event):
+	payload = {"doctype": "FT Schedule", "name": doc.name, "action": "inserted"}
+	_emit("ft_schedule_updated", payload, doctype="FT Schedule")
+
+
+def emit_schedule_updated(doc, _event):
+	payload = {"doctype": "FT Schedule", "name": doc.name, "action": "updated"}
+	_emit("ft_schedule_updated", payload, doctype="FT Schedule")

@@ -12,6 +12,7 @@
   "defect_severity",
   "defect_description",
   "defect_photo",
+  "additional_photos",
   "defect_status",
   "defect_quotation",
   "defect_repair_job",
@@ -84,12 +85,17 @@
    "fieldname": "defect_notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "additional_photos",
+   "fieldtype": "Attach",
+   "label": "Additional Photos"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-02 22:56:14.275314",
+ "modified": "2026-02-11 22:03:44.725903",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Defect",
@@ -104,6 +110,30 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Employee",
    "share": 1,
    "write": 1
   }

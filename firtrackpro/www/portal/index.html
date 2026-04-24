@@ -1,97 +1,28 @@
-{% extends "firtrackpro/www/templates/portal_base.html" %}
-{% block title %}Dashboard{% endblock %}
-{% block portal_content %}
-<div class="w-full max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-6">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1"
+    />
+    <title>FireTrack Pro</title>
 
-  <!-- KPIs -->
-  <!-- ✅ single column on xs, two on sm, four on md+ -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-    {% for k in KPIS %}
-    <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
-      <div class="text-sm text-muted">{{ k.label }}</div>
-      <div class="mt-1 flex items-baseline gap-2">
-        <div class="text-2xl font-semibold text-ink">{{ k.value }}</div>
-        <div class="text-xs text-muted">{{ k.delta }}</div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <!-- Charts -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-    <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1 lg:col-span-2">
-      <div class="flex items-center justify-between">
-        <div class="font-semibold text-ink">Jobs by status</div>
-      </div>
-      <div class="mt-2">
-        <canvas id="chartJobs"></canvas>
-      </div>
-    </div>
-    <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
-      <div class="font-semibold text-ink">Invoices by state</div>
-      <div class="mt-2">
-        <canvas id="chartInv"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- Activity & Top lists -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-    <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1 lg:col-span-2">
-      <div class="font-semibold text-ink mb-3">Recent activity</div>
-      <ul class="divide-y">
-        {% for a in RECENT %}
-        <li class="py-2 flex items-center justify-between">
-          <span class="text-ink">{{ a.txt }}</span>
-          <span class="text-xs text-muted">{{ a.time }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="bg-white border border-line rounded-2xl p-4 shadow-ft1">
-      <div class="font-semibold text-ink mb-3">Quick links</div>
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <a class="rounded-xl border border-line p-3 hover:bg-panelweak" href="/portal/jobs">Jobs</a>
-        <a class="rounded-xl border border-line p-3 hover:bg-panelweak" href="/portal/invoices">Invoices</a>
-        <a class="rounded-xl border border-line p-3 hover:bg-panelweak" href="/portal/defects">Defects</a>
-        <a class="rounded-xl border border-line p-3 hover:bg-panelweak" href="/portal/scheduler">Scheduler</a>
-      </div>
-    </div>
-  </div>
-</div>
-{% endblock %}
-
-{% block script %}
-{{ super() }}
-<!-- Chart.js via CDN for demo -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script>
-const jobs = {{ JOBS_STATUS | tojson }};
-const invs = {{ INVOICE_MIX | tojson }};
-const cj = new Chart(document.getElementById('chartJobs'), {
-  type: 'bar',
-  data: {
-    labels: jobs.map(x=>x.s),
-    datasets: [{label:'Jobs', data: jobs.map(x=>x.n)}]
-  },
-  options: {
-    responsive:true,
-    maintainAspectRatio: false,
-    plugins:{ legend:{ display:false } },
-    scales:{ y:{ beginAtZero:true } }
-  }
-});
-const ci = new Chart(document.getElementById('chartInv'), {
-  type: 'doughnut',
-  data: {
-    labels: invs.map(x=>x.s),
-    datasets: [{ data: invs.map(x=>x.n) }]
-  },
-  options: {
-    responsive:true,
-    maintainAspectRatio: false,
-    plugins:{ legend:{ position:'bottom' } }
-  }
-});
-</script>
-{% endblock %}
+    <!-- Favicons (files go in /public) -->
+    <link rel="icon" type="image/svg+xml" href="/portal/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/portal/favicon.svg" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/portal/favicon.ico" type="image/x-icon">
+    <!-- Fallback to silence /favicon.ico 404s in some browsers -->
+    <link rel="alternate icon" href="/portal/favicon.ico" sizes="any" />
+    <!-- Optional platform extras -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#e11d48" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+    <script type="module" crossorigin src="/portal/assets/index-cKXHmVEb.js"></script>
+    <link rel="stylesheet" crossorigin href="/portal/assets/index-Dj3gPAbt.css">
+  </head>
+  <body class="bg-ink-50 text-ink-800 antialiased dark:bg-ink-950 dark:text-ink-100">
+    <div id="root"></div>
+  </body>
+</html>

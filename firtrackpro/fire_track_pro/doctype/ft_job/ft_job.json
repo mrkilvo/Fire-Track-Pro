@@ -1,6 +1,6 @@
 {
  "actions": [],
- "allow_rename": 1,
+ "autoname": "autoincrement",
  "creation": "2025-08-11 19:58:23.389995",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -24,23 +24,27 @@
   "job_defects_created",
   "job_part_usage",
   "job_report_pdf",
+  "job_report",
   "job_office_reviewed",
+  "job_finalised_and_locked",
   "job_sales_invoice",
   "job_quote",
   "job_firelink_uid",
-  "notes"
+  "notes",
+  "job_tech_time"
  ],
  "fields": [
   {
    "fieldname": "job_title",
-   "fieldtype": "Data",
-   "label": "Title"
+   "fieldtype": "Select",
+   "label": "Title",
+   "options": "Inspection\nService\nTest\nRepair\nService & Repairs\nAudit Follow Up"
   },
   {
    "fieldname": "job_status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nPlanned\nScheduled\nIn Progress\nComplete\nOffice Review\nInvoiced\nClosed\nFinalised"
+   "options": "Draft\nPlanned\nScheduled\nIn Progress\nComplete\nOffice Review\nInvoiced\nClosed\nFinalised\nReschedule"
   },
   {
    "fieldname": "job_contract",
@@ -140,6 +144,12 @@
    "label": "Report PDF"
   },
   {
+   "fieldname": "job_report",
+   "fieldtype": "Link",
+   "label": "Job Report",
+   "options": "FT Report"
+  },
+  {
    "default": "0",
    "fieldname": "job_office_reviewed",
    "fieldtype": "Check",
@@ -166,15 +176,27 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
+  },
+  {
+   "fieldname": "job_tech_time",
+   "fieldtype": "Duration",
+   "label": "Job Tech Time"
+  },
+  {
+   "default": "0",
+   "fieldname": "job_finalised_and_locked",
+   "fieldtype": "Check",
+   "label": "Job Finalised and Locked"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-05 19:40:38.734691",
+ "modified": "2026-04-17 15:18:36.497260",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Job",
+ "naming_rule": "Autoincrement",
  "owner": "Administrator",
  "permissions": [
   {

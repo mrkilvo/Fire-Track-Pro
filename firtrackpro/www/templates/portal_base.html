@@ -1,5 +1,5 @@
 {% extends "firtrackpro/www/templates/base_brand.html" %}
-{% block title %}Portal{% endblock %}
+{% block title %}My Portal{% endblock %}
 {% block navbar %}{% endblock %}
 {% if frappe.session.user == "Guest" %}
   <script>window.location.href = "/login";</script>
@@ -9,20 +9,60 @@
   {{ super() }}
   <meta name="csrf-token" content="{{ frappe.session.csrf_token }}">
 
-  <!-- Compiled Tailwind + custom -->
+  <!-- Compiled Tailwind + your custom bundle -->
   <link rel="stylesheet" href="/assets/firtrackpro/css/portal.tailwind.css">
   <link rel="stylesheet" href="/assets/firtrackpro/css/custom.css">
   <script defer src="/assets/firtrackpro/js/flowbite.min.js"></script>
 
+  <!-- =========================
+       Global Portal UI Kit + Theming (COMPACT BUTTONS)
+       ========================= -->
   <style>
-    :root{
+    /* ========= THEME TOKENS =========
+       Default theme is "fire". You can switch by adding:
+       <html data-theme="ocean"> or <html data-theme="slate">
+    */
+
+    :root {
+      /* ---- Brand (Fire) ---- */
+      --brand:        #ef4444; /* red-500 */
+      --brand-600:    #dc2626; /* red-600 */
+      --brand-700:    #b91c1c; /* red-700 */
+      --brand-weak:   #fff1f2; /* rose-50 for subtle surfaces */
+
+      /* ---- Base ---- */
+      --ink:          #0f172a; /* slate-900 */
+      --muted:        #475569; /* slate-600 */
+      --line:         #e5e7eb; /* gray-200 */
+      --panel:        #ffffff;
+      --panel-weak:   #f8fafc; /* slate-50 */
+      --ring:         rgba(239, 68, 68, 0.35); /* brand focus */
+
+      /* ---- Status ---- */
+      --ok:           #16a34a;  /* green-600 */
+      --warn:         #f59e0b;  /* amber-500 */
+      --info:         #0ea5e9;  /* sky-500 */
+      --danger:       #ef4444;  /* red-500 */
+
+      /* Shadows */
+      --shadow-1: 0 1px 1px rgba(0,0,0,.04);
+      --shadow-2: 0 6px 16px rgba(0,0,0,.08);
+      --shadow-3: 0 20px 50px rgba(0,0,0,.18);
+
+      /* Radius */
+      --r-sm: 10px;
+      --r-md: 12px;
+      --r-lg: 14px;
+      --r-xl: 16px;
+
+      /* Sidebar legacy + accents (kept) */
       --sidebar-bg:#161616;
       --sidebar-text:#ffffff;
-      --brand-accent:#e11d48;
-      --brand-accent-600:#be123c;
+      --brand-accent:#ef4444;       /* align with --brand */
+      --brand-accent-600:#dc2626;
 
-      /* ========= SCALING CONTROLS ========= */
-      --topbar-scale:1.2;                 /* base — lowered a touch for small screens */
+      /* ========= Topbar scaling (kept) ========= */
+      --topbar-scale:1.2;
       --topbar-base-height:40px;
       --topbar-base-icon:14px;
       --topbar-base-avatar:24px;
@@ -30,17 +70,34 @@
       --topbar-base-gap:0.375rem;
       --topbar-base-xpad:0.5rem;
 
-      /* Derived sizes (auto-scale) */
+      /* Derived */
       --topbar-height:calc(var(--topbar-base-height)*var(--topbar-scale));
       --topbar-icon-size:calc(var(--topbar-base-icon)*var(--topbar-scale));
       --topbar-avatar-size:calc(var(--topbar-base-avatar)*var(--topbar-scale));
       --topbar-title-size:calc(var(--topbar-base-title)*var(--topbar-scale));
       --topbar-gap:calc(var(--topbar-base-gap)*var(--topbar-scale));
       --topbar-xpad:calc(var(--topbar-base-xpad)*var(--topbar-scale));
-      --topbar-button-size:calc(var(--topbar-height) - 2px);
+
+      /* Sidebar icon sizes */
+      --sidebar-icon-size:22px;
+      --sidebar-chevron-size:18px;
     }
 
-    /* Up-scale on md+ screens */
+    /* ---- Ocean theme (cool, professional) ---- */
+    html[data-theme="ocean"] {
+      --brand:#0ea5e9; --brand-600:#0284c7; --brand-700:#0369a1; --brand-weak:#e0f2fe;
+      --ring: rgba(14,165,233,.35);
+      --brand-accent:#0ea5e9; --brand-accent-600:#0284c7;
+    }
+
+    /* ---- Slate theme (neutral, minimal) ---- */
+    html[data-theme="slate"] {
+      --brand:#475569; --brand-600:#334155; --brand-700:#1f2937; --brand-weak:#f1f5f9;
+      --ring: rgba(71,85,105,.35);
+      --brand-accent:#475569; --brand-accent-600:#334155;
+    }
+
+    /* Up-scale on md+ screens (kept) */
     @media (min-width: 768px){
       :root{
         --topbar-scale:1.45;
@@ -50,24 +107,106 @@
         --topbar-title-size:calc(var(--topbar-base-title)*var(--topbar-scale));
         --topbar-gap:calc(var(--topbar-base-gap)*var(--topbar-scale));
         --topbar-xpad:calc(var(--topbar-base-xpad)*var(--topbar-scale));
-        --topbar-button-size:calc(var(--topbar-height) - 2px);
       }
     }
 
-    /* Sidebar icon sizes */
-    --sidebar-icon-size:22px;
-    --sidebar-chevron-size:18px;
-    .sb-icon{font-size:var(--sidebar-icon-size);width:1.6em;height:1.6em;display:inline-flex;align-items:center;justify-content:center;line-height:1}
-    .sb-chevron{font-size:var(--sidebar-chevron-size);line-height:1}
+    /* ===== Global base ===== */
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      color:var(--ink);
+      background:var(--panel-weak);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
 
-    /* Top bar */
+    /* ===== Top bar (kept) ===== */
     .tb{height:var(--topbar-height)}
     .tb-wrap{padding-left:var(--topbar-xpad);padding-right:var(--topbar-xpad)}
     .tb-title{font-size:var(--topbar-title-size);line-height:1;margin:0}
     .tb-icon{font-size:var(--topbar-icon-size);line-height:1}
     .tb-avatar{height:var(--topbar-avatar-size);width:var(--topbar-avatar-size)}
-    .tb-btn{width:var(--topbar-button-size);height:var(--topbar-button-size)}
+    .tb-btn{width:calc(var(--topbar-height) - 2px);height:calc(var(--topbar-height) - 2px)}
     .tb-name{font-size:max(10px, calc(var(--topbar-title-size)*0.92))}
+    .sb-icon{font-size:var(--sidebar-icon-size);width:1.6em;height:1.6em;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+    .sb-chevron{font-size:var(--sidebar-chevron-size);line-height:1}
+
+    /* ===== Inputs ===== */
+    .input{
+      border:1px solid var(--line); border-radius:var(--r-md);
+      padding:.5rem .65rem; min-height:34px; outline:none;
+      background:#fff; color:var(--ink);
+      transition: box-shadow .15s ease, border-color .15s ease;
+      font-size:.9rem;
+    }
+    .input:focus{ box-shadow:0 0 0 .2rem var(--ring); border-color:var(--brand); }
+    .label{ font-size:.82rem; color:#64748b; margin-bottom:.25rem; display:block; }
+
+    /* ===== Buttons (COMPACT) ===== */
+    .btn{
+      --bg:#fff; --fg:var(--ink); --bd:var(--line);
+      display:inline-flex; align-items:center; justify-content:center; gap:.4rem;
+      padding:.35rem .65rem;               /* tighter padding */
+      font-size:.85rem;                    /* smaller text */
+      line-height:1.2;
+      border:1px solid var(--bd);
+      border-radius: var(--r-sm);          /* tighter radius */
+      background:var(--bg); color:var(--fg);
+      font-weight:500;
+      box-shadow: var(--shadow-1);
+      transition: transform .05s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease, color .15s ease;
+      cursor:pointer; user-select:none;
+    }
+    .btn:hover{ transform:translateY(-1px); box-shadow: var(--shadow-2); }
+    .btn:active{ transform:translateY(0); box-shadow:0 2px 6px rgba(0,0,0,.08); }
+    .btn:focus-visible{ outline:none; box-shadow: 0 0 0 .2rem var(--ring); }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+
+    .btn-sm{ padding:.25rem .5rem; font-size:.8rem; border-radius: var(--r-sm); }
+    .btn-lg{ padding:.45rem .8rem; font-size:.9rem; border-radius: var(--r-md); }
+
+    /* Variants */
+    .btn-primary{ --bg:var(--brand); --fg:#fff; --bd:transparent; }
+    .btn-primary:hover{ --bg:var(--brand-600); }
+    .btn-primary:active{ --bg:var(--brand-700); }
+
+    .btn-secondary{ --bg:#0f172a; --fg:#fff; --bd:#0f172a; }
+    .btn-secondary:hover{ --bg:#0b1220; --bd:#0b1220; }
+
+    .btn-ghost{ --bg:#fff; --fg:#334155; --bd:var(--line); }
+    .btn-ghost:hover{ --bg:#f8fafc; }
+
+    .btn-danger{ --bg:var(--danger); --fg:#fff; --bd:var(--danger); }
+    .btn-danger:hover{ --bg:#dc2626; --bd:#dc2626; }
+    .btn-danger-outline{ --bg:#fff; --fg:#b91c1c; --bd:#fecaca; }
+    .btn-danger-outline:hover{ --bg:#fff1f2; --bd:#fda4af; }
+
+    /* ===== Badges ===== */
+    .badge{ display:inline-flex; align-items:center; padding:.1rem .45rem; font-size:.73rem; border-radius:.6rem; border:1px solid transparent; }
+    .badge.gray{ background:#f1f5f9; color:#334155; border-color:#e2e8f0; }
+    .badge.green{ background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
+    .badge.amber{ background:#fffbeb; color:#92400e; border-color:#fde68a; }
+    .badge.red{ background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
+
+    /* ===== Cards / Modals / Sections ===== */
+    .card{ background:#fff; border-radius:var(--r-xl); box-shadow:0 6px 20px rgba(0,0,0,.06); border:1px solid #eef2f7; }
+    .card-modal{ background:#fff; border-radius:var(--r-xl); box-shadow:var(--shadow-3); width:100%; max-width:40rem; padding:1.25rem 1.25rem; }
+    .section-title{ font-weight:600; margin-bottom:.6rem; }
+    .sub{ color:#64748b; font-size:.82rem; }
+    .mono{ font-variant-numeric:tabular-nums; }
+
+    /* ===== Tabs ===== */
+    .btn-tab{ padding:.45rem .6rem; border-bottom:2px solid transparent; color:#475569; font-weight:600; background:transparent; border-radius:0; font-size:.9rem; }
+    .btn-tab.active{ color:#0f172a; border-color:var(--brand); }
+
+    /* ===== Stat cards ===== */
+    .stat-card{ border:1px solid var(--line); border-radius:var(--r-lg); padding:10px; background:#fff; }
+    .stat-label{ font-size:.73rem; color:#64748b; }
+    .stat-val{ font-size:1.2rem; font-weight:700; }
+
+    /* ===== Toasts ===== */
+    #toastHost{position:fixed;inset:auto 0 16px 0;display:flex;justify-content:center;z-index:9999;pointer-events:none}
+    .toast{pointer-events:auto;min-width:220px;max-width:96vw;padding:9px 12px;border-radius:var(--r-md);box-shadow:0 10px 25px rgba(0,0,0,.15);color:#0b2a13;background:#dcfce7;border:1px solid #86efac;font-size:13px;margin-top:8px}
+    .toast.error{background:#fee2e2;color:#450a0a;border-color:#fca5a5}
   </style>
 {% endblock %}
 

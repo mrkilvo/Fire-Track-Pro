@@ -1,0 +1,150 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "autoincrement",
+ "creation": "2026-04-16 14:14:19.209741",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "report_job",
+  "report_title",
+  "report_status",
+  "report_html",
+  "report_text",
+  "quote_items_json",
+  "supplier_quote_refs_json",
+  "workflow_state_json",
+  "report_created_by",
+  "report_date",
+  "job_property",
+  "job_customer",
+  "report_locked"
+ ],
+ "fields": [
+  {
+   "fieldname": "report_job",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Report Job",
+   "options": "FT Job"
+  },
+  {
+   "fieldname": "report_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Report Title"
+  },
+  {
+   "fieldname": "report_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Report Status",
+   "options": "Draft\nIn Progress\nSubmitted\nApproved\nCompleted\nFinalised\nArchived"
+  },
+  {
+   "fieldname": "report_html",
+   "fieldtype": "Text Editor",
+   "label": "Report"
+  },
+  {
+   "fieldname": "report_text",
+   "fieldtype": "Long Text",
+   "label": "Report text"
+  },
+  {
+   "fieldname": "quote_items_json",
+   "fieldtype": "Long Text",
+   "label": "Quote Items Json",
+   "hidden": 1
+  },
+  {
+   "fieldname": "supplier_quote_refs_json",
+   "fieldtype": "Long Text",
+   "label": "Supplier Quote Refs Json",
+   "hidden": 1
+  },
+  {
+   "fieldname": "workflow_state_json",
+   "fieldtype": "Long Text",
+   "label": "Workflow State Json",
+   "hidden": 1
+  },
+  {
+   "fieldname": "report_created_by",
+   "fieldtype": "Link",
+   "label": "Report Created By",
+   "options": "User"
+  },
+  {
+   "fieldname": "report_date",
+   "fieldtype": "Date",
+   "label": "Report Date"
+  },
+  {
+   "fieldname": "job_property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Job Property",
+   "options": "FT Property"
+  },
+  {
+   "fieldname": "job_customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Job Customer",
+   "options": "Customer"
+  },
+  {
+   "default": "0",
+   "fieldname": "report_locked",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Report Locked",
+   "options": "Customer"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-20 15:57:13.125275",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Report",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

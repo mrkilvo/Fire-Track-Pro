@@ -7,7 +7,7 @@ from frappe.utils import get_fullname, get_url
 
 
 def _redirect_to_login(target: str):
-	frappe.local.flags.redirect_location = f"/login?redirect-to={quote(target)}"
+	frappe.local.flags.redirect_location = f"/portal/login?redirect-to={quote(target)}"
 	raise frappe.Redirect
 
 
@@ -31,7 +31,7 @@ def build_portal_context(
 	*,
 	page_h1: str = "Untitled",
 	messages_url: str = "/portal/messages",
-	notifications_url: str = "/app/notifications",
+	notifications_url: str = "/portal/notifications",
 	force_login: bool = True,
 ):
 	if force_login and frappe.session.user == "Guest":

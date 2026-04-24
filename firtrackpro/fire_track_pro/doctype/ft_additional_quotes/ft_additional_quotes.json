@@ -1,0 +1,54 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-20 15:42:57.307350",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "additional_job_quotes",
+  "quote_roll",
+  "status",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "additional_job_quotes",
+   "fieldtype": "Link",
+   "label": "Additional Job Quotes",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "quote_roll",
+   "fieldtype": "Select",
+   "label": "Quote Role",
+   "options": "\nPrimary\nVariation\noption\nRevision"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nDraft\nSent\nApproved\nRejected\nSuperseeded\nConverted\nCancelled"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-20 15:48:28.019026",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Additional Quotes",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

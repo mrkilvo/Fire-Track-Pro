@@ -1,0 +1,121 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-17 20:38:43.447702",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "auth_url",
+  "client_id",
+  "tenant__company_id",
+  "webhook_secret",
+  "api_base_url",
+  "token_url",
+  "client_secret",
+  "oauth_scopes",
+  "enabled",
+  "sync_customers",
+  "sync_invoices",
+  "sync_payments",
+  "sync_suppliers"
+ ],
+ "fields": [
+  {
+   "fieldname": "auth_url",
+   "fieldtype": "Data",
+   "label": "AUTH URL"
+  },
+  {
+   "fieldname": "client_id",
+   "fieldtype": "Data",
+   "label": "Client ID"
+  },
+  {
+   "fieldname": "tenant__company_id",
+   "fieldtype": "Data",
+   "label": "Tenant / Company ID"
+  },
+  {
+   "fieldname": "webhook_secret",
+   "fieldtype": "Data",
+   "label": "Webhook Secret"
+  },
+  {
+   "fieldname": "api_base_url",
+   "fieldtype": "Data",
+   "label": "API Base URL"
+  },
+  {
+   "fieldname": "token_url",
+   "fieldtype": "Data",
+   "label": "Token URL"
+  },
+  {
+   "fieldname": "client_secret",
+   "fieldtype": "Data",
+   "label": "Client Secret"
+  },
+  {
+   "fieldname": "oauth_scopes",
+   "fieldtype": "Data",
+   "label": "OAUTH Scopes"
+  },
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "default": "0",
+   "fieldname": "sync_customers",
+   "fieldtype": "Check",
+   "label": "Sync Customers"
+  },
+  {
+   "default": "0",
+   "fieldname": "sync_invoices",
+   "fieldtype": "Check",
+   "label": "Sync Invoices"
+  },
+  {
+   "default": "0",
+   "fieldname": "sync_payments",
+   "fieldtype": "Check",
+   "label": "Sync Payments"
+  },
+  {
+   "default": "0",
+   "fieldname": "sync_suppliers",
+   "fieldtype": "Check",
+   "label": "Sync Suppliers"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-04-17 20:42:17.695993",
+ "modified_by": "Administrator",
+ "module": "Fire Track Pro",
+ "name": "FT Integrations",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

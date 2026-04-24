@@ -10,6 +10,7 @@
   "property_access_gate_code",
   "property_access_alarm_panel",
   "property_access_parking",
+  "property_access_notes",
   "property_access_maps",
   "property_access_last_revealed_by",
   "property_access_last_revealed_on"
@@ -56,12 +57,17 @@
    "fieldname": "property_access_alarm_panel",
    "fieldtype": "Small Text",
    "label": "Alarm Panel Notes"
+  },
+  {
+   "fieldname": "property_access_notes",
+   "fieldtype": "Small Text",
+   "label": "Access notes"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-02 20:37:19.740033",
+ "modified": "2026-04-17 13:20:02.832909",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Property Access",

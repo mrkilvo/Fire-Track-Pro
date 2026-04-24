@@ -13,6 +13,7 @@
   "property_as1851_edition",
   "property_standards",
   "property_credentials",
+  "property_inductions",
   "ft_property_contacts",
   "property_zone_root",
   "property_access",
@@ -51,7 +52,7 @@
    "fieldname": "property_as1851_edition",
    "fieldtype": "Select",
    "label": "AS1851 Edition",
-   "options": "2005\n2012\n2018\n2021"
+   "options": "2005\n2012\n2018\n2021\n2025"
   },
   {
    "fieldname": "property_standards",
@@ -94,12 +95,19 @@
    "fieldtype": "Table",
    "label": "Property Contacts",
    "options": "FT Property Contact"
+  },
+  {
+   "description": "Require for visits, e.g police check, Flu Vaccine",
+   "fieldname": "property_inductions",
+   "fieldtype": "Table",
+   "label": "Property Inductions",
+   "options": "FT Property Credential Requirement"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-02 21:06:56.657718",
+ "modified": "2026-04-17 20:04:25.731384",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Property",
@@ -126,6 +134,18 @@
    "read": 1,
    "report": 1,
    "role": "Administrator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Field Technician",
    "share": 1,
    "write": 1
   }

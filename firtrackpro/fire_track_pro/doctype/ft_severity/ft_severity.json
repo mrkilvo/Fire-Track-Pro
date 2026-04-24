@@ -1,5 +1,6 @@
 {
  "actions": [],
+ "autoname": "field:severity",
  "creation": "2025-09-01 17:36:17.672199",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -10,16 +11,19 @@
   {
    "fieldname": "severity",
    "fieldtype": "Data",
-   "label": "Severity"
+   "label": "Severity",
+   "translatable": 1,
+   "unique": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-01 17:37:06.535091",
+ "modified": "2026-02-11 21:49:29.530522",
  "modified_by": "Administrator",
  "module": "Fire Track Pro",
  "name": "FT Severity",
+ "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
   {
@@ -31,6 +35,29 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "All",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Employee",
    "share": 1,
    "write": 1
   }
