@@ -1,0 +1,75 @@
+name: Build FireTrack Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout frappe_docker
+        uses: actions/checkout@v4
+        with:
+          repository: frappe/frappe_docker
+          path: frappe_docker
+
+      - name: Create apps.json
+        run: |
+          cat > frappe_docker/apps.json <<'EOF'
+          [
+            {
+              "url": "https://github.com/frappe/erpnext",
+              "branch": "version-15"
+            },
+            {
+              "url": "https://github.com/frappe/hrms",
+              "branch": "version-15"
+            },
+            {
+              "url": "https://github.com/mrkilvo/Fire-Track-Pro",
+              "branch": "main"
+            }
+          ]
+          EOF
+
+      - name: Set image tags
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          BUILD_TAG="v16-${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+          echo "BUILD_TAG=${BUILD_TAG}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=ghcr.io/mrkilvo/erpnext-firetrackpro-hrms" >> "$GITHUB_ENV"
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+      - name: Build image
+        working-directory: frappe_docker
+        run: |
+          export APPS_JSON_BASE64=$(base64 -w 0 apps.json)
+
+          docker build \
+            --build-arg FRAPPE_BRANCH=version-15 \
+            --build-arg APPS_JSON_BASE64="$APPS_JSON_BASE64" \
+            --file images/layered/Containerfile \
+            --tag "${IMAGE_NAME}:${BUILD_TAG}" \
+            --tag "${IMAGE_NAME}:latest" \
+            .
+
+      - name: Push image
+        run: |
+          docker push "${IMAGE_NAME}:${BUILD_TAG}"
+          docker push "${IMAGE_NAME}:latest"
+
+      - name: Show image tags
+        run: |
+          echo "Built and pushed:"
+          echo "${IMAGE_NAME}:${BUILD_TAG}"
+          echo "${IMAGE_NAME}:latest"
