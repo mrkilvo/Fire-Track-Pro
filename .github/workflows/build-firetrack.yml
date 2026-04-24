@@ -58,7 +58,7 @@ jobs:
           docker build \
             --build-arg FRAPPE_BRANCH=version-16 \
             --build-arg APPS_JSON_BASE64="$APPS_JSON_BASE64" \
-            --file images/layered/Containerfile \
+            --file images/custom/Containerfile \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             .
