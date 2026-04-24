@@ -50,19 +50,26 @@ jobs:
       - name: Login to GHCR
         run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
 
+      - name: Inject git credentials into Dockerfile
+        working-directory: frappe_docker
+        run: |
+          cp images/custom/Containerfile images/custom/Containerfile.firetrack
+
+          sed -i '/bench init/i \
+          RUN git config --global credential.helper store && \
+              echo "https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com" > /root/.git-credentials \
+          ' images/custom/Containerfile.firetrack
+
       - name: Build image
         working-directory: frappe_docker
         env:
           DOCKER_BUILDKIT: "1"
-          GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
         run: |
           docker build \
             --progress=plain \
             --secret id=apps_json,src=apps.json \
-            --secret id=git_token,env=GIT_TOKEN \
             --build-arg FRAPPE_BRANCH=version-16 \
-            --build-arg GIT_TOKEN=${GIT_TOKEN} \
-            --file images/custom/Containerfile \
+            --file images/custom/Containerfile.firetrack \
             --tag "${IMAGE_NAME}:${BUILD_TAG}" \
             --tag "${IMAGE_NAME}:latest" \
             .
