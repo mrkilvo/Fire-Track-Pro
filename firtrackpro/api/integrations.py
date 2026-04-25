@@ -10,6 +10,13 @@ except Exception:  # pragma: no cover
 
 PROVIDERS = ["MYOB", "Xero", "QuickBooks", "Custom"]
 DEFAULTS_KEY = "firtrackpro:integration_configs_json"
+GOOGLE_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+GOOGLE_PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+GOOGLE_KEY_CANDIDATES = (
+	"google_maps_api_key",
+	"google_places_api_key",
+	"google_api_key",
+)
 
 PROVIDER_DEFAULTS = {
 	"MYOB": {
@@ -88,6 +95,48 @@ def _load_records() -> dict[str, Any]:
 
 def _save_records(records: dict[str, Any]) -> None:
 	frappe.db.set_default(DEFAULTS_KEY, json.dumps(records))
+
+
+def _get_google_maps_api_key() -> str:
+	site_conf = frappe.get_site_config() or {}
+	for key in GOOGLE_KEY_CANDIDATES:
+		value = _as_str(site_conf.get(key) or frappe.conf.get(key))
+		if value:
+			return value
+	frappe.throw(
+		"Google Places API key is not configured on the server. "
+		"Set google_maps_api_key in site_config.json.",
+		frappe.ValidationError,
+	)
+
+
+def _google_http_get(url: str, params: dict[str, Any]) -> dict[str, Any]:
+	if requests is None:
+		frappe.throw("Google lookup is unavailable (requests library missing).")
+	key = _get_google_maps_api_key()
+	query = dict(params or {})
+	query["key"] = key
+	try:
+		res = requests.get(url, params=query, timeout=12)
+		res.raise_for_status()
+		payload = res.json() if hasattr(res, "json") else {}
+	except Exception as exc:
+		frappe.throw(f"Google lookup failed: {exc}")
+
+	status = _as_str(payload.get("status"))
+	if status not in {"OK", "ZERO_RESULTS"}:
+		err = _as_str(payload.get("error_message") or payload.get("status")) or "Unknown Google API error"
+		frappe.throw(f"Google lookup failed: {err}")
+	return payload if isinstance(payload, dict) else {}
+
+
+def _pick_component(components: list[dict[str, Any]], kind: str, short: bool = False) -> str:
+	for comp in components:
+		types = comp.get("types") if isinstance(comp, dict) else None
+		if isinstance(types, list) and kind in types:
+			key = "short_name" if short else "long_name"
+			return _as_str(comp.get(key))
+	return ""
 
 
 @frappe.whitelist()
@@ -194,3 +243,103 @@ def sync_invoice(**kwargs):
 @frappe.whitelist(methods=["POST"])
 def sync_payment(**kwargs):
 	return sync_entity(**kwargs)
+
+
+@frappe.whitelist()
+def google_places_autocomplete(query=None, country="au"):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+
+	q = _as_str(query)
+	if len(q) < 3:
+		return []
+
+	params: dict[str, Any] = {
+		"input": q,
+		"types": "address",
+	}
+	country_code = _as_str(country).lower()
+	if country_code:
+		params["components"] = f"country:{country_code}"
+
+	payload = _google_http_get(GOOGLE_AUTOCOMPLETE_URL, params)
+	rows = payload.get("predictions")
+	if not isinstance(rows, list):
+		return []
+
+	out: list[dict[str, str]] = []
+	for row in rows[:10]:
+		if not isinstance(row, dict):
+			continue
+		description = _as_str(row.get("description"))
+		place_id = _as_str(row.get("place_id"))
+		if not description or not place_id:
+			continue
+		out.append({"description": description, "place_id": place_id})
+	return out
+
+
+@frappe.whitelist()
+def google_place_details(place_id=None):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+
+	google_place_id = _as_str(place_id)
+	if not google_place_id:
+		frappe.throw("place_id is required", frappe.ValidationError)
+
+	payload = _google_http_get(
+		GOOGLE_PLACE_DETAILS_URL,
+		{
+			"place_id": google_place_id,
+			"fields": "place_id,name,formatted_address,address_component,geometry",
+		},
+	)
+	result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+	components = result.get("address_components")
+	components = components if isinstance(components, list) else []
+
+	street_number = _pick_component(components, "street_number")
+	route = _pick_component(components, "route")
+	subpremise = _pick_component(components, "subpremise")
+	locality = _pick_component(components, "locality")
+	sublocality = _pick_component(components, "sublocality")
+	city = locality or sublocality or _pick_component(components, "administrative_area_level_2")
+	state = _pick_component(components, "administrative_area_level_1", short=True) or _pick_component(
+		components, "administrative_area_level_1"
+	)
+	pincode = _pick_component(components, "postal_code")
+	country = _pick_component(components, "country") or "Australia"
+	line1 = " ".join([piece for piece in [street_number, route] if piece]).strip()
+	line2 = subpremise
+
+	geometry = result.get("geometry") if isinstance(result.get("geometry"), dict) else {}
+	location = geometry.get("location") if isinstance(geometry.get("location"), dict) else {}
+	lat = location.get("lat")
+	lng = location.get("lng")
+	try:
+		lat = float(lat) if lat is not None else None
+	except Exception:
+		lat = None
+	try:
+		lng = float(lng) if lng is not None else None
+	except Exception:
+		lng = None
+
+	formatted_address = _as_str(result.get("formatted_address"))
+	address_title = _as_str(result.get("name")) or line1 or formatted_address.split(",")[0].strip() or "Site Address"
+	address_line1 = line1 or address_title
+
+	return {
+		"place_id": google_place_id,
+		"address_title": address_title,
+		"address_line1": address_line1,
+		"address_line2": line2 or None,
+		"city": city or None,
+		"state": state or None,
+		"pincode": pincode or None,
+		"country": country,
+		"lat": lat,
+		"lng": lng,
+		"formatted_address": formatted_address or None,
+	}
