@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlparse
 
 import frappe
 
@@ -16,8 +17,13 @@ FIRELINK_BASE_DEFAULT_KEY = "firtrackpro:firelink_base_url"
 FIRELINK_ENDPOINT_DEFAULT_KEY = "firtrackpro:firelink_user_limit_endpoint"
 CACHED_LIMIT_DEFAULT_KEY = "firtrackpro:cached_allowed_users"
 FIRELINK_BASE_FALLBACK = "https://firelink.firetrackpro.com.au"
-FIRELINK_ENDPOINT_FALLBACK = "/api/method/firtrackpro.api.membership.get_site_user_quota"
+FIRELINK_BRIDGE_TOKEN_KEYS = [
+	"firelink_bridge_token",
+	"firtrackpro_firelink_bridge_token",
+]
+FIRELINK_ENDPOINT_FALLBACK = "/api/method/firtrackpro.api.integrations.firelink_admin_subscriptions_bridge"
 FIRELINK_ENDPOINT_CANDIDATES = [
+	"/api/method/firtrackpro.api.integrations.firelink_admin_subscriptions_bridge",
 	"/api/method/firtrackpro.api.membership.get_site_user_quota",
 	"/api/method/firetrackpro.api.membership.get_site_user_quota",
 	"/api/method/firelink.api.membership.get_site_user_quota",
@@ -175,14 +181,22 @@ def _get_local_membership_limit():
 
 
 def _extract_limit_from_payload(payload):
-	candidates = [
-		payload.get("allowed_users"),
-		payload.get("user_limit"),
-		payload.get("max_users"),
-		payload.get("seats"),
-		payload.get("seat_limit"),
-		payload.get("quota_users"),
-	]
+	if isinstance(payload.get("quota"), dict):
+		quota = payload.get("quota") or {}
+		candidates = [
+			quota.get("allowed_users"),
+			quota.get("allowed_users_total"),
+			payload.get("allowed_users"),
+		]
+	else:
+		candidates = [
+			payload.get("allowed_users"),
+			payload.get("user_limit"),
+			payload.get("max_users"),
+			payload.get("seats"),
+			payload.get("seat_limit"),
+			payload.get("quota_users"),
+		]
 	for candidate in candidates:
 		parsed = _to_int_or_none(candidate)
 		if parsed is not None:
@@ -240,6 +254,29 @@ def _build_firelink_endpoints():
 	return FIRELINK_ENDPOINT_CANDIDATES
 
 
+def _firelink_bridge_token():
+	for key in FIRELINK_BRIDGE_TOKEN_KEYS:
+		val = str(frappe.db.get_default(key) or "").strip()
+		if val:
+			return val
+	return ""
+
+
+def _normalize_host(raw):
+	host = str(raw or "").strip().lower()
+	if not host:
+		return ""
+	if "://" in host:
+		try:
+			host = (urlparse(host).hostname or host).strip().lower()
+		except Exception:
+			pass
+	host = host.split("/", 1)[0].strip().lower()
+	if ":" in host:
+		host = host.split(":", 1)[0].strip().lower()
+	return host
+
+
 def _get_firelink_limit():
 	if requests is None:
 		raise Exception("requests is not available")
@@ -250,8 +287,9 @@ def _get_firelink_limit():
 	)
 	base_headers = {"Accept": "application/json"}
 	api_key = _get_membership_api_key()
+	bridge_token = _firelink_bridge_token()
 	missing_key_note = ""
-	if not api_key:
+	if not api_key and not bridge_token:
 		membership_rows = (
 			frappe.get_all(
 				"FL Membership",
@@ -272,6 +310,7 @@ def _get_firelink_limit():
 			)
 
 	base_params = {"site": frappe.local.site, "host": frappe.local.site}
+	site_host = _normalize_host(frappe.local.site)
 	auth_attempts = [({}, {})]
 	if api_key:
 		auth_attempts = [
@@ -292,7 +331,75 @@ def _get_firelink_limit():
 			headers = {**base_headers, **header_add}
 			params = {**base_params, **param_add}
 			try:
-				response = requests.get(url, headers=headers, params=params, timeout=8, allow_redirects=True)
+				if endpoint.endswith("firelink_admin_subscriptions_bridge"):
+					bridge_headers = {
+						**headers,
+						"Content-Type": "application/x-www-form-urlencoded",
+					}
+					if site_host:
+						bridge_headers["Origin"] = f"https://{site_host}"
+						bridge_headers["Referer"] = f"https://{site_host}/portal"
+					response = None
+					payload = None
+					bridge_error = None
+					for bridge_action in ("quota", "list"):
+						form = {
+							"action": bridge_action,
+							"site_host": site_host,
+							"host": site_host,
+							"site": site_host,
+						}
+						if bridge_token:
+							form["bridge_token"] = bridge_token
+						response = requests.post(
+							url,
+							headers=bridge_headers,
+							data=form,
+							timeout=8,
+							allow_redirects=True,
+						)
+						if response.status_code >= 400:
+							bridge_error = _extract_firelink_error(response) or f"HTTP {response.status_code}"
+							continue
+						data = response.json() if response.content else {}
+						payload = (
+							data.get("message")
+							if isinstance(data, dict) and isinstance(data.get("message"), dict)
+							else data
+						)
+						if not isinstance(payload, dict):
+							bridge_error = "invalid JSON payload"
+							continue
+						if bridge_action == "list":
+							rows = payload.get("rows")
+							if not isinstance(rows, list):
+								bridge_error = "list response missing rows"
+								continue
+							targets = [site_host]
+							if site_host.startswith("www."):
+								targets.append(site_host[4:])
+							match = None
+							for row in rows:
+								if not isinstance(row, dict):
+									continue
+								row_host = _normalize_host(row.get("site_host"))
+								if row_host in targets:
+									match = row
+									break
+							if not match:
+								bridge_error = f"no FL Site Subscription for host {site_host}"
+								continue
+							payload = {
+								"allowed_users": match.get("allowed_users_total"),
+								"source": "FL Site Subscription.allowed_users_total",
+							}
+						bridge_error = None
+						break
+					if bridge_error:
+						reasons.append(f"{url} {bridge_error}")
+						continue
+				else:
+					response = requests.get(url, headers=headers, params=params, timeout=8, allow_redirects=True)
 				if response.status_code >= 400:
 					detail = _extract_firelink_error(response)
 					reasons.append(f"{url} HTTP {response.status_code}" + (f" ({detail})" if detail else ""))
@@ -306,10 +413,20 @@ def _get_firelink_limit():
 				if not isinstance(payload, dict):
 					reasons.append(f"{url} invalid JSON payload")
 					continue
+				if isinstance(payload.get("quota"), dict):
+					quota = payload.get("quota") or {}
+					if quota.get("found") is False:
+						reasons.append(f"{url} no FL Site Subscription for host {site_host}")
+						continue
 				limit = _extract_limit_from_payload(payload)
 				if limit is None:
 					reasons.append(f"{url} missing allowed_users/user_limit field")
 					continue
+				if isinstance(payload.get("quota"), dict):
+					source = str((payload.get("quota") or {}).get("source") or "").strip()
+					if not source:
+						source = "FL Site Subscription.allowed_users_total"
+					return limit, f"firelink:{source}"
 				return limit, f"firelink:{url}"
 			except Exception as exc:
 				reasons.append(f"{url} {exc}")

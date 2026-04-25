@@ -1,6 +1,6 @@
 import json
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import frappe
 
@@ -911,6 +911,68 @@ def _local_get_subscription(name: str) -> dict[str, Any]:
 	return {k: out.get(k) for k in _sub_fields()}
 
 
+def _normalize_site_host(raw: str) -> str:
+	host = _as_str(raw).strip().lower()
+	if not host:
+		return ""
+	if "://" in host:
+		try:
+			host = (urlparse(host).hostname or host).strip().lower()
+		except Exception:
+			pass
+	host = host.split("/", 1)[0].strip().lower()
+	if ":" in host:
+		host = host.split(":", 1)[0].strip().lower()
+	return host
+
+
+def _local_subscription_quota(site_host: str) -> dict[str, Any]:
+	if not frappe.db.exists("DocType", "FL Site Subscription"):
+		return {
+			"found": False,
+			"site_host": _normalize_site_host(site_host),
+			"allowed_users": None,
+			"subscription_status": "",
+			"source": "FL Site Subscription",
+		}
+	normalized = _normalize_site_host(site_host)
+	if not normalized:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	queries = [normalized]
+	if normalized.startswith("www."):
+		queries.append(normalized[4:])
+	for key in queries:
+		rows = frappe.get_all(
+			"FL Site Subscription",
+			fields=_sub_fields(),
+			filters={"site_host": key},
+			order_by="modified desc",
+			limit_page_length=1,
+		)
+		if not rows:
+			continue
+		row = rows[0]
+		base = int(float(row.get("base_users_included") or 0))
+		extra = int(float(row.get("extra_users_purchased") or 0))
+		allowed = row.get("allowed_users_total")
+		allowed_int = int(float(allowed)) if str(allowed or "").strip() else max(0, base + extra)
+		return {
+			"found": True,
+			"site_host": key,
+			"allowed_users": max(0, allowed_int),
+			"subscription_status": _as_str(row.get("subscription_status")) or "Active",
+			"source": "FL Site Subscription.allowed_users_total",
+			"row": row,
+		}
+	return {
+		"found": False,
+		"site_host": normalized,
+		"allowed_users": None,
+		"subscription_status": "",
+		"source": "FL Site Subscription",
+	}
+
+
 def _local_create_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 	doc = frappe.get_doc(
 		{
@@ -1067,6 +1129,13 @@ def firelink_admin_subscriptions_bridge(**kwargs):
 		return {"rows": _local_list_subscriptions()}
 	if action == "get":
 		return {"row": _local_get_subscription(_as_str(kwargs.get("name")))}
+	if action == "quota":
+		site_host = (
+			_as_str(kwargs.get("site_host"))
+			or _as_str(kwargs.get("host"))
+			or _as_str(kwargs.get("site"))
+		)
+		return {"quota": _local_subscription_quota(site_host)}
 	if action == "create":
 		return {"row": _local_create_subscription(kwargs)}
 	if action == "update":
