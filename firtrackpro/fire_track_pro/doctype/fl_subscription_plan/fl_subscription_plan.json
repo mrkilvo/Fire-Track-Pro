@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:plan_code",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "plan_name",
+  "plan_code",
+  "base_fee",
+  "base_users_included",
+  "extra_user_fee",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "plan_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Plan Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plan_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Plan Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "base_fee",
+   "fieldtype": "Currency",
+   "label": "Base Fee"
+  },
+  {
+   "default": "0",
+   "fieldname": "base_users_included",
+   "fieldtype": "Int",
+   "label": "Base Users Included"
+  },
+  {
+   "fieldname": "extra_user_fee",
+   "fieldtype": "Currency",
+   "label": "Extra User Fee"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Active"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Fire Track Pro",
+ "name": "FL Subscription Plan",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "plan_name,plan_code",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "site_host",
+  "snapshot_at",
+  "allowed_users",
+  "used_users",
+  "remaining_users",
+  "source",
+  "verified_live",
+  "details_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "site_host",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Site Host",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "snapshot_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Snapshot At"
+  },
+  {
+   "fieldname": "allowed_users",
+   "fieldtype": "Int",
+   "label": "Allowed Users"
+  },
+  {
+   "fieldname": "used_users",
+   "fieldtype": "Int",
+   "label": "Used Users"
+  },
+  {
+   "fieldname": "remaining_users",
+   "fieldtype": "Int",
+   "label": "Remaining Users"
+  },
+  {
+   "fieldname": "source",
+   "fieldtype": "Data",
+   "label": "Source"
+  },
+  {
+   "default": "0",
+   "fieldname": "verified_live",
+   "fieldtype": "Check",
+   "label": "Verified Live"
+  },
+  {
+   "fieldname": "details_json",
+   "fieldtype": "Long Text",
+   "label": "Details JSON"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Fire Track Pro",
+ "name": "FL Subscription Usage",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "site_host,source",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,128 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:site_host",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "site_host",
+  "site_alias",
+  "customer",
+  "subscription_plan",
+  "subscription_status",
+  "base_users_included",
+  "extra_users_purchased",
+  "allowed_users_total",
+  "billing_cycle",
+  "next_invoice_date",
+  "subscription_reference",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "site_host",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Site Host",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "site_alias",
+   "fieldtype": "Data",
+   "label": "Site Alias"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subscription_plan",
+   "fieldtype": "Link",
+   "label": "Subscription Plan",
+   "options": "FL Subscription Plan"
+  },
+  {
+   "default": "Active",
+   "fieldname": "subscription_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Subscription Status",
+   "options": "Active\nTrial\nSuspended\nCancelled"
+  },
+  {
+   "default": "0",
+   "fieldname": "base_users_included",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Base Users Included",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "extra_users_purchased",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Extra Users Purchased",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "allowed_users_total",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Allowed Users Total",
+   "reqd": 1
+  },
+  {
+   "default": "Monthly",
+   "fieldname": "billing_cycle",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Billing Cycle",
+   "options": "Monthly\nQuarterly\nAnnual"
+  },
+  {
+   "fieldname": "next_invoice_date",
+   "fieldtype": "Date",
+   "label": "Next Invoice Date"
+  },
+  {
+   "fieldname": "subscription_reference",
+   "fieldtype": "Data",
+   "label": "Subscription Reference"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Fire Track Pro",
+ "name": "FL Site Subscription",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "site_host,customer,subscription_reference",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
