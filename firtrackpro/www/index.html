@@ -2,16 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1"
+    />
     <title>FireTrack Pro</title>
-    <meta name="description" content="FireTrack Pro - real-time wildfire intelligence for incident command." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/firtrackpro/portal/assets/index-CHkdUc-5.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/firtrackpro/portal/assets/index-C8i62Erb.css">
+
+    <!-- Favicons (files go in /public) -->
+    <link rel="icon" type="image/svg+xml" href="/assets/firtrackpro/portal/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/assets/firtrackpro/portal/favicon.svg" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/assets/firtrackpro/portal/favicon.ico" type="image/x-icon">
+    <!-- Fallback to silence /favicon.ico 404s in some browsers -->
+    <link rel="alternate icon" href="/assets/firtrackpro/portal/favicon.ico" sizes="any" />
+    <!-- Optional platform extras -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#e11d48" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+    <script type="module" crossorigin src="/assets/firtrackpro/portal/assets/index-C59ZHuQw.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/firtrackpro/portal/assets/index-C9BElt0V.css">
   </head>
-  <body>
-    <div id="firetrack-home-root"></div>
+  <body class="bg-ink-50 text-ink-800 antialiased dark:bg-ink-950 dark:text-ink-100">
+    <div id="root"></div>
   </body>
 </html>

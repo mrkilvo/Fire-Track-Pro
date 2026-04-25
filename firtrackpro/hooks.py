@@ -1,4 +1,4 @@
-# apps/firtrackpro/firtrackpro/hooks.py
+﻿# apps/firtrackpro/firtrackpro/hooks.py
 
 app_name = "firtrackpro"
 app_title = "Fire Track Pro"
@@ -13,6 +13,10 @@ home_page = "index"
 get_website_user_home_page = "firtrackpro.portal_utils.get_website_user_home_page"
 after_install = "firtrackpro.api.site_info.apply_portal_site_defaults"
 after_migrate = "firtrackpro.api.site_info.apply_portal_site_defaults"
+
+on_session_creation = [
+	"firtrackpro.api.site_info.force_portal_home_on_session_creation",
+]
 
 website_route_rules = [
 	{"from_route": "/", "to_route": "index"},
