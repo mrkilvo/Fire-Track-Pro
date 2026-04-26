@@ -1354,21 +1354,38 @@ def _build_setup_items(
 	extra_users: int,
 ) -> list[dict[str, Any]]:
 	items: list[dict[str, Any]] = []
-	if base_price > 0:
-		if not base_item_code:
-			frappe.throw(
-				"base_item_code is required when monthly base price is above zero.", frappe.ValidationError
+	has_base_item = bool(_as_str(base_item_code))
+	has_extra_item = bool(_as_str(extra_item_code))
+
+	# Allow explicit base item selection even when base price is 0 (for $0 recurring templates).
+	if has_base_item:
+		items.append({"item_code": base_item_code, "qty": 1, "rate": max(0.0, base_price)})
+	elif base_price > 0:
+		frappe.throw(
+			"base_item_code is required when monthly base price is above zero.",
+			frappe.ValidationError,
+		)
+
+	if extra_users > 0:
+		if has_extra_item:
+			items.append(
+				{
+					"item_code": extra_item_code,
+					"qty": max(0, extra_users),
+					"rate": max(0.0, extra_user_price),
+				}
 			)
-		items.append({"item_code": base_item_code, "qty": 1, "rate": base_price})
-	if extra_users > 0 and extra_user_price > 0:
-		if not extra_item_code:
+		elif extra_user_price > 0:
 			frappe.throw(
 				"extra_user_item_code is required when extra user monthly billing is above zero.",
 				frappe.ValidationError,
 			)
-		items.append({"item_code": extra_item_code, "qty": extra_users, "rate": extra_user_price})
+
 	if not items:
-		frappe.throw("At least one recurring billing item is required.", frappe.ValidationError)
+		frappe.throw(
+			"At least one recurring billing item is required. Set a base price above $0 or choose a base subscription item code.",
+			frappe.ValidationError,
+		)
 	return items
 
 
