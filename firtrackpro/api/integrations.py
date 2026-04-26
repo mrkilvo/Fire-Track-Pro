@@ -1,4 +1,8 @@
 import json
+import os
+import shlex
+import subprocess
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -44,6 +48,16 @@ FIRELINK_BRIDGE_TOKEN_CANDIDATES = (
 )
 FIRELINK_BASE_FALLBACK = "https://firelink.firetrackpro.com.au"
 FIRELINK_ADDRESS_DOCTYPES = ("FL Address", "Address")
+
+FIRELINK_PROVISION_COMMAND_CANDIDATES = (
+	"firelink_provision_command",
+	"firtrackpro_firelink_provision_command",
+)
+
+FIRELINK_DOMAIN_PROVISION_COMMAND_CANDIDATES = (
+	"firelink_domain_provision_command",
+	"firtrackpro_firelink_domain_provision_command",
+)
 
 PROVIDER_DEFAULTS = {
 	"MYOB": {
@@ -1876,3 +1890,341 @@ def firelink_admin_recurring_billing_bridge(**kwargs):
 	if action == "update":
 		return {"row": _local_update_recurring(kwargs)}
 	frappe.throw("Invalid action", frappe.ValidationError)
+
+
+def _normalize_site_host(raw: Any) -> str:
+	host = _as_str(raw).lower()
+	host = host.replace("http://", "").replace("https://", "")
+	host = host.split("/")[0].strip()
+	return host
+
+
+def _sites_root_path() -> str:
+	current_site_path = frappe.get_site_path()
+	return os.path.dirname(current_site_path)
+
+
+def _site_paths_for_host(site_host: str) -> tuple[str, str]:
+	safe_host = _normalize_site_host(site_host)
+	site_dir = os.path.join(_sites_root_path(), safe_host)
+	config_path = os.path.join(site_dir, "site_config.json")
+	return site_dir, config_path
+
+
+def _site_exists_on_disk(site_host: str) -> bool:
+	site_dir, config_path = _site_paths_for_host(site_host)
+	return os.path.isdir(site_dir) and os.path.isfile(config_path)
+
+
+def _local_site_status_payload(site_host: str) -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+
+	exists = _site_exists_on_disk(host)
+	row = None
+	if frappe.db.exists("DocType", "FL Site Subscription"):
+		row = frappe.db.get_value(
+			"FL Site Subscription",
+			{"site_host": host},
+			["name", "customer"],
+			as_dict=True,
+		)
+
+	if exists:
+		status = "success"
+		message = f"Site {host} exists on this cluster (sites directory + site_config.json found)."
+	else:
+		status = "missing"
+		message = f"Site {host} is not provisioned on this cluster yet (site folder/site_config.json not found)."
+
+	out = {
+		"status": status,
+		"message": message,
+		"site_host": host,
+		"exists_in_k8s": 1 if exists else 0,
+		"provisioned": 1 if exists else 0,
+		"checked_at": datetime.now(timezone.utc).isoformat(),
+	}
+	if row:
+		out["subscription"] = {
+			"name": _as_str(row.get("name")),
+			"customer": _as_str(row.get("customer")),
+		}
+	return out
+
+
+def _provision_command_template() -> str:
+	return _site_conf_value(*FIRELINK_PROVISION_COMMAND_CANDIDATES)
+
+
+def _domain_provision_command_template() -> str:
+	return _site_conf_value(*FIRELINK_DOMAIN_PROVISION_COMMAND_CANDIDATES)
+
+
+def _run_provision_command(**kwargs) -> dict[str, Any]:
+	template = _provision_command_template()
+	if not template:
+		return {
+			"ok": False,
+			"message": (
+				"Provision command is not configured. Set firelink_provision_command in site_config.json "
+				"with placeholders {site_host}, {admin_password}, {namespace}, {release_name}, {values_path}, {image_tag}."
+			),
+		}
+
+	payload = {
+		"site_host": shlex.quote(_normalize_site_host(kwargs.get("site_host"))),
+		"admin_password": shlex.quote(_as_str(kwargs.get("admin_password"))),
+		"namespace": shlex.quote(_as_str(kwargs.get("namespace"))),
+		"release_name": shlex.quote(_as_str(kwargs.get("release_name"))),
+		"values_path": shlex.quote(_as_str(kwargs.get("values_path"))),
+		"image_tag": shlex.quote(_as_str(kwargs.get("image_tag"))),
+	}
+
+	try:
+		command = template.format(**payload)
+	except Exception as exc:
+		return {"ok": False, "message": f"Provision command template is invalid: {exc}"}
+
+	try:
+		res = subprocess.run(
+			command,
+			shell=True,
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=2400,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"Provision command failed to start: {exc}"}
+
+	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+	redacted_pw = _as_str(kwargs.get("admin_password"))
+	if redacted_pw:
+		output = output.replace(redacted_pw, "******")
+	if len(output) > 1200:
+		output = output[-1200:]
+
+	if res.returncode != 0:
+		return {
+			"ok": False,
+			"message": f"Provision command failed with exit code {res.returncode}.",
+			"details": output,
+		}
+	return {
+		"ok": True,
+		"message": "Provision command completed.",
+		"details": output,
+	}
+
+
+def _run_domain_provision_command(**kwargs) -> dict[str, Any]:
+	template = _domain_provision_command_template()
+	if not template:
+		return {
+			"ok": False,
+			"message": (
+				"Domain command is not configured. Set firelink_domain_provision_command in site_config.json "
+				"with placeholders {site_host}, {admin_password}, {namespace}, {release_name}, {values_path}, {image_tag}."
+			),
+		}
+
+	payload = {
+		"site_host": shlex.quote(_normalize_site_host(kwargs.get("site_host"))),
+		"admin_password": shlex.quote(_as_str(kwargs.get("admin_password"))),
+		"namespace": shlex.quote(_as_str(kwargs.get("namespace"))),
+		"release_name": shlex.quote(_as_str(kwargs.get("release_name"))),
+		"values_path": shlex.quote(_as_str(kwargs.get("values_path"))),
+		"image_tag": shlex.quote(_as_str(kwargs.get("image_tag"))),
+	}
+
+	try:
+		command = template.format(**payload)
+	except Exception as exc:
+		return {"ok": False, "message": f"Domain command template is invalid: {exc}"}
+
+	try:
+		res = subprocess.run(
+			command,
+			shell=True,
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=1800,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"Domain command failed to start: {exc}"}
+
+	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+	redacted_pw = _as_str(kwargs.get("admin_password"))
+	if redacted_pw:
+		output = output.replace(redacted_pw, "******")
+	if len(output) > 1200:
+		output = output[-1200:]
+
+	if res.returncode != 0:
+		return {
+			"ok": False,
+			"message": f"Domain command failed with exit code {res.returncode}.",
+			"details": output,
+		}
+	return {
+		"ok": True,
+		"message": "Domain command completed.",
+		"details": output,
+	}
+
+
+def _attach_domain_result(result: dict[str, Any], **kwargs) -> dict[str, Any]:
+	if not _as_bool(kwargs.get("configure_domain")):
+		result["domain_status"] = "skipped"
+		result["domain_message"] = "Domain setup not requested."
+		return result
+	domain_run = _run_domain_provision_command(**kwargs)
+	result["domain_status"] = "success" if _as_bool(domain_run.get("ok")) else "failed"
+	result["domain_message"] = _as_str(domain_run.get("message"))
+	details = _as_str(domain_run.get("details"))
+	if details:
+		result["domain_details"] = details
+	return result
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_site_status(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	if _is_firelink_local_site():
+		return _local_site_status_payload(host)
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_site_status_bridge",
+		_remote_bridge_payload({"site_host": host}),
+	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_site_status_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	return _local_site_status_payload(host)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_provision_site(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	if _is_firelink_local_site():
+		before = _local_site_status_payload(host)
+		if _as_bool(before.get("exists_in_k8s")):
+			return _attach_domain_result(
+				{
+					**before,
+					"status": "success",
+					"message": f"Site {host} is already provisioned.",
+				},
+				**kwargs,
+			)
+
+		run = _run_provision_command(
+			site_host=host,
+			admin_password=kwargs.get("admin_password"),
+			namespace=kwargs.get("namespace"),
+			release_name=kwargs.get("release_name"),
+			values_path=kwargs.get("values_path"),
+			image_tag=kwargs.get("image_tag"),
+		)
+		after = _local_site_status_payload(host)
+		if _as_bool(after.get("exists_in_k8s")):
+			return _attach_domain_result(
+				{
+					**after,
+					"status": "success",
+					"message": _as_str(run.get("message")) or f"Site {host} provisioned.",
+					"details": _as_str(run.get("details")),
+				},
+				**kwargs,
+			)
+		return _attach_domain_result(
+			{
+				**after,
+				"status": "not_ready",
+				"message": _as_str(run.get("message")) or f"Provisioning for {host} did not complete.",
+				"details": _as_str(run.get("details")),
+			},
+			**kwargs,
+		)
+
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_provision_site_bridge",
+		_remote_bridge_payload(
+			{
+				"site_host": host,
+				"admin_password": kwargs.get("admin_password"),
+				"namespace": kwargs.get("namespace"),
+				"release_name": kwargs.get("release_name"),
+				"values_path": kwargs.get("values_path"),
+				"image_tag": kwargs.get("image_tag"),
+				"configure_domain": kwargs.get("configure_domain"),
+			}
+		),
+	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_provision_site_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	before = _local_site_status_payload(host)
+	if _as_bool(before.get("exists_in_k8s")):
+		return _attach_domain_result(
+			{
+				**before,
+				"status": "success",
+				"message": f"Site {host} is already provisioned.",
+			},
+			**kwargs,
+		)
+
+	run = _run_provision_command(
+		site_host=host,
+		admin_password=kwargs.get("admin_password"),
+		namespace=kwargs.get("namespace"),
+		release_name=kwargs.get("release_name"),
+		values_path=kwargs.get("values_path"),
+		image_tag=kwargs.get("image_tag"),
+	)
+	after = _local_site_status_payload(host)
+	if _as_bool(after.get("exists_in_k8s")):
+		return _attach_domain_result(
+			{
+				**after,
+				"status": "success",
+				"message": _as_str(run.get("message")) or f"Site {host} provisioned.",
+				"details": _as_str(run.get("details")),
+			},
+			**kwargs,
+		)
+	return _attach_domain_result(
+		{
+			**after,
+			"status": "not_ready",
+			"message": _as_str(run.get("message")) or f"Provisioning for {host} did not complete.",
+			"details": _as_str(run.get("details")),
+		},
+		**kwargs,
+	)
+
