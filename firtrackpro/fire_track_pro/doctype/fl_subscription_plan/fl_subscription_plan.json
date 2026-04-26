@@ -7,9 +7,15 @@
  "field_order": [
   "plan_name",
   "plan_code",
+  "description",
+  "billing_cycle",
   "base_fee",
   "base_users_included",
   "extra_user_fee",
+  "default_extra_users",
+  "base_item_code",
+  "extra_user_item_code",
+  "sort_order",
   "is_active"
  ],
  "fields": [
@@ -29,6 +35,18 @@
    "unique": 1
   },
   {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "default": "Monthly",
+   "fieldname": "billing_cycle",
+   "fieldtype": "Select",
+   "label": "Billing Cycle",
+   "options": "Monthly\nQuarterly\nAnnual"
+  },
+  {
    "fieldname": "base_fee",
    "fieldtype": "Currency",
    "label": "Base Fee"
@@ -43,6 +61,30 @@
    "fieldname": "extra_user_fee",
    "fieldtype": "Currency",
    "label": "Extra User Fee"
+  },
+  {
+   "default": "0",
+   "fieldname": "default_extra_users",
+   "fieldtype": "Int",
+   "label": "Default Extra Users"
+  },
+  {
+   "fieldname": "base_item_code",
+   "fieldtype": "Link",
+   "label": "Base Item Code",
+   "options": "Item"
+  },
+  {
+   "fieldname": "extra_user_item_code",
+   "fieldtype": "Link",
+   "label": "Extra User Item Code",
+   "options": "Item"
+  },
+  {
+   "default": "0",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
   },
   {
    "default": "1",

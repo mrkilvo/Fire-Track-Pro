@@ -85,6 +85,20 @@ def _as_str(value: Any) -> str:
 	return str(value or "").strip()
 
 
+def _as_int(value: Any, default: int = 0) -> int:
+	try:
+		return int(float(value))
+	except Exception:
+		return int(default)
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+	try:
+		return float(value)
+	except Exception:
+		return float(default)
+
+
 def _safe_json_load(raw: str) -> dict[str, Any]:
 	try:
 		parsed = json.loads(raw or "{}")
@@ -894,9 +908,175 @@ def _sub_fields() -> list[str]:
 		"billing_cycle",
 		"next_invoice_date",
 		"subscription_reference",
+		"quotation_reference",
+		"sales_invoice_reference",
+		"auto_repeat_reference",
+		"base_item_code",
+		"extra_user_item_code",
+		"monthly_base_price",
+		"monthly_extra_user_price",
+		"monthly_extra_users_amount",
+		"monthly_total_amount",
 		"notes",
 		"modified",
 	]
+
+
+def _plan_fields() -> list[str]:
+	return [
+		"name",
+		"plan_name",
+		"plan_code",
+		"description",
+		"billing_cycle",
+		"base_fee",
+		"base_users_included",
+		"extra_user_fee",
+		"default_extra_users",
+		"base_item_code",
+		"extra_user_item_code",
+		"is_active",
+		"sort_order",
+		"modified",
+	]
+
+
+def _billing_cycle_to_frequency(cycle: str) -> str:
+	normalized = _as_str(cycle).lower()
+	if normalized == "annual":
+		return "Yearly"
+	if normalized == "quarterly":
+		return "Quarterly"
+	return "Monthly"
+
+
+def _local_list_plans() -> list[dict[str, Any]]:
+	if not frappe.db.exists("DocType", "FL Subscription Plan"):
+		return []
+	return frappe.get_all(
+		"FL Subscription Plan",
+		fields=_plan_fields(),
+		order_by="sort_order asc, modified desc",
+		limit_page_length=500,
+	)
+
+
+def _local_get_plan(name: str) -> dict[str, Any]:
+	doc = frappe.get_doc("FL Subscription Plan", name)
+	out = doc.as_dict()
+	return {k: out.get(k) for k in _plan_fields()}
+
+
+def _local_create_plan(kwargs: dict[str, Any]) -> dict[str, Any]:
+	plan_code = _as_str(kwargs.get("plan_code"))
+	plan_name = _as_str(kwargs.get("plan_name")) or plan_code
+	if not plan_code:
+		frappe.throw("plan_code is required", frappe.ValidationError)
+	if not plan_name:
+		frappe.throw("plan_name is required", frappe.ValidationError)
+	doc = frappe.get_doc(
+		{
+			"doctype": "FL Subscription Plan",
+			"plan_name": plan_name,
+			"plan_code": plan_code,
+			"description": _as_str(kwargs.get("description")) or None,
+			"billing_cycle": _as_str(kwargs.get("billing_cycle")) or "Monthly",
+			"base_fee": _as_float(kwargs.get("base_fee"), 0.0),
+			"base_users_included": _as_int(kwargs.get("base_users_included"), 0),
+			"extra_user_fee": _as_float(kwargs.get("extra_user_fee"), 0.0),
+			"default_extra_users": _as_int(kwargs.get("default_extra_users"), 0),
+			"base_item_code": _as_str(kwargs.get("base_item_code")) or None,
+			"extra_user_item_code": _as_str(kwargs.get("extra_user_item_code")) or None,
+			"is_active": 1 if _as_bool(kwargs.get("is_active") if "is_active" in kwargs else True) else 0,
+			"sort_order": _as_int(kwargs.get("sort_order"), 0),
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return _local_get_plan(doc.name)
+
+
+def _local_update_plan(kwargs: dict[str, Any]) -> dict[str, Any]:
+	name = _as_str(kwargs.get("name"))
+	if not name:
+		frappe.throw("name is required", frappe.ValidationError)
+	doc = frappe.get_doc("FL Subscription Plan", name)
+	for key in (
+		"plan_name",
+		"plan_code",
+		"description",
+		"billing_cycle",
+		"base_item_code",
+		"extra_user_item_code",
+	):
+		if key in kwargs and kwargs.get(key) is not None:
+			doc.set(key, _as_str(kwargs.get(key)) or None)
+	for key in ("base_fee", "extra_user_fee"):
+		if key in kwargs and kwargs.get(key) is not None and str(kwargs.get(key)).strip() != "":
+			doc.set(key, _as_float(kwargs.get(key), 0.0))
+	for key in ("base_users_included", "default_extra_users", "sort_order"):
+		if key in kwargs and kwargs.get(key) is not None and str(kwargs.get(key)).strip() != "":
+			doc.set(key, _as_int(kwargs.get(key), 0))
+	if "is_active" in kwargs:
+		doc.set("is_active", 1 if _as_bool(kwargs.get("is_active")) else 0)
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+	return _local_get_plan(doc.name)
+
+
+def _local_find_plan_by_code(plan_code: str) -> dict[str, Any] | None:
+	code = _as_str(plan_code)
+	if not code:
+		return None
+	rows = frappe.get_all(
+		"FL Subscription Plan",
+		fields=_plan_fields(),
+		filters={"plan_code": code},
+		limit_page_length=1,
+	)
+	return rows[0] if rows else None
+
+
+def _local_upsert_plan_by_code(kwargs: dict[str, Any]) -> dict[str, Any]:
+	existing = _local_find_plan_by_code(_as_str(kwargs.get("plan_code")))
+	if existing and existing.get("name"):
+		payload = dict(kwargs)
+		payload["name"] = existing.get("name")
+		return _local_update_plan(payload)
+	return _local_create_plan(kwargs)
+
+
+def _local_find_subscription_by_site(site_host: str) -> dict[str, Any] | None:
+	normalized = _normalize_site_host(site_host)
+	if not normalized:
+		return None
+	queries = [normalized]
+	if normalized.startswith("www."):
+		queries.append(normalized[4:])
+	for key in queries:
+		rows = frappe.get_all(
+			"FL Site Subscription",
+			fields=_sub_fields(),
+			filters={"site_host": key},
+			order_by="modified desc",
+			limit_page_length=1,
+		)
+		if rows:
+			return rows[0]
+	return None
+
+
+def _local_upsert_subscription_by_site(kwargs: dict[str, Any]) -> dict[str, Any]:
+	site_host = _normalize_site_host(kwargs.get("site_host"))
+	if not site_host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	existing = _local_find_subscription_by_site(site_host)
+	payload = dict(kwargs)
+	payload["site_host"] = site_host
+	if existing and existing.get("name"):
+		payload["name"] = existing.get("name")
+		return _local_update_subscription(payload)
+	return _local_create_subscription(payload)
 
 
 def _local_list_subscriptions() -> list[dict[str, Any]]:
@@ -979,6 +1159,14 @@ def _local_subscription_quota(site_host: str) -> dict[str, Any]:
 
 
 def _local_create_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
+	base_users = _as_int(kwargs.get("base_users_included"), 0)
+	extra_users = _as_int(kwargs.get("extra_users_purchased"), 0)
+	allowed_total = kwargs.get("allowed_users_total")
+	allowed_users = (
+		_as_int(allowed_total, base_users + extra_users)
+		if str(allowed_total or "").strip()
+		else max(0, base_users + extra_users)
+	)
 	doc = frappe.get_doc(
 		{
 			"doctype": "FL Site Subscription",
@@ -987,12 +1175,21 @@ def _local_create_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 			"customer": _as_str(kwargs.get("customer")),
 			"subscription_plan": _as_str(kwargs.get("subscription_plan")) or None,
 			"subscription_status": _as_str(kwargs.get("subscription_status")) or "Active",
-			"base_users_included": int(float(kwargs.get("base_users_included") or 0)),
-			"extra_users_purchased": int(float(kwargs.get("extra_users_purchased") or 0)),
-			"allowed_users_total": int(float(kwargs.get("allowed_users_total") or 0)),
+			"base_users_included": max(0, base_users),
+			"extra_users_purchased": max(0, extra_users),
+			"allowed_users_total": max(0, allowed_users),
 			"billing_cycle": _as_str(kwargs.get("billing_cycle")) or "Monthly",
 			"next_invoice_date": _as_str(kwargs.get("next_invoice_date")) or None,
 			"subscription_reference": _as_str(kwargs.get("subscription_reference")) or None,
+			"quotation_reference": _as_str(kwargs.get("quotation_reference")) or None,
+			"sales_invoice_reference": _as_str(kwargs.get("sales_invoice_reference")) or None,
+			"auto_repeat_reference": _as_str(kwargs.get("auto_repeat_reference")) or None,
+			"base_item_code": _as_str(kwargs.get("base_item_code")) or None,
+			"extra_user_item_code": _as_str(kwargs.get("extra_user_item_code")) or None,
+			"monthly_base_price": _as_float(kwargs.get("monthly_base_price"), 0.0),
+			"monthly_extra_user_price": _as_float(kwargs.get("monthly_extra_user_price"), 0.0),
+			"monthly_extra_users_amount": _as_float(kwargs.get("monthly_extra_users_amount"), 0.0),
+			"monthly_total_amount": _as_float(kwargs.get("monthly_total_amount"), 0.0),
 			"notes": _as_str(kwargs.get("notes")) or None,
 		}
 	)
@@ -1015,6 +1212,11 @@ def _local_update_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 		"billing_cycle",
 		"next_invoice_date",
 		"subscription_reference",
+		"quotation_reference",
+		"sales_invoice_reference",
+		"auto_repeat_reference",
+		"base_item_code",
+		"extra_user_item_code",
 		"notes",
 	):
 		if key in kwargs and kwargs.get(key) is not None:
@@ -1022,7 +1224,15 @@ def _local_update_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 			doc.set(key, _normalize_site_host(val) if key == "site_host" else (val or None))
 	for key in ("base_users_included", "extra_users_purchased", "allowed_users_total"):
 		if key in kwargs and kwargs.get(key) is not None and str(kwargs.get(key)).strip() != "":
-			doc.set(key, int(float(kwargs.get(key) or 0)))
+			doc.set(key, _as_int(kwargs.get(key), 0))
+	for key in (
+		"monthly_base_price",
+		"monthly_extra_user_price",
+		"monthly_extra_users_amount",
+		"monthly_total_amount",
+	):
+		if key in kwargs and kwargs.get(key) is not None and str(kwargs.get(key)).strip() != "":
+			doc.set(key, _as_float(kwargs.get(key), 0.0))
 	doc.save(ignore_permissions=True)
 	frappe.db.commit()
 	return _local_get_subscription(doc.name)
@@ -1089,6 +1299,407 @@ def _local_update_recurring(kwargs: dict[str, Any]) -> dict[str, Any]:
 	return _local_get_recurring(doc.name)
 
 
+def _resolve_customer_for_setup(kwargs: dict[str, Any]) -> tuple[str, str]:
+	customer = _as_str(kwargs.get("customer"))
+	customer_name = _as_str(kwargs.get("customer_name")) or customer
+	if customer and frappe.db.exists("Customer", customer):
+		doc = frappe.get_doc("Customer", customer)
+		return doc.name, _as_str(doc.customer_name) or doc.name
+	if customer_name:
+		existing = frappe.get_all(
+			"Customer",
+			fields=["name", "customer_name"],
+			filters={"customer_name": customer_name},
+			limit_page_length=1,
+		)
+		if existing:
+			row = existing[0]
+			return _as_str(row.get("name")), _as_str(row.get("customer_name")) or _as_str(row.get("name"))
+	created = frappe.get_doc(
+		{
+			"doctype": "Customer",
+			"customer_name": customer_name or customer,
+			"customer_type": _as_str(kwargs.get("customer_type")) or "Company",
+			"customer_group": _as_str(kwargs.get("customer_group")) or "All Customer Groups",
+			"territory": _as_str(kwargs.get("territory")) or "All Territories",
+			"email_id": _as_str(kwargs.get("email_id")) or None,
+			"mobile_no": _as_str(kwargs.get("mobile_no")) or None,
+			"disabled": 1 if _as_bool(kwargs.get("disabled")) else 0,
+		}
+	)
+	created.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return created.name, _as_str(created.customer_name) or created.name
+
+
+def _resolve_plan_for_setup(plan_name: str) -> dict[str, Any]:
+	if not plan_name:
+		return {}
+	if not frappe.db.exists("DocType", "FL Subscription Plan"):
+		return {}
+	if not frappe.db.exists("FL Subscription Plan", plan_name):
+		frappe.throw(f"Subscription plan '{plan_name}' was not found", frappe.ValidationError)
+	return _local_get_plan(plan_name)
+
+
+def _default_company() -> str:
+	return _as_str(frappe.defaults.get_global_default("company"))
+
+
+def _build_setup_items(
+	base_item_code: str,
+	extra_item_code: str,
+	base_price: float,
+	extra_user_price: float,
+	extra_users: int,
+) -> list[dict[str, Any]]:
+	items: list[dict[str, Any]] = []
+	if base_price > 0:
+		if not base_item_code:
+			frappe.throw(
+				"base_item_code is required when monthly base price is above zero.", frappe.ValidationError
+			)
+		items.append({"item_code": base_item_code, "qty": 1, "rate": base_price})
+	if extra_users > 0 and extra_user_price > 0:
+		if not extra_item_code:
+			frappe.throw(
+				"extra_user_item_code is required when extra user monthly billing is above zero.",
+				frappe.ValidationError,
+			)
+		items.append({"item_code": extra_item_code, "qty": extra_users, "rate": extra_user_price})
+	if not items:
+		frappe.throw("At least one recurring billing item is required.", frappe.ValidationError)
+	return items
+
+
+def _create_quotation_for_setup(
+	customer_name: str,
+	customer_display_name: str,
+	company: str,
+	posting_date: str,
+	items: list[dict[str, Any]],
+	site_host: str,
+	billing_cycle: str,
+	base_users: int,
+	extra_users: int,
+	monthly_total: float,
+) -> str:
+	doc = frappe.get_doc(
+		{
+			"doctype": "Quotation",
+			"quotation_to": "Customer",
+			"party_name": customer_name,
+			"customer_name": customer_display_name or customer_name,
+			"company": company,
+			"transaction_date": posting_date,
+			"valid_till": posting_date,
+			"order_type": "Sales",
+			"items": items,
+			"remarks": "\n".join(
+				[
+					f"FireLink site: {site_host}",
+					f"Billing cycle: {billing_cycle}",
+					f"Included users: {base_users}",
+					f"Extra users: {extra_users}",
+					f"Monthly total: {monthly_total:.2f}",
+				]
+			),
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return doc.name
+
+
+def _create_sales_invoice_for_setup(
+	customer_name: str,
+	company: str,
+	posting_date: str,
+	items: list[dict[str, Any]],
+	site_host: str,
+	billing_cycle: str,
+	base_users: int,
+	extra_users: int,
+	monthly_total: float,
+) -> str:
+	doc = frappe.get_doc(
+		{
+			"doctype": "Sales Invoice",
+			"customer": customer_name,
+			"company": company,
+			"posting_date": posting_date,
+			"due_date": posting_date,
+			"items": items,
+			"remarks": "\n".join(
+				[
+					f"FireLink site: {site_host}",
+					f"Billing cycle: {billing_cycle}",
+					f"Included users: {base_users}",
+					f"Extra users: {extra_users}",
+					f"Monthly total: {monthly_total:.2f}",
+				]
+			),
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return doc.name
+
+
+def _create_auto_repeat_for_setup(invoice_name: str, billing_cycle: str, start_date: str) -> str:
+	doc = frappe.get_doc(
+		{
+			"doctype": "Auto Repeat",
+			"reference_doctype": "Sales Invoice",
+			"reference_document": invoice_name,
+			"frequency": _billing_cycle_to_frequency(billing_cycle),
+			"start_date": start_date,
+			"disabled": 0,
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	frappe.db.commit()
+	return doc.name
+
+
+def _upsert_subscription_for_setup(payload: dict[str, Any]) -> dict[str, Any]:
+	if _is_firelink_local_site():
+		return _local_upsert_subscription_by_site(payload)
+	return (
+		_firelink_remote_bridge_call(
+			"/api/method/firtrackpro.api.integrations.firelink_admin_subscriptions_bridge",
+			_remote_bridge_payload({"action": "upsert_by_site", **payload}),
+		).get("row")
+		or {}
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_list_plans(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	if _is_firelink_local_site():
+		return {"rows": _local_list_plans()}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_plans_bridge",
+		_remote_bridge_payload({"action": "list"}),
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_get_plan(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	name = _as_str(kwargs.get("name"))
+	if not name:
+		frappe.throw("name is required", frappe.ValidationError)
+	if _is_firelink_local_site():
+		return {"row": _local_get_plan(name)}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_plans_bridge",
+		_remote_bridge_payload({"action": "get", "name": name}),
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_create_plan(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	if _is_firelink_local_site():
+		return {"row": _local_create_plan(kwargs)}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_plans_bridge",
+		_remote_bridge_payload({"action": "create", **kwargs}),
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_update_plan(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	if _is_firelink_local_site():
+		return {"row": _local_update_plan(kwargs)}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_plans_bridge",
+		_remote_bridge_payload({"action": "update", **kwargs}),
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_seed_default_plans(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	defaults = [
+		{
+			"plan_name": "Starter",
+			"plan_code": "STARTER",
+			"description": "$295/month includes 5 users, +$30 per extra user",
+			"billing_cycle": "Monthly",
+			"base_fee": 295,
+			"base_users_included": 5,
+			"extra_user_fee": 30,
+			"default_extra_users": 0,
+			"sort_order": 10,
+			"is_active": 1,
+		},
+		{
+			"plan_name": "Growth",
+			"plan_code": "GROWTH",
+			"description": "$595/month includes 20 users, lower per-user pricing",
+			"billing_cycle": "Monthly",
+			"base_fee": 595,
+			"base_users_included": 20,
+			"extra_user_fee": 25,
+			"default_extra_users": 0,
+			"sort_order": 20,
+			"is_active": 1,
+		},
+		{
+			"plan_name": "Pro",
+			"plan_code": "PRO",
+			"description": "$995/month includes 50 users, best value",
+			"billing_cycle": "Monthly",
+			"base_fee": 995,
+			"base_users_included": 50,
+			"extra_user_fee": 20,
+			"default_extra_users": 0,
+			"sort_order": 30,
+			"is_active": 1,
+		},
+	]
+	rows: list[dict[str, Any]] = []
+	for plan in defaults:
+		rows.append(_local_upsert_plan_by_code(plan))
+	return {"rows": rows}
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_setup_subscription(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	site_host = _normalize_site_host(kwargs.get("site_host"))
+	if not site_host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+
+	customer_name, customer_display_name = _resolve_customer_for_setup(kwargs)
+	plan_name = _as_str(kwargs.get("subscription_plan"))
+	plan = _resolve_plan_for_setup(plan_name)
+
+	billing_cycle = _as_str(kwargs.get("billing_cycle")) or _as_str(plan.get("billing_cycle")) or "Monthly"
+	base_users = _as_int(
+		kwargs.get("base_users_included"),
+		_as_int(plan.get("base_users_included"), 0),
+	)
+	extra_users = _as_int(
+		kwargs.get("extra_users_purchased"),
+		_as_int(plan.get("default_extra_users"), 0),
+	)
+	allowed_users = _as_int(
+		kwargs.get("allowed_users_total"),
+		max(0, base_users + extra_users),
+	)
+	base_price = _as_float(kwargs.get("base_price"), _as_float(plan.get("base_fee"), 0.0))
+	extra_user_price = _as_float(kwargs.get("extra_user_price"), _as_float(plan.get("extra_user_fee"), 0.0))
+	base_item_code = _as_str(kwargs.get("base_item_code")) or _as_str(plan.get("base_item_code"))
+	extra_user_item_code = _as_str(kwargs.get("extra_user_item_code")) or _as_str(
+		plan.get("extra_user_item_code")
+	)
+	monthly_extra_users_amount = max(0.0, float(extra_users) * max(0.0, extra_user_price))
+	monthly_total = max(0.0, base_price) + monthly_extra_users_amount
+
+	company = _as_str(kwargs.get("company")) or _default_company()
+	if not company:
+		frappe.throw("company is required", frappe.ValidationError)
+	posting_date = (
+		_as_str(kwargs.get("invoice_start_date") or kwargs.get("posting_date")) or frappe.utils.nowdate()
+	)
+	next_invoice_date = _as_str(kwargs.get("next_invoice_date")) or posting_date
+
+	items = _build_setup_items(
+		base_item_code=base_item_code,
+		extra_item_code=extra_user_item_code,
+		base_price=max(0.0, base_price),
+		extra_user_price=max(0.0, extra_user_price),
+		extra_users=max(0, extra_users),
+	)
+	quotation_name = _create_quotation_for_setup(
+		customer_name=customer_name,
+		customer_display_name=customer_display_name,
+		company=company,
+		posting_date=posting_date,
+		items=items,
+		site_host=site_host,
+		billing_cycle=billing_cycle,
+		base_users=max(0, base_users),
+		extra_users=max(0, extra_users),
+		monthly_total=monthly_total,
+	)
+	invoice_name = _create_sales_invoice_for_setup(
+		customer_name=customer_name,
+		company=company,
+		posting_date=posting_date,
+		items=items,
+		site_host=site_host,
+		billing_cycle=billing_cycle,
+		base_users=max(0, base_users),
+		extra_users=max(0, extra_users),
+		monthly_total=monthly_total,
+	)
+	auto_repeat_name = _create_auto_repeat_for_setup(
+		invoice_name=invoice_name,
+		billing_cycle=billing_cycle,
+		start_date=posting_date,
+	)
+
+	subscription_notes = _as_str(kwargs.get("notes"))
+	if not subscription_notes:
+		subscription_notes = "\n".join(
+			[
+				f"Plan: {plan_name or 'Custom'}",
+				f"Quotation: {quotation_name}",
+				f"Sales Invoice: {invoice_name}",
+				f"Auto Repeat: {auto_repeat_name}",
+				f"Billing cycle: {billing_cycle}",
+				f"Included users: {max(0, base_users)}",
+				f"Extra users: {max(0, extra_users)}",
+			]
+		)
+
+	sub_payload = {
+		"site_host": site_host,
+		"site_alias": _as_str(kwargs.get("site_alias")) or customer_display_name,
+		"customer": customer_name,
+		"subscription_plan": plan_name or None,
+		"subscription_status": _as_str(kwargs.get("subscription_status")) or "Active",
+		"base_users_included": max(0, base_users),
+		"extra_users_purchased": max(0, extra_users),
+		"allowed_users_total": max(0, allowed_users),
+		"billing_cycle": billing_cycle,
+		"next_invoice_date": next_invoice_date,
+		"subscription_reference": _as_str(kwargs.get("subscription_reference")) or invoice_name,
+		"quotation_reference": quotation_name,
+		"sales_invoice_reference": invoice_name,
+		"auto_repeat_reference": auto_repeat_name,
+		"base_item_code": base_item_code or None,
+		"extra_user_item_code": extra_user_item_code or None,
+		"monthly_base_price": max(0.0, base_price),
+		"monthly_extra_user_price": max(0.0, extra_user_price),
+		"monthly_extra_users_amount": monthly_extra_users_amount,
+		"monthly_total_amount": monthly_total,
+		"notes": subscription_notes,
+	}
+	subscription_row = _upsert_subscription_for_setup(sub_payload)
+
+	return {
+		"customer": customer_name,
+		"customer_display_name": customer_display_name,
+		"quotation": quotation_name,
+		"sales_invoice": invoice_name,
+		"auto_repeat": auto_repeat_name,
+		"subscription": subscription_row,
+	}
+
+
 @frappe.whitelist(methods=["POST"])
 def firelink_admin_list_subscriptions(**kwargs):
 	if frappe.session.user == "Guest":
@@ -1141,6 +1752,24 @@ def firelink_admin_update_subscription(**kwargs):
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_plans_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	action = _as_str(kwargs.get("action")).lower()
+	if action == "list":
+		return {"rows": _local_list_plans()}
+	if action == "get":
+		return {"row": _local_get_plan(_as_str(kwargs.get("name")))}
+	if action == "create":
+		return {"row": _local_create_plan(kwargs)}
+	if action == "update":
+		return {"row": _local_update_plan(kwargs)}
+	if action == "upsert_by_code":
+		return {"row": _local_upsert_plan_by_code(kwargs)}
+	frappe.throw("Invalid action", frappe.ValidationError)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def firelink_admin_subscriptions_bridge(**kwargs):
 	if not _is_valid_bridge_call():
 		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
@@ -1158,6 +1787,10 @@ def firelink_admin_subscriptions_bridge(**kwargs):
 		return {"row": _local_create_subscription(kwargs)}
 	if action == "update":
 		return {"row": _local_update_subscription(kwargs)}
+	if action == "find_by_site":
+		return {"row": _local_find_subscription_by_site(_as_str(kwargs.get("site_host")))}
+	if action == "upsert_by_site":
+		return {"row": _local_upsert_subscription_by_site(kwargs)}
 	frappe.throw("Invalid action", frappe.ValidationError)
 
 

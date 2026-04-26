@@ -16,6 +16,15 @@
   "billing_cycle",
   "next_invoice_date",
   "subscription_reference",
+  "quotation_reference",
+  "sales_invoice_reference",
+  "auto_repeat_reference",
+  "base_item_code",
+  "extra_user_item_code",
+  "monthly_base_price",
+  "monthly_extra_user_price",
+  "monthly_extra_users_amount",
+  "monthly_total_amount",
   "notes"
  ],
  "fields": [
@@ -95,6 +104,56 @@
    "fieldname": "subscription_reference",
    "fieldtype": "Data",
    "label": "Subscription Reference"
+  },
+  {
+   "fieldname": "quotation_reference",
+   "fieldtype": "Link",
+   "label": "Quotation Reference",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "sales_invoice_reference",
+   "fieldtype": "Link",
+   "label": "Sales Invoice Reference",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "auto_repeat_reference",
+   "fieldtype": "Link",
+   "label": "Auto Repeat Reference",
+   "options": "Auto Repeat"
+  },
+  {
+   "fieldname": "base_item_code",
+   "fieldtype": "Link",
+   "label": "Base Item Code",
+   "options": "Item"
+  },
+  {
+   "fieldname": "extra_user_item_code",
+   "fieldtype": "Link",
+   "label": "Extra User Item Code",
+   "options": "Item"
+  },
+  {
+   "fieldname": "monthly_base_price",
+   "fieldtype": "Currency",
+   "label": "Monthly Base Price"
+  },
+  {
+   "fieldname": "monthly_extra_user_price",
+   "fieldtype": "Currency",
+   "label": "Monthly Extra User Price"
+  },
+  {
+   "fieldname": "monthly_extra_users_amount",
+   "fieldtype": "Currency",
+   "label": "Monthly Extra Users Amount"
+  },
+  {
+   "fieldname": "monthly_total_amount",
+   "fieldtype": "Currency",
+   "label": "Monthly Total Amount"
   },
   {
    "fieldname": "notes",
