@@ -884,12 +884,17 @@ def _sub_fields() -> list[str]:
 	return [
 		"name",
 		"site_host",
+		"site_alias",
 		"customer",
+		"subscription_plan",
 		"subscription_status",
 		"base_users_included",
 		"extra_users_purchased",
 		"allowed_users_total",
 		"billing_cycle",
+		"next_invoice_date",
+		"subscription_reference",
+		"notes",
 		"modified",
 	]
 
@@ -977,13 +982,18 @@ def _local_create_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 	doc = frappe.get_doc(
 		{
 			"doctype": "FL Site Subscription",
-			"site_host": _as_str(kwargs.get("site_host")).lower(),
+			"site_host": _normalize_site_host(kwargs.get("site_host")),
+			"site_alias": _as_str(kwargs.get("site_alias")) or None,
 			"customer": _as_str(kwargs.get("customer")),
+			"subscription_plan": _as_str(kwargs.get("subscription_plan")) or None,
 			"subscription_status": _as_str(kwargs.get("subscription_status")) or "Active",
 			"base_users_included": int(float(kwargs.get("base_users_included") or 0)),
 			"extra_users_purchased": int(float(kwargs.get("extra_users_purchased") or 0)),
 			"allowed_users_total": int(float(kwargs.get("allowed_users_total") or 0)),
 			"billing_cycle": _as_str(kwargs.get("billing_cycle")) or "Monthly",
+			"next_invoice_date": _as_str(kwargs.get("next_invoice_date")) or None,
+			"subscription_reference": _as_str(kwargs.get("subscription_reference")) or None,
+			"notes": _as_str(kwargs.get("notes")) or None,
 		}
 	)
 	doc.insert(ignore_permissions=True)
@@ -996,10 +1006,20 @@ def _local_update_subscription(kwargs: dict[str, Any]) -> dict[str, Any]:
 	if not name:
 		frappe.throw("name is required", frappe.ValidationError)
 	doc = frappe.get_doc("FL Site Subscription", name)
-	for key in ("site_host", "customer", "subscription_status", "billing_cycle"):
+	for key in (
+		"site_host",
+		"site_alias",
+		"customer",
+		"subscription_plan",
+		"subscription_status",
+		"billing_cycle",
+		"next_invoice_date",
+		"subscription_reference",
+		"notes",
+	):
 		if key in kwargs and kwargs.get(key) is not None:
 			val = _as_str(kwargs.get(key))
-			doc.set(key, val.lower() if key == "site_host" else val)
+			doc.set(key, _normalize_site_host(val) if key == "site_host" else (val or None))
 	for key in ("base_users_included", "extra_users_purchased", "allowed_users_total"):
 		if key in kwargs and kwargs.get(key) is not None and str(kwargs.get(key)).strip() != "":
 			doc.set(key, int(float(kwargs.get(key) or 0)))
@@ -1131,9 +1151,7 @@ def firelink_admin_subscriptions_bridge(**kwargs):
 		return {"row": _local_get_subscription(_as_str(kwargs.get("name")))}
 	if action == "quota":
 		site_host = (
-			_as_str(kwargs.get("site_host"))
-			or _as_str(kwargs.get("host"))
-			or _as_str(kwargs.get("site"))
+			_as_str(kwargs.get("site_host")) or _as_str(kwargs.get("host")) or _as_str(kwargs.get("site"))
 		)
 		return {"quota": _local_subscription_quota(site_host)}
 	if action == "create":
