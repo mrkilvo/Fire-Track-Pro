@@ -61,6 +61,11 @@ FIRELINK_DOMAIN_PROVISION_COMMAND_CANDIDATES = (
 	"firtrackpro_firelink_domain_provision_command",
 )
 
+FIRELINK_SITE_STATUS_COMMAND_CANDIDATES = (
+	"firelink_site_status_command",
+	"firtrackpro_firelink_site_status_command",
+)
+
 PROVIDER_DEFAULTS = {
 	"MYOB": {
 		"baseUrl": "https://api.myob.com/accountright",
@@ -2330,7 +2335,6 @@ def _local_site_status_payload(site_host: str) -> dict[str, Any]:
 	if not host:
 		frappe.throw("site_host is required", frappe.ValidationError)
 
-	exists = _site_exists_on_disk(host)
 	row = None
 	if frappe.db.exists("DocType", "FL Site Subscription"):
 		row = frappe.db.get_value(
@@ -2340,6 +2344,37 @@ def _local_site_status_payload(site_host: str) -> dict[str, Any]:
 			as_dict=True,
 		)
 
+	status_run = _run_site_status_command(
+		site_host=host,
+		namespace=_as_str(getattr(frappe.local, "form_dict", {}).get("namespace")),
+		release_name=_as_str(getattr(frappe.local, "form_dict", {}).get("release_name")),
+		values_path=_as_str(getattr(frappe.local, "form_dict", {}).get("values_path")),
+	)
+	if status_run.get("configured"):
+		exists = 1 if _as_bool(status_run.get("exists")) else 0
+		status = "success" if exists else "missing"
+		message = _as_str(status_run.get("message")) or (
+			f"Site {host} exists in k8s." if exists else f"Site {host} is not provisioned in k8s yet."
+		)
+		out = {
+			"status": status,
+			"message": message,
+			"site_host": host,
+			"exists_in_k8s": exists,
+			"provisioned": exists,
+			"checked_at": datetime.now(timezone.utc).isoformat(),
+		}
+		details = _as_str(status_run.get("details"))
+		if details:
+			out["details"] = details
+		if row:
+			out["subscription"] = {
+				"name": _as_str(row.get("name")),
+				"customer": _as_str(row.get("customer")),
+			}
+		return out
+
+	exists = _site_exists_on_disk(host)
 	if exists:
 		status = "success"
 		message = f"Site {host} exists on this cluster (sites directory + site_config.json found)."
@@ -2361,6 +2396,70 @@ def _local_site_status_payload(site_host: str) -> dict[str, Any]:
 			"customer": _as_str(row.get("customer")),
 		}
 	return out
+
+
+def _site_status_command_template() -> str:
+	return _site_conf_value(*FIRELINK_SITE_STATUS_COMMAND_CANDIDATES)
+
+
+def _run_site_status_command(**kwargs) -> dict[str, Any]:
+	template = _site_status_command_template()
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not template:
+		return {"configured": False}
+	if not host:
+		return {"configured": True, "ok": False, "exists": False, "message": "site_host is required"}
+
+	payload = {
+		"site_host": shlex.quote(host),
+		"namespace": shlex.quote(_as_str(kwargs.get("namespace"))),
+		"release_name": shlex.quote(_as_str(kwargs.get("release_name"))),
+		"values_path": shlex.quote(_as_str(kwargs.get("values_path"))),
+		"image_tag": shlex.quote(_as_str(kwargs.get("image_tag"))),
+	}
+
+	try:
+		command = template.format(**payload)
+	except Exception as exc:
+		return {"configured": True, "ok": False, "exists": False, "message": f"Status command template is invalid: {exc}"}
+
+	try:
+		res = subprocess.run(
+			command,
+			shell=True,
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=600,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"configured": True, "ok": False, "exists": False, "message": f"Status command failed to start: {exc}"}
+
+	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+	if len(output) > 1200:
+		output = output[-1200:]
+	text_out = output.lower()
+	exists = "status_ok" in text_out
+	if "status_missing" in text_out:
+		exists = False
+
+	if res.returncode != 0 and "status_ok" not in text_out and "status_missing" not in text_out:
+		return {
+			"configured": True,
+			"ok": False,
+			"exists": False,
+			"message": f"Status command failed with exit code {res.returncode}.",
+			"details": output,
+		}
+
+	return {
+		"configured": True,
+		"ok": True,
+		"exists": bool(exists),
+		"message": "Site exists in k8s." if exists else "Site is not provisioned in k8s yet.",
+		"details": output,
+	}
 
 
 def _provision_command_template() -> str:
