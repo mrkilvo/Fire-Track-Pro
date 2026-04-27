@@ -1320,11 +1320,98 @@ def _local_update_recurring(kwargs: dict[str, Any]) -> dict[str, Any]:
 	return _local_get_recurring(doc.name)
 
 
+def _pick_non_group_link_value(doctype: str, requested: Any, fallback: str = "") -> str:
+	requested_name = _as_str(requested)
+	fallback_name = _as_str(fallback)
+
+	def _is_group(name: str) -> bool:
+		if not name:
+			return False
+		if not frappe.db.exists(doctype, name):
+			return False
+		try:
+			return _as_bool(frappe.db.get_value(doctype, name, "is_group"))
+		except Exception:
+			return False
+
+	for candidate in (requested_name, fallback_name):
+		if candidate and frappe.db.exists(doctype, candidate) and not _is_group(candidate):
+			return candidate
+
+	try:
+		rows = frappe.get_all(
+			doctype,
+			fields=["name"],
+			filters={"is_group": 0},
+			order_by="name asc",
+			limit_page_length=1,
+		)
+		if rows:
+			return _as_str(rows[0].get("name"))
+	except Exception:
+		pass
+
+	rows = frappe.get_all(
+		doctype,
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=1,
+	)
+	if rows:
+		return _as_str(rows[0].get("name"))
+
+	return requested_name or fallback_name
+
+
 def _resolve_customer_for_setup(kwargs: dict[str, Any]) -> tuple[str, str]:
+	requested_customer_type = _as_str(kwargs.get("customer_type")) or "Company"
+	requested_customer_group = _pick_non_group_link_value("Customer Group", kwargs.get("customer_group"), "Commercial")
+	requested_territory = _pick_non_group_link_value("Territory", kwargs.get("territory"), "Australia")
+	requested_email = _as_str(kwargs.get("email_id")) or None
+	requested_mobile = _as_str(kwargs.get("mobile_no")) or None
+
+	def _ensure_customer_defaults(doc: Any) -> None:
+		changed = False
+
+		if not _as_str(getattr(doc, "customer_type", "")):
+			doc.customer_type = requested_customer_type
+			changed = True
+
+		resolved_group = _pick_non_group_link_value(
+			"Customer Group",
+			getattr(doc, "customer_group", None),
+			requested_customer_group,
+		)
+		if resolved_group and _as_str(getattr(doc, "customer_group", "")) != resolved_group:
+			doc.customer_group = resolved_group
+			changed = True
+
+		resolved_territory = _pick_non_group_link_value(
+			"Territory",
+			getattr(doc, "territory", None),
+			requested_territory,
+		)
+		if resolved_territory and _as_str(getattr(doc, "territory", "")) != resolved_territory:
+			doc.territory = resolved_territory
+			changed = True
+
+		if requested_email and not _as_str(getattr(doc, "email_id", "")):
+			doc.email_id = requested_email
+			changed = True
+
+		if requested_mobile and not _as_str(getattr(doc, "mobile_no", "")):
+			doc.mobile_no = requested_mobile
+			changed = True
+
+		if changed:
+			doc.save(ignore_permissions=True)
+			frappe.db.commit()
+
 	customer = _as_str(kwargs.get("customer"))
 	customer_name = _as_str(kwargs.get("customer_name")) or customer
 	if customer and frappe.db.exists("Customer", customer):
 		doc = frappe.get_doc("Customer", customer)
+		_ensure_customer_defaults(doc)
 		return doc.name, _as_str(doc.customer_name) or doc.name
 	if customer_name:
 		existing = frappe.get_all(
@@ -1335,16 +1422,18 @@ def _resolve_customer_for_setup(kwargs: dict[str, Any]) -> tuple[str, str]:
 		)
 		if existing:
 			row = existing[0]
-			return _as_str(row.get("name")), _as_str(row.get("customer_name")) or _as_str(row.get("name"))
+			doc = frappe.get_doc("Customer", _as_str(row.get("name")))
+			_ensure_customer_defaults(doc)
+			return doc.name, _as_str(doc.customer_name) or doc.name
 	created = frappe.get_doc(
 		{
 			"doctype": "Customer",
 			"customer_name": customer_name or customer,
-			"customer_type": _as_str(kwargs.get("customer_type")) or "Company",
-			"customer_group": _as_str(kwargs.get("customer_group")) or "All Customer Groups",
-			"territory": _as_str(kwargs.get("territory")) or "All Territories",
-			"email_id": _as_str(kwargs.get("email_id")) or None,
-			"mobile_no": _as_str(kwargs.get("mobile_no")) or None,
+			"customer_type": requested_customer_type,
+			"customer_group": requested_customer_group,
+			"territory": requested_territory,
+			"email_id": requested_email,
+			"mobile_no": requested_mobile,
 			"disabled": 1 if _as_bool(kwargs.get("disabled")) else 0,
 		}
 	)
@@ -1569,8 +1658,8 @@ def _auto_link_signup_customer_and_subscription(signup_doc: Any) -> dict[str, An
 			{
 				"customer_name": _as_str(getattr(signup_doc, "company_legal_name", "")),
 				"customer_type": "Company",
-				"customer_group": "All Customer Groups",
-				"territory": "All Territories",
+				"customer_group": "Commercial",
+				"territory": "Australia",
 				"email_id": _as_str(getattr(signup_doc, "contact_email", "")),
 				"mobile_no": _as_str(getattr(signup_doc, "contact_phone", "")),
 			}
