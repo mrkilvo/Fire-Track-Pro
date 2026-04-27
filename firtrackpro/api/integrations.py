@@ -1362,20 +1362,48 @@ def _signup_request_summary(row: dict[str, Any]) -> dict[str, Any]:
 	return {
 		"name": _as_str(row.get("name")),
 		"request_status": _as_str(row.get("request_status")) or "New",
-		"company_legal_name": _as_str(row.get("company_legal_name")),
-		"contact_name": _as_str(row.get("contact_name")),
-		"contact_email": _as_str(row.get("contact_email")),
-		"requested_site_host": _as_str(row.get("requested_site_host")),
+		"submitted_on": _as_str(row.get("submitted_on")),
 		"subscription_plan": _as_str(row.get("subscription_plan")),
+		"plan_code": _as_str(row.get("plan_code")),
+		"company_legal_name": _as_str(row.get("company_legal_name")),
+		"company_trading_name": _as_str(row.get("company_trading_name")),
+		"company_abn": _as_str(row.get("company_abn")),
+		"company_address": _as_str(row.get("company_address")),
+		"company_logo": _as_str(row.get("company_logo")),
 		"current_system": _as_str(row.get("current_system")),
 		"migration_scope": _as_str(row.get("migration_scope")),
 		"import_data_required": 1 if _as_bool(row.get("import_data_required")) else 0,
+		"migration_notes": _as_str(row.get("migration_notes")),
+		"team_size": _as_int(row.get("team_size"), 0),
+		"base_users_included": _as_int(row.get("base_users_included"), 0),
+		"extra_users_requested": _as_int(row.get("extra_users_requested"), 0),
+		"extra_user_rate": _as_float(row.get("extra_user_rate"), 0.0),
+		"monthly_base_price": _as_float(row.get("monthly_base_price"), 0.0),
 		"monthly_total_estimate": _as_float(row.get("monthly_total_estimate"), 0.0),
-		"company_logo": _as_str(row.get("company_logo")),
+		"domain_option": _as_str(row.get("domain_option")),
+		"requested_subdomain": _as_str(row.get("requested_subdomain")),
+		"standard_site_host": _as_str(row.get("standard_site_host")),
 		"standard_host_status": _as_str(row.get("standard_host_status")),
+		"custom_domain": _as_str(row.get("custom_domain")),
+		"requested_site_host": _as_str(row.get("requested_site_host")),
 		"requested_host_status": _as_str(row.get("requested_host_status")),
+		"availability_checked_on": _as_str(row.get("availability_checked_on")),
+		"contact_name": _as_str(row.get("contact_name")),
+		"contact_email": _as_str(row.get("contact_email")),
+		"contact_phone": _as_str(row.get("contact_phone")),
+		"accounts_email": _as_str(row.get("accounts_email")),
+		"admin_first_name": _as_str(row.get("admin_first_name")),
+		"admin_last_name": _as_str(row.get("admin_last_name")),
+		"admin_username": _as_str(row.get("admin_username")),
+		"admin_password_set": 1 if _as_str(row.get("admin_password")) else 0,
+		"managed_website_option": 1 if _as_bool(row.get("managed_website_option")) else 0,
+		"voip_option": 1 if _as_bool(row.get("voip_option")) else 0,
 		"provisioning_readiness": _as_str(row.get("provisioning_readiness")),
+		"activation_notes": _as_str(row.get("activation_notes")),
+		"source_site": _as_str(row.get("source_site")),
+		"source_url": _as_str(row.get("source_url")),
 	}
+
 
 
 def _sanitize_signup_subdomain(value: Any) -> str:
@@ -1525,6 +1553,70 @@ def _local_signup_availability_payload(kwargs: dict[str, Any]) -> dict[str, Any]
 	}
 
 
+def _auto_link_signup_customer_and_subscription(signup_doc: Any) -> dict[str, Any]:
+	if not frappe.db.exists("DocType", "Customer") or not frappe.db.exists("DocType", "FL Site Subscription"):
+		return {
+			"linked_setup_created": 0,
+			"linked_setup_message": "Customer or FL Site Subscription doctype is not installed.",
+		}
+	try:
+		customer_name, customer_display_name = _resolve_customer_for_setup(
+			{
+				"customer_name": _as_str(getattr(signup_doc, "company_legal_name", "")),
+				"customer_type": "Company",
+				"customer_group": "All Customer Groups",
+				"territory": "All Territories",
+				"email_id": _as_str(getattr(signup_doc, "contact_email", "")),
+				"mobile_no": _as_str(getattr(signup_doc, "contact_phone", "")),
+			}
+		)
+		base_users = max(0, _as_int(getattr(signup_doc, "base_users_included", 0), 0))
+		extra_users = max(0, _as_int(getattr(signup_doc, "extra_users_requested", 0), 0))
+		allowed_users = max(0, _as_int(getattr(signup_doc, "team_size", base_users + extra_users), base_users + extra_users))
+		base_price = max(0.0, _as_float(getattr(signup_doc, "monthly_base_price", 0), 0.0))
+		extra_user_rate = max(0.0, _as_float(getattr(signup_doc, "extra_user_rate", 0), 0.0))
+		monthly_extra_users_amount = float(extra_users) * extra_user_rate
+		monthly_total_amount = max(
+			0.0,
+			_as_float(
+				getattr(signup_doc, "monthly_total_estimate", 0),
+				base_price + monthly_extra_users_amount,
+			),
+		)
+		subscription_row = _local_upsert_subscription_by_site(
+			{
+				"site_host": _as_str(getattr(signup_doc, "requested_site_host", "")),
+				"site_alias": customer_display_name or customer_name,
+				"customer": customer_name,
+				"subscription_plan": _as_str(getattr(signup_doc, "subscription_plan", "")) or None,
+				"subscription_status": "Trial",
+				"base_users_included": base_users,
+				"extra_users_purchased": extra_users,
+				"allowed_users_total": allowed_users,
+				"billing_cycle": "Monthly",
+				"monthly_base_price": base_price,
+				"monthly_extra_user_price": extra_user_rate,
+				"monthly_extra_users_amount": monthly_extra_users_amount,
+				"monthly_total_amount": monthly_total_amount,
+				"subscription_reference": _as_str(getattr(signup_doc, "name", "")) or None,
+				"notes": "Auto-linked from signup request {0}".format(_as_str(getattr(signup_doc, "name", ""))),
+			}
+		)
+		return {
+			"linked_setup_created": 1,
+			"linked_customer": customer_name,
+			"linked_customer_display_name": customer_display_name,
+			"linked_subscription": _as_str(subscription_row.get("name")),
+			"linked_setup_message": "Customer and subscription prepared for provisioning.",
+		}
+	except Exception as exc:
+		frappe.log_error(frappe.get_traceback(), "FireLink Signup Auto Link Failed")
+		return {
+			"linked_setup_created": 0,
+			"linked_setup_message": _as_str(exc) or "Auto link failed.",
+		}
+
+
 def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str, Any] | None = None) -> dict[str, Any]:
 	if not frappe.db.exists("DocType", "FL Signup Request"):
 		frappe.throw("FL Signup Request doctype is not installed", frappe.ValidationError)
@@ -1550,10 +1642,19 @@ def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str,
 
 	team_size = max(1, _as_int(kwargs.get("company_size") or kwargs.get("team_size"), 1))
 	base_users = max(0, _as_int(plan.get("base_users_included"), 0))
-	extra_user_rate = max(0.0, _as_float(plan.get("extra_user_fee"), 0.0))
-	extra_users_requested = max(0, team_size - base_users)
-	monthly_base_price = max(0.0, _as_float(plan.get("base_fee"), 0.0))
-	monthly_total_estimate = monthly_base_price + float(extra_users_requested) * extra_user_rate
+	extra_user_rate = max(
+		0.0,
+		_as_float(kwargs.get("extra_user_rate"), _as_float(plan.get("extra_user_fee"), 0.0)),
+	)
+	extra_users_requested = max(0, _as_int(kwargs.get("extra_users_requested"), max(0, team_size - base_users)))
+	monthly_base_price = max(0.0, _as_float(kwargs.get("monthly_base_price"), _as_float(plan.get("base_fee"), 0.0)))
+	monthly_total_estimate = max(
+		0.0,
+		_as_float(
+			kwargs.get("monthly_total_estimate"),
+			monthly_base_price + float(extra_users_requested) * extra_user_rate,
+		),
+	)
 	availability = _local_signup_availability_payload(
 		{
 			"domain_option": domain_option,
@@ -1612,14 +1713,20 @@ def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str,
 			"voip_option": 1 if _as_bool(kwargs.get("voip_option")) else 0,
 			"provisioning_readiness": "Ready for Manual Provisioning",
 			"activation_notes": _as_str(kwargs.get("activation_notes")) or None,
-			"source_site": _as_str(getattr(frappe.local, "site", "")) or None,
+			"source_site": _as_str(kwargs.get("source_site")) or _as_str(getattr(frappe.local, "site", "")) or None,
 			"source_url": _as_str(kwargs.get("source_url")) or None,
 		}
 	)
 	doc.insert(ignore_permissions=True)
 	_attach_signup_logo(doc, logo_payload or {})
+	auto_link = _auto_link_signup_customer_and_subscription(doc)
+	if _as_bool(auto_link.get("linked_setup_created")):
+		doc.provisioning_readiness = "Customer + Subscription Ready"
+		doc.save(ignore_permissions=True)
 	frappe.db.commit()
-	return _signup_request_summary(doc.as_dict())
+	result = _signup_request_summary(doc.as_dict())
+	result.update(auto_link)
+	return result
 
 
 def _default_company() -> str:
