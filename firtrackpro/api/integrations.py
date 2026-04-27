@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import shlex
@@ -7,6 +8,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 import frappe
+from frappe.utils.file_manager import save_file
 
 try:
 	import requests
@@ -1356,6 +1358,270 @@ def _resolve_plan_for_setup(plan_name: str) -> dict[str, Any]:
 	return _local_get_plan(plan_name)
 
 
+def _signup_request_summary(row: dict[str, Any]) -> dict[str, Any]:
+	return {
+		"name": _as_str(row.get("name")),
+		"request_status": _as_str(row.get("request_status")) or "New",
+		"company_legal_name": _as_str(row.get("company_legal_name")),
+		"contact_name": _as_str(row.get("contact_name")),
+		"contact_email": _as_str(row.get("contact_email")),
+		"requested_site_host": _as_str(row.get("requested_site_host")),
+		"subscription_plan": _as_str(row.get("subscription_plan")),
+		"current_system": _as_str(row.get("current_system")),
+		"migration_scope": _as_str(row.get("migration_scope")),
+		"import_data_required": 1 if _as_bool(row.get("import_data_required")) else 0,
+		"monthly_total_estimate": _as_float(row.get("monthly_total_estimate"), 0.0),
+		"company_logo": _as_str(row.get("company_logo")),
+		"standard_host_status": _as_str(row.get("standard_host_status")),
+		"requested_host_status": _as_str(row.get("requested_host_status")),
+		"provisioning_readiness": _as_str(row.get("provisioning_readiness")),
+	}
+
+
+def _sanitize_signup_subdomain(value: Any) -> str:
+	raw = _as_str(value).lower()
+	clean = "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in raw)
+	while "--" in clean:
+		clean = clean.replace("--", "-")
+	return clean.strip("-")
+
+
+def _sanitize_signup_file_name(value: Any) -> str:
+	name = os.path.basename(_as_str(value)) or "company-logo"
+	clean = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in name)
+	return clean.strip("-") or "company-logo"
+
+
+def _extract_signup_logo_payload(kwargs: dict[str, Any]) -> dict[str, Any]:
+	content = _as_str(kwargs.get("company_logo_content_base64"))
+	filename = _sanitize_signup_file_name(kwargs.get("company_logo_filename") or kwargs.get("company_logo_name"))
+	mime_type = _as_str(kwargs.get("company_logo_mime_type")) or "application/octet-stream"
+	if content:
+		return {
+			"content_base64": content,
+			"filename": filename,
+			"mime_type": mime_type,
+		}
+
+	upload = getattr(getattr(frappe, "request", None), "files", None)
+	file_obj = upload.get("company_logo_file") if upload else None
+	if not file_obj:
+		return {}
+	file_bytes = file_obj.read()
+	if not file_bytes:
+		return {}
+	return {
+		"content_base64": base64.b64encode(file_bytes).decode("ascii"),
+		"filename": _sanitize_signup_file_name(getattr(file_obj, "filename", "") or filename),
+		"mime_type": _as_str(getattr(file_obj, "content_type", "")) or mime_type,
+	}
+
+
+def _attach_signup_logo(doc: Any, logo_payload: dict[str, Any]) -> None:
+	content = _as_str((logo_payload or {}).get("content_base64"))
+	if not content:
+		return
+	try:
+		file_bytes = base64.b64decode(content)
+	except Exception:
+		frappe.throw("Invalid company logo upload", frappe.ValidationError)
+	filename = _sanitize_signup_file_name((logo_payload or {}).get("filename") or "company-logo")
+	saved = save_file(filename, file_bytes, doc.doctype, doc.name, is_private=0)
+	file_url = ""
+	if isinstance(saved, dict):
+		file_url = _as_str(saved.get("file_url") or saved.get("name"))
+	else:
+		file_url = _as_str(getattr(saved, "file_url", "") or getattr(saved, "name", ""))
+	if file_url:
+		doc.company_logo = file_url
+		doc.save(ignore_permissions=True)
+
+
+def _local_signup_host_availability(site_host: Any, exclude_request_name: str = "") -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return {
+			"site_host": "",
+			"available": False,
+			"status": "Invalid",
+			"reason": "A valid site host is required.",
+		}
+
+	if _site_exists_on_disk(host):
+		return {
+			"site_host": host,
+			"available": False,
+			"status": "Provisioned",
+			"reason": "This domain is already provisioned on our system.",
+		}
+
+	if frappe.db.exists("DocType", "FL Site Subscription"):
+		subscription_name = frappe.db.get_value("FL Site Subscription", {"site_host": host}, "name")
+		if subscription_name:
+			return {
+				"site_host": host,
+				"available": False,
+				"status": "Subscribed",
+				"reason": f"This domain is already linked to subscription {subscription_name}.",
+			}
+
+	if frappe.db.exists("DocType", "FL Signup Request"):
+		rows = frappe.get_all(
+			"FL Signup Request",
+			fields=["name", "request_status"],
+			filters={"requested_site_host": host},
+			order_by="modified desc",
+			limit_page_length=5,
+		)
+		for row in rows:
+			row_name = _as_str(row.get("name"))
+			if exclude_request_name and row_name == exclude_request_name:
+				continue
+			status = _as_str(row.get("request_status")) or "New"
+			if status.lower() == "rejected":
+				continue
+			return {
+				"site_host": host,
+				"available": False,
+				"status": "Reserved",
+				"reason": f"This domain is already attached to signup request {row_name}.",
+				"request_name": row_name,
+				"request_status": status,
+			}
+
+	return {
+		"site_host": host,
+		"available": True,
+		"status": "Available",
+		"reason": "This domain is available for a new FireTrack signup request.",
+	}
+
+
+def _local_signup_availability_payload(kwargs: dict[str, Any]) -> dict[str, Any]:
+	domain_option = _as_str(kwargs.get("domain_option")) or "subdomain"
+	requested_subdomain = _sanitize_signup_subdomain(kwargs.get("requested_subdomain") or kwargs.get("subdomain_name"))
+	custom_domain = _normalize_site_host(kwargs.get("custom_domain"))
+	if not requested_subdomain:
+		frappe.throw("requested_subdomain is required", frappe.ValidationError)
+	if domain_option == "custom" and not custom_domain:
+		frappe.throw("custom_domain is required when custom domain is selected", frappe.ValidationError)
+
+	standard_site_host = f"{requested_subdomain}.firetrackpro.com.au"
+	requested_site_host = custom_domain if domain_option == "custom" and custom_domain else standard_site_host
+	standard_check = _local_signup_host_availability(standard_site_host)
+	requested_check = _local_signup_host_availability(requested_site_host)
+	available = bool(standard_check.get("available")) and bool(requested_check.get("available"))
+	return {
+		"available": available,
+		"domain_option": domain_option,
+		"requested_subdomain": requested_subdomain,
+		"standard_site_host": standard_site_host,
+		"requested_site_host": requested_site_host,
+		"standard_host_status": _as_str(standard_check.get("status")),
+		"requested_host_status": _as_str(requested_check.get("status")),
+		"standard_host_reason": _as_str(standard_check.get("reason")),
+		"requested_host_reason": _as_str(requested_check.get("reason")),
+		"checked_at": frappe.utils.now_datetime().isoformat(),
+	}
+
+
+def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+	if not frappe.db.exists("DocType", "FL Signup Request"):
+		frappe.throw("FL Signup Request doctype is not installed", frappe.ValidationError)
+
+	plan_name = _as_str(kwargs.get("subscription_plan"))
+	plan = _resolve_plan_for_setup(plan_name)
+	company_legal_name = _as_str(kwargs.get("company_legal_name"))
+	contact_name = _as_str(kwargs.get("contact_name"))
+	contact_email = _as_str(kwargs.get("contact_email"))
+	domain_option = _as_str(kwargs.get("domain_option")) or "subdomain"
+	requested_subdomain = _sanitize_signup_subdomain(kwargs.get("requested_subdomain") or kwargs.get("subdomain_name"))
+	custom_domain = _normalize_site_host(kwargs.get("custom_domain"))
+	if not company_legal_name:
+		frappe.throw("company_legal_name is required", frappe.ValidationError)
+	if not contact_name:
+		frappe.throw("contact_name is required", frappe.ValidationError)
+	if not contact_email:
+		frappe.throw("contact_email is required", frappe.ValidationError)
+	if not requested_subdomain:
+		frappe.throw("requested_subdomain is required", frappe.ValidationError)
+	if domain_option == "custom" and not custom_domain:
+		frappe.throw("custom_domain is required when custom domain is selected", frappe.ValidationError)
+
+	team_size = max(1, _as_int(kwargs.get("company_size") or kwargs.get("team_size"), 1))
+	base_users = max(0, _as_int(plan.get("base_users_included"), 0))
+	extra_user_rate = max(0.0, _as_float(plan.get("extra_user_fee"), 0.0))
+	extra_users_requested = max(0, team_size - base_users)
+	monthly_base_price = max(0.0, _as_float(plan.get("base_fee"), 0.0))
+	monthly_total_estimate = monthly_base_price + float(extra_users_requested) * extra_user_rate
+	availability = _local_signup_availability_payload(
+		{
+			"domain_option": domain_option,
+			"requested_subdomain": requested_subdomain,
+			"custom_domain": custom_domain,
+		}
+	)
+	if not _as_bool(availability.get("available")):
+		frappe.throw(
+			_as_str(availability.get("requested_host_reason"))
+			or _as_str(availability.get("standard_host_reason"))
+			or "The requested domain is not available.",
+			frappe.ValidationError,
+		)
+	standard_site_host = _as_str(availability.get("standard_site_host"))
+	requested_site_host = _as_str(availability.get("requested_site_host"))
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "FL Signup Request",
+			"request_status": "Reviewed",
+			"submitted_on": frappe.utils.now_datetime(),
+			"subscription_plan": plan_name or None,
+			"plan_code": _as_str(plan.get("plan_code")) or None,
+			"company_legal_name": company_legal_name,
+			"company_trading_name": _as_str(kwargs.get("company_trading_name")) or None,
+			"company_abn": _as_str(kwargs.get("company_abn")) or None,
+			"company_address": _as_str(kwargs.get("company_address")) or None,
+			"current_system": _as_str(kwargs.get("current_system")) or None,
+			"migration_scope": _as_str(kwargs.get("migration_scope")) or None,
+			"import_data_required": 1 if _as_bool(kwargs.get("import_data_required")) else 0,
+			"migration_notes": _as_str(kwargs.get("migration_notes")) or None,
+			"team_size": team_size,
+			"base_users_included": base_users,
+			"extra_users_requested": extra_users_requested,
+			"extra_user_rate": extra_user_rate,
+			"monthly_base_price": monthly_base_price,
+			"monthly_total_estimate": monthly_total_estimate,
+			"domain_option": domain_option,
+			"requested_subdomain": requested_subdomain,
+			"standard_site_host": standard_site_host,
+			"standard_host_status": _as_str(availability.get("standard_host_status")) or "Available",
+			"custom_domain": custom_domain or None,
+			"requested_site_host": requested_site_host,
+			"requested_host_status": _as_str(availability.get("requested_host_status")) or "Available",
+			"availability_checked_on": frappe.utils.now_datetime(),
+			"contact_name": contact_name,
+			"contact_email": contact_email,
+			"contact_phone": _as_str(kwargs.get("contact_phone")) or None,
+			"accounts_email": _as_str(kwargs.get("accounts_email")) or None,
+			"admin_first_name": _as_str(kwargs.get("admin_first_name")) or None,
+			"admin_last_name": _as_str(kwargs.get("admin_last_name")) or None,
+			"admin_username": _as_str(kwargs.get("admin_username")) or "Administrator",
+			"admin_password": _as_str(kwargs.get("admin_password")) or None,
+			"managed_website_option": 1 if _as_bool(kwargs.get("managed_website_option")) else 0,
+			"voip_option": 1 if _as_bool(kwargs.get("voip_option")) else 0,
+			"provisioning_readiness": "Ready for Manual Provisioning",
+			"activation_notes": _as_str(kwargs.get("activation_notes")) or None,
+			"source_site": _as_str(getattr(frappe.local, "site", "")) or None,
+			"source_url": _as_str(kwargs.get("source_url")) or None,
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	_attach_signup_logo(doc, logo_payload or {})
+	frappe.db.commit()
+	return _signup_request_summary(doc.as_dict())
+
+
 def _default_company() -> str:
 	return _as_str(frappe.defaults.get_global_default("company"))
 
@@ -1780,6 +2046,42 @@ def firelink_admin_update_subscription(**kwargs):
 		"/api/method/firtrackpro.api.integrations.firelink_admin_subscriptions_bridge",
 		_remote_bridge_payload({"action": "update", **kwargs}),
 	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_public_submit_signup_request(**kwargs):
+	logo_payload = _extract_signup_logo_payload(kwargs)
+	if _is_firelink_local_site():
+		return {"row": _local_create_signup_request(kwargs, logo_payload)}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_public_signup_request_bridge",
+		_remote_bridge_payload({**kwargs, **logo_payload}),
+	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_public_signup_request_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	logo_payload = _extract_signup_logo_payload(kwargs)
+	return {"row": _local_create_signup_request(kwargs, logo_payload)}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_public_check_signup_availability(**kwargs):
+	if _is_firelink_local_site():
+		return {"row": _local_signup_availability_payload(kwargs)}
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_public_signup_availability_bridge",
+		_remote_bridge_payload(kwargs),
+	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_public_signup_availability_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	return {"row": _local_signup_availability_payload(kwargs)}
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -2227,4 +2529,3 @@ def firelink_admin_provision_site_bridge(**kwargs):
 		},
 		**kwargs,
 	)
-

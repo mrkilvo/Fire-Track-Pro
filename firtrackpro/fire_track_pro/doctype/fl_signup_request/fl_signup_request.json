@@ -1,0 +1,299 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:FSR-{#####}",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "request_status",
+  "submitted_on",
+  "subscription_plan",
+  "plan_code",
+  "company_legal_name",
+  "company_trading_name",
+  "company_logo",
+  "company_abn",
+  "company_address",
+  "current_system",
+  "migration_scope",
+  "import_data_required",
+  "migration_notes",
+  "team_size",
+  "base_users_included",
+  "extra_users_requested",
+  "extra_user_rate",
+  "monthly_base_price",
+  "monthly_total_estimate",
+  "domain_option",
+  "requested_subdomain",
+  "standard_site_host",
+  "standard_host_status",
+  "custom_domain",
+  "requested_site_host",
+  "requested_host_status",
+  "availability_checked_on",
+  "contact_name",
+  "contact_email",
+  "contact_phone",
+  "accounts_email",
+  "admin_first_name",
+  "admin_last_name",
+  "admin_username",
+  "admin_password",
+  "managed_website_option",
+  "voip_option",
+  "provisioning_readiness",
+  "activation_notes",
+  "source_site",
+  "source_url"
+ ],
+ "fields": [
+  {
+   "default": "New",
+   "fieldname": "request_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Request Status",
+   "options": "New\nReviewed\nProvisioning\nProvisioned\nRejected",
+   "reqd": 1
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Submitted On"
+  },
+  {
+   "fieldname": "subscription_plan",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Subscription Plan",
+   "options": "FL Subscription Plan",
+   "reqd": 1
+  },
+  {
+   "fieldname": "plan_code",
+   "fieldtype": "Data",
+   "label": "Plan Code"
+  },
+  {
+   "fieldname": "company_legal_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Company Legal Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company_trading_name",
+   "fieldtype": "Data",
+   "label": "Company Trading Name"
+  },
+  {
+   "fieldname": "company_logo",
+   "fieldtype": "Attach Image",
+   "label": "Company Logo"
+  },
+  {
+   "fieldname": "company_abn",
+   "fieldtype": "Data",
+   "label": "ABN / ACN"
+  },
+  {
+   "fieldname": "company_address",
+   "fieldtype": "Small Text",
+   "label": "Company Address"
+  },
+  {
+   "fieldname": "current_system",
+   "fieldtype": "Data",
+   "label": "Current System"
+  },
+  {
+   "fieldname": "migration_scope",
+   "fieldtype": "Select",
+   "label": "Migration Scope",
+   "options": "None / fresh start\nCustomers and contacts\nSites and assets\nJobs and service history\nQuotes, invoices, and finance\nFull migration planning"
+  },
+  {
+   "fieldname": "import_data_required",
+   "fieldtype": "Check",
+   "label": "Import Data Required"
+  },
+  {
+   "fieldname": "migration_notes",
+   "fieldtype": "Small Text",
+   "label": "Migration Notes"
+  },
+  {
+   "fieldname": "team_size",
+   "fieldtype": "Int",
+   "label": "Team Size"
+  },
+  {
+   "fieldname": "base_users_included",
+   "fieldtype": "Int",
+   "label": "Base Users Included"
+  },
+  {
+   "fieldname": "extra_users_requested",
+   "fieldtype": "Int",
+   "label": "Extra Users Requested"
+  },
+  {
+   "fieldname": "extra_user_rate",
+   "fieldtype": "Currency",
+   "label": "Extra User Rate"
+  },
+  {
+   "fieldname": "monthly_base_price",
+   "fieldtype": "Currency",
+   "label": "Monthly Base Price"
+  },
+  {
+   "fieldname": "monthly_total_estimate",
+   "fieldtype": "Currency",
+   "label": "Monthly Total Estimate"
+  },
+  {
+   "fieldname": "domain_option",
+   "fieldtype": "Select",
+   "label": "Domain Option",
+   "options": "subdomain\ncustom",
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_subdomain",
+   "fieldtype": "Data",
+   "label": "Requested Subdomain",
+   "reqd": 1
+  },
+  {
+   "fieldname": "standard_site_host",
+   "fieldtype": "Data",
+   "label": "Standard Site Host"
+  },
+  {
+   "fieldname": "standard_host_status",
+   "fieldtype": "Data",
+   "label": "Standard Host Status"
+  },
+  {
+   "fieldname": "custom_domain",
+   "fieldtype": "Data",
+   "label": "Custom Domain"
+  },
+  {
+   "fieldname": "requested_site_host",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Requested Site Host",
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_host_status",
+   "fieldtype": "Data",
+   "label": "Requested Host Status"
+  },
+  {
+   "fieldname": "availability_checked_on",
+   "fieldtype": "Datetime",
+   "label": "Availability Checked On"
+  },
+  {
+   "fieldname": "contact_name",
+   "fieldtype": "Data",
+   "label": "Contact Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_email",
+   "fieldtype": "Data",
+   "label": "Contact Email",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_phone",
+   "fieldtype": "Data",
+   "label": "Contact Phone"
+  },
+  {
+   "fieldname": "accounts_email",
+   "fieldtype": "Data",
+   "label": "Accounts Email"
+  },
+  {
+   "fieldname": "admin_first_name",
+   "fieldtype": "Data",
+   "label": "Admin First Name"
+  },
+  {
+   "fieldname": "admin_last_name",
+   "fieldtype": "Data",
+   "label": "Admin Last Name"
+  },
+  {
+   "fieldname": "admin_username",
+   "fieldtype": "Data",
+   "label": "Admin Username"
+  },
+  {
+   "fieldname": "admin_password",
+   "fieldtype": "Password",
+   "label": "Admin Password"
+  },
+  {
+   "fieldname": "managed_website_option",
+   "fieldtype": "Check",
+   "label": "Managed Website Option"
+  },
+  {
+   "fieldname": "voip_option",
+   "fieldtype": "Check",
+   "label": "VOIP Option"
+  },
+  {
+   "fieldname": "provisioning_readiness",
+   "fieldtype": "Data",
+   "label": "Provisioning Readiness"
+  },
+  {
+   "fieldname": "activation_notes",
+   "fieldtype": "Small Text",
+   "label": "Activation Notes"
+  },
+  {
+   "fieldname": "source_site",
+   "fieldtype": "Data",
+   "label": "Source Site"
+  },
+  {
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Fire Track Pro",
+ "name": "FL Signup Request",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "company_legal_name,contact_name,contact_email,requested_site_host",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "company_legal_name"
+}
