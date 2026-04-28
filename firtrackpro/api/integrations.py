@@ -383,7 +383,11 @@ def _strong_match(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
 	row_place_id = _norm(existing.get("place_id"))
 	in_place_id = _norm(incoming.get("place_id"))
 	if in_place_id:
-		return bool(row_place_id and row_place_id == in_place_id)
+		if row_place_id:
+			return row_place_id == in_place_id
+		# If existing row has no place_id yet, still allow strong textual/location match
+		# so we don't create duplicate addresses/properties for the same site.
+		# place_id can be backfilled later.
 	row_post = _norm(existing.get("pincode"))
 	in_post = _norm(incoming.get("pincode"))
 	if row_post and in_post and row_post == in_post:

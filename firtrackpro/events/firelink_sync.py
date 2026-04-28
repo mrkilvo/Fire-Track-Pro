@@ -118,11 +118,18 @@ def sync_defect_after_save(doc, method=None):
 		if not firelink_property_id:
 			return
 
+		firelink_asset_id = ""
+		linked_asset_id = _safe_str(getattr(doc, "defect_asset", ""))
+		if linked_asset_id and frappe.db.exists("FT Asset", linked_asset_id):
+			firelink_asset_id = _safe_str(
+				frappe.db.get_value("FT Asset", linked_asset_id, "asset_firelink_uid")
+			)
+
 		result = (
 			integrations.firelink_defect_sync(
 				local_defect_id=_safe_str(doc.name),
 				firelink_property_id=firelink_property_id,
-				firelink_asset_id=_safe_str(getattr(doc, "defect_asset", "")),
+				firelink_asset_id=firelink_asset_id or None,
 				defect_template_code=_safe_str(getattr(doc, "defect_template", "")),
 				defect_severity=_safe_str(getattr(doc, "defect_severity", "")),
 				defect_status=_safe_str(getattr(doc, "defect_status", "")),
