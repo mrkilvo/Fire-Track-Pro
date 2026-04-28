@@ -165,9 +165,43 @@ def _get_google_maps_api_key() -> str:
 		value = _as_str(site_conf.get(key) or frappe.conf.get(key))
 		if value:
 			return value
+	for key in ("GOOGLE_MAPS_API_KEY", "GOOGLE_PLACES_API_KEY"):
+		value = _as_str(os.environ.get(key))
+		if value:
+			return value
+	try:
+		common_site_config_path = frappe.get_site_path("..", "common_site_config.json")
+		if common_site_config_path and os.path.exists(common_site_config_path):
+			with open(common_site_config_path, "r", encoding="utf-8") as handle:
+				common_conf = json.load(handle) or {}
+			if isinstance(common_conf, dict):
+				for key in GOOGLE_KEY_CANDIDATES:
+					value = _as_str(common_conf.get(key))
+					if value:
+						return value
+	except Exception:
+		pass
+	try:
+		reference_site = _as_str(
+			site_conf.get("google_maps_reference_site")
+			or frappe.conf.get("google_maps_reference_site")
+			or "dev.firetrackpro.com.au"
+		)
+		if reference_site:
+			reference_config_path = frappe.get_site_path("..", reference_site, "site_config.json")
+			if reference_config_path and os.path.exists(reference_config_path):
+				with open(reference_config_path, "r", encoding="utf-8") as handle:
+					reference_conf = json.load(handle) or {}
+				if isinstance(reference_conf, dict):
+					for key in GOOGLE_KEY_CANDIDATES:
+						value = _as_str(reference_conf.get(key))
+						if value:
+							return value
+	except Exception:
+		pass
 	frappe.throw(
 		"Google Places API key is not configured on the server. "
-		"Set google_maps_api_key in site_config.json.",
+		"Set google_maps_api_key in site_config.json, common_site_config.json, or GOOGLE_MAPS_API_KEY.",
 		frappe.ValidationError,
 	)
 
