@@ -823,10 +823,7 @@ def firelink_address_resolve_or_create(**kwargs):
 	except Exception:
 		pass
 
-	frappe.throw(
-		"FireLink bridge endpoint is unavailable on firelink.firetrackpro.com.au. "
-		"Deploy this updated firtrackpro app to FireLink and configure firelink_bridge_token on both sites."
-	)
+	# Bridge unavailable: continue into legacy fallback for compatibility.
 
 	# Legacy fallback for benches where bridge is not yet deployed.
 	_firelink_login_if_needed()
