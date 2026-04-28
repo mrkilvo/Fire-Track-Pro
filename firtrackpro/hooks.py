@@ -1,4 +1,4 @@
-﻿# apps/firtrackpro/firtrackpro/hooks.py
+# apps/firtrackpro/firtrackpro/hooks.py
 
 app_name = "firtrackpro"
 app_title = "Fire Track Pro"
@@ -41,5 +41,17 @@ doc_events = {
 	"FT Schedule": {
 		"after_insert": "firtrackpro.events.jobs.emit_schedule_inserted",
 		"on_update": "firtrackpro.events.jobs.emit_schedule_updated",
+	},
+	"FT Property": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_property_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_property_after_save",
+	},
+	"FT Asset": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_asset_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_asset_after_save",
+	},
+	"FT Defect": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_defect_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_defect_after_save",
 	},
 }

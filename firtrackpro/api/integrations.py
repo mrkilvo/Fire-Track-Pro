@@ -172,7 +172,7 @@ def _get_google_maps_api_key() -> str:
 	try:
 		common_site_config_path = frappe.get_site_path("..", "common_site_config.json")
 		if common_site_config_path and os.path.exists(common_site_config_path):
-			with open(common_site_config_path, "r", encoding="utf-8") as handle:
+			with open(common_site_config_path, encoding="utf-8") as handle:
 				common_conf = json.load(handle) or {}
 			if isinstance(common_conf, dict):
 				for key in GOOGLE_KEY_CANDIDATES:
@@ -190,7 +190,7 @@ def _get_google_maps_api_key() -> str:
 		if reference_site:
 			reference_config_path = frappe.get_site_path("..", reference_site, "site_config.json")
 			if reference_config_path and os.path.exists(reference_config_path):
-				with open(reference_config_path, "r", encoding="utf-8") as handle:
+				with open(reference_config_path, encoding="utf-8") as handle:
 					reference_conf = json.load(handle) or {}
 				if isinstance(reference_conf, dict):
 					for key in GOOGLE_KEY_CANDIDATES:
@@ -1399,7 +1399,9 @@ def _pick_non_group_link_value(doctype: str, requested: Any, fallback: str = "")
 
 def _resolve_customer_for_setup(kwargs: dict[str, Any]) -> tuple[str, str]:
 	requested_customer_type = _as_str(kwargs.get("customer_type")) or "Company"
-	requested_customer_group = _pick_non_group_link_value("Customer Group", kwargs.get("customer_group"), "Commercial")
+	requested_customer_group = _pick_non_group_link_value(
+		"Customer Group", kwargs.get("customer_group"), "Commercial"
+	)
 	requested_territory = _pick_non_group_link_value("Territory", kwargs.get("territory"), "Australia")
 	requested_email = _as_str(kwargs.get("email_id")) or None
 	requested_mobile = _as_str(kwargs.get("mobile_no")) or None
@@ -1533,7 +1535,6 @@ def _signup_request_summary(row: dict[str, Any]) -> dict[str, Any]:
 	}
 
 
-
 def _sanitize_signup_subdomain(value: Any) -> str:
 	raw = _as_str(value).lower()
 	clean = "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in raw)
@@ -1550,7 +1551,9 @@ def _sanitize_signup_file_name(value: Any) -> str:
 
 def _extract_signup_logo_payload(kwargs: dict[str, Any]) -> dict[str, Any]:
 	content = _as_str(kwargs.get("company_logo_content_base64"))
-	filename = _sanitize_signup_file_name(kwargs.get("company_logo_filename") or kwargs.get("company_logo_name"))
+	filename = _sanitize_signup_file_name(
+		kwargs.get("company_logo_filename") or kwargs.get("company_logo_name")
+	)
 	mime_type = _as_str(kwargs.get("company_logo_mime_type")) or "application/octet-stream"
 	if content:
 		return {
@@ -1655,7 +1658,9 @@ def _local_signup_host_availability(site_host: Any, exclude_request_name: str = 
 
 def _local_signup_availability_payload(kwargs: dict[str, Any]) -> dict[str, Any]:
 	domain_option = _as_str(kwargs.get("domain_option")) or "subdomain"
-	requested_subdomain = _sanitize_signup_subdomain(kwargs.get("requested_subdomain") or kwargs.get("subdomain_name"))
+	requested_subdomain = _sanitize_signup_subdomain(
+		kwargs.get("requested_subdomain") or kwargs.get("subdomain_name")
+	)
 	custom_domain = _normalize_site_host(kwargs.get("custom_domain"))
 	if not requested_subdomain:
 		frappe.throw("requested_subdomain is required", frappe.ValidationError)
@@ -1700,7 +1705,9 @@ def _auto_link_signup_customer_and_subscription(signup_doc: Any) -> dict[str, An
 		)
 		base_users = max(0, _as_int(getattr(signup_doc, "base_users_included", 0), 0))
 		extra_users = max(0, _as_int(getattr(signup_doc, "extra_users_requested", 0), 0))
-		allowed_users = max(0, _as_int(getattr(signup_doc, "team_size", base_users + extra_users), base_users + extra_users))
+		allowed_users = max(
+			0, _as_int(getattr(signup_doc, "team_size", base_users + extra_users), base_users + extra_users)
+		)
 		base_price = max(0.0, _as_float(getattr(signup_doc, "monthly_base_price", 0), 0.0))
 		extra_user_rate = max(0.0, _as_float(getattr(signup_doc, "extra_user_rate", 0), 0.0))
 		monthly_extra_users_amount = float(extra_users) * extra_user_rate
@@ -1727,7 +1734,9 @@ def _auto_link_signup_customer_and_subscription(signup_doc: Any) -> dict[str, An
 				"monthly_extra_users_amount": monthly_extra_users_amount,
 				"monthly_total_amount": monthly_total_amount,
 				"subscription_reference": _as_str(getattr(signup_doc, "name", "")) or None,
-				"notes": "Auto-linked from signup request {0}".format(_as_str(getattr(signup_doc, "name", ""))),
+				"notes": "Auto-linked from signup request {0}".format(
+					_as_str(getattr(signup_doc, "name", ""))
+				),
 			}
 		)
 		return {
@@ -1745,7 +1754,9 @@ def _auto_link_signup_customer_and_subscription(signup_doc: Any) -> dict[str, An
 		}
 
 
-def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def _local_create_signup_request(
+	kwargs: dict[str, Any], logo_payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
 	if not frappe.db.exists("DocType", "FL Signup Request"):
 		frappe.throw("FL Signup Request doctype is not installed", frappe.ValidationError)
 
@@ -1755,7 +1766,9 @@ def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str,
 	contact_name = _as_str(kwargs.get("contact_name"))
 	contact_email = _as_str(kwargs.get("contact_email"))
 	domain_option = _as_str(kwargs.get("domain_option")) or "subdomain"
-	requested_subdomain = _sanitize_signup_subdomain(kwargs.get("requested_subdomain") or kwargs.get("subdomain_name"))
+	requested_subdomain = _sanitize_signup_subdomain(
+		kwargs.get("requested_subdomain") or kwargs.get("subdomain_name")
+	)
 	custom_domain = _normalize_site_host(kwargs.get("custom_domain"))
 	if not company_legal_name:
 		frappe.throw("company_legal_name is required", frappe.ValidationError)
@@ -1774,8 +1787,12 @@ def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str,
 		0.0,
 		_as_float(kwargs.get("extra_user_rate"), _as_float(plan.get("extra_user_fee"), 0.0)),
 	)
-	extra_users_requested = max(0, _as_int(kwargs.get("extra_users_requested"), max(0, team_size - base_users)))
-	monthly_base_price = max(0.0, _as_float(kwargs.get("monthly_base_price"), _as_float(plan.get("base_fee"), 0.0)))
+	extra_users_requested = max(
+		0, _as_int(kwargs.get("extra_users_requested"), max(0, team_size - base_users))
+	)
+	monthly_base_price = max(
+		0.0, _as_float(kwargs.get("monthly_base_price"), _as_float(plan.get("base_fee"), 0.0))
+	)
 	monthly_total_estimate = max(
 		0.0,
 		_as_float(
@@ -1841,7 +1858,9 @@ def _local_create_signup_request(kwargs: dict[str, Any], logo_payload: dict[str,
 			"voip_option": 1 if _as_bool(kwargs.get("voip_option")) else 0,
 			"provisioning_readiness": "Ready for Manual Provisioning",
 			"activation_notes": _as_str(kwargs.get("activation_notes")) or None,
-			"source_site": _as_str(kwargs.get("source_site")) or _as_str(getattr(frappe.local, "site", "")) or None,
+			"source_site": _as_str(kwargs.get("source_site"))
+			or _as_str(getattr(frappe.local, "site", ""))
+			or None,
 			"source_url": _as_str(kwargs.get("source_url")) or None,
 		}
 	)
@@ -2503,7 +2522,9 @@ def _local_site_status_payload(site_host: str) -> dict[str, Any]:
 		message = f"Site {host} exists on this cluster (sites directory + site_config.json found)."
 	else:
 		status = "missing"
-		message = f"Site {host} is not provisioned on this cluster yet (site folder/site_config.json not found)."
+		message = (
+			f"Site {host} is not provisioned on this cluster yet (site folder/site_config.json not found)."
+		)
 
 	out = {
 		"status": status,
@@ -2544,7 +2565,12 @@ def _run_site_status_command(**kwargs) -> dict[str, Any]:
 	try:
 		command = template.format(**payload)
 	except Exception as exc:
-		return {"configured": True, "ok": False, "exists": False, "message": f"Status command template is invalid: {exc}"}
+		return {
+			"configured": True,
+			"ok": False,
+			"exists": False,
+			"message": f"Status command template is invalid: {exc}",
+		}
 
 	try:
 		res = subprocess.run(
@@ -2557,7 +2583,12 @@ def _run_site_status_command(**kwargs) -> dict[str, Any]:
 			cwd=_sites_root_path(),
 		)
 	except Exception as exc:
-		return {"configured": True, "ok": False, "exists": False, "message": f"Status command failed to start: {exc}"}
+		return {
+			"configured": True,
+			"ok": False,
+			"exists": False,
+			"message": f"Status command failed to start: {exc}",
+		}
 
 	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
 	if len(output) > 1200:
@@ -2858,3 +2889,308 @@ def firelink_admin_provision_site_bridge(**kwargs):
 		},
 		**kwargs,
 	)
+
+
+def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
+	address_id = _as_str(payload.get("firelink_address_id")) or _as_str(payload.get("address_id"))
+	if not address_id:
+		frappe.throw("firelink_address_id is required", frappe.ValidationError)
+	property_id = _as_str(payload.get("firelink_property_id")) or address_id
+	display_name = (
+		_as_str(payload.get("property_display_name")) or _as_str(payload.get("address_title")) or address_id
+	)
+	address_json = {
+		"address_id": address_id,
+		"address_title": _as_str(payload.get("address_title")),
+		"address_line1": _as_str(payload.get("address_line1")),
+		"address_line2": _as_str(payload.get("address_line2")),
+		"city": _as_str(payload.get("city")),
+		"state": _as_str(payload.get("state")),
+		"pincode": _as_str(payload.get("pincode")),
+		"country": _as_str(payload.get("country")) or "Australia",
+	}
+	lat = _as_float(payload.get("property_lat"), 0.0)
+	lng = _as_float(payload.get("property_lng"), 0.0)
+
+	if frappe.db.exists("FL Property", property_id):
+		doc = frappe.get_doc("FL Property", property_id)
+		doc.property_display_name = display_name
+		doc.property_address_json = json.dumps(address_json, separators=(",", ":"))
+		doc.property_lat = lat
+		doc.property_lng = lng
+		doc.save(ignore_permissions=True)
+		created = False
+	else:
+		doc = frappe.get_doc(
+			{
+				"doctype": "FL Property",
+				"name": property_id,
+				"property_display_name": display_name,
+				"property_address_json": json.dumps(address_json, separators=(",", ":")),
+				"property_lat": lat,
+				"property_lng": lng,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		created = True
+	return {"firelink_property_id": doc.name, "created": created}
+
+
+def _upsert_fl_asset_local(payload: dict[str, Any]) -> dict[str, Any]:
+	property_id = _as_str(payload.get("firelink_property_id"))
+	if not property_id:
+		frappe.throw("firelink_property_id is required", frappe.ValidationError)
+	asset_id = _as_str(payload.get("firelink_asset_id")) or _as_str(payload.get("local_asset_id"))
+	if not asset_id:
+		frappe.throw("local_asset_id is required", frappe.ValidationError)
+	values = {
+		"asset_property": property_id,
+		"asset_type_code": _as_str(payload.get("asset_type_code")),
+		"asset_label": _as_str(payload.get("asset_label")),
+		"asset_serial": _as_str(payload.get("asset_serial")),
+		"asset_identifier": _as_str(payload.get("asset_identifier")),
+		"asset_status": _as_str(payload.get("asset_status")),
+	}
+	if frappe.db.exists("FL Asset", asset_id):
+		doc = frappe.get_doc("FL Asset", asset_id)
+		for fieldname, value in values.items():
+			setattr(doc, fieldname, value)
+		doc.save(ignore_permissions=True)
+		created = False
+	else:
+		doc = frappe.get_doc({"doctype": "FL Asset", "name": asset_id, **values})
+		doc.insert(ignore_permissions=True)
+		created = True
+	return {"firelink_asset_id": doc.name, "created": created}
+
+
+def _upsert_fl_defect_local(payload: dict[str, Any]) -> dict[str, Any]:
+	property_id = _as_str(payload.get("firelink_property_id"))
+	if not property_id:
+		frappe.throw("firelink_property_id is required", frappe.ValidationError)
+	defect_id = _as_str(payload.get("firelink_defect_id")) or _as_str(payload.get("local_defect_id"))
+	if not defect_id:
+		frappe.throw("local_defect_id is required", frappe.ValidationError)
+	values = {
+		"defect_property": property_id,
+		"defect_asset": _as_str(payload.get("firelink_asset_id")),
+		"defect_template_code": _as_str(payload.get("defect_template_code")),
+		"defect_severity": _as_str(payload.get("defect_severity")),
+		"defect_status": _as_str(payload.get("defect_status")),
+		"defect_summary": _as_str(payload.get("defect_summary"))[:140],
+	}
+	if frappe.db.exists("FL Defect", defect_id):
+		doc = frappe.get_doc("FL Defect", defect_id)
+		for fieldname, value in values.items():
+			setattr(doc, fieldname, value)
+		doc.save(ignore_permissions=True)
+		created = False
+	else:
+		doc = frappe.get_doc({"doctype": "FL Defect", "name": defect_id, **values})
+		doc.insert(ignore_permissions=True)
+		created = True
+	return {"firelink_defect_id": doc.name, "created": created}
+
+
+def _upsert_remote_fl_doctype(doctype: str, name: str, values: dict[str, Any]) -> dict[str, Any]:
+	if not name:
+		frappe.throw(f"{doctype} name is required", frappe.ValidationError)
+	filtered = {k: v for k, v in (values or {}).items() if v is not None}
+	filtered["name"] = name
+	exists = False
+	try:
+		existing = _firelink_http(
+			"GET",
+			f"/api/resource/{quote(doctype, safe='')}/{quote(name, safe='')}",
+			params={"fields": json.dumps(["name"])},
+		)
+		exists = isinstance(existing.get("data"), dict)
+	except Exception:
+		exists = False
+	if exists:
+		_firelink_http(
+			"PUT",
+			f"/api/resource/{quote(doctype, safe='')}/{quote(name, safe='')}",
+			data={"data": json.dumps(filtered)},
+			headers={"Content-Type": "application/x-www-form-urlencoded"},
+		)
+		return {"name": name, "created": False}
+	create_doc = {"doctype": doctype, **filtered}
+	res = _firelink_http(
+		"POST",
+		"/api/method/frappe.client.insert",
+		data={"doc": json.dumps(create_doc)},
+		headers={"Content-Type": "application/x-www-form-urlencoded"},
+	)
+	created_name = _as_str(
+		(res.get("message") or {}).get("name") if isinstance(res.get("message"), dict) else ""
+	)
+	return {"name": created_name or name, "created": True}
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_property_sync(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	address_payload = {
+		"address_title": _as_str(kwargs.get("address_title")) or None,
+		"address_line1": _as_str(kwargs.get("address_line1")),
+		"address_line2": _as_str(kwargs.get("address_line2")) or None,
+		"city": _as_str(kwargs.get("city")) or None,
+		"state": _as_str(kwargs.get("state")) or None,
+		"pincode": _as_str(kwargs.get("pincode")) or None,
+		"country": _as_str(kwargs.get("country")) or "Australia",
+		"place_id": _as_str(kwargs.get("place_id")) or None,
+	}
+	address_result = firelink_address_resolve_or_create(**address_payload)
+	firelink_address_id = _as_str((address_result or {}).get("firelink_address_id"))
+	if not firelink_address_id:
+		frappe.throw("Unable to resolve FireLink address", frappe.ValidationError)
+
+	payload = {
+		"firelink_address_id": firelink_address_id,
+		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")) or None,
+		"property_display_name": _as_str(kwargs.get("property_display_name")) or None,
+		"property_lat": kwargs.get("property_lat"),
+		"property_lng": kwargs.get("property_lng"),
+		"address_title": _as_str(kwargs.get("address_title")) or None,
+		"address_line1": _as_str(kwargs.get("address_line1")) or None,
+		"address_line2": _as_str(kwargs.get("address_line2")) or None,
+		"city": _as_str(kwargs.get("city")) or None,
+		"state": _as_str(kwargs.get("state")) or None,
+		"pincode": _as_str(kwargs.get("pincode")) or None,
+		"country": _as_str(kwargs.get("country")) or "Australia",
+	}
+	if _is_firelink_local_site():
+		out = _upsert_fl_property_local(payload)
+	else:
+		try:
+			out = _firelink_remote_bridge_call(
+				"/api/method/firtrackpro.api.integrations.firelink_property_sync_bridge",
+				_remote_bridge_payload(payload),
+			)
+		except Exception:
+			remote = _upsert_remote_fl_doctype(
+				"FL Property",
+				_as_str(payload.get("firelink_property_id")) or firelink_address_id,
+				{
+					"property_display_name": _as_str(payload.get("property_display_name"))
+					or _as_str(payload.get("address_title"))
+					or firelink_address_id,
+					"property_address_json": json.dumps(
+						{
+							"address_id": firelink_address_id,
+							"address_title": _as_str(payload.get("address_title")),
+							"address_line1": _as_str(payload.get("address_line1")),
+							"address_line2": _as_str(payload.get("address_line2")),
+							"city": _as_str(payload.get("city")),
+							"state": _as_str(payload.get("state")),
+							"pincode": _as_str(payload.get("pincode")),
+							"country": _as_str(payload.get("country")) or "Australia",
+						},
+						separators=(",", ":"),
+					),
+					"property_lat": _as_float(payload.get("property_lat"), 0.0),
+					"property_lng": _as_float(payload.get("property_lng"), 0.0),
+				},
+			)
+			out = {
+				"firelink_property_id": _as_str(remote.get("name")),
+				"created": bool(remote.get("created")),
+			}
+	return {"firelink_address_id": firelink_address_id, **(out or {})}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_property_sync_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	return _upsert_fl_property_local(kwargs)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_asset_sync(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	payload = {
+		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")),
+		"firelink_asset_id": _as_str(kwargs.get("firelink_asset_id")) or None,
+		"local_asset_id": _as_str(kwargs.get("local_asset_id")),
+		"asset_type_code": _as_str(kwargs.get("asset_type_code")) or None,
+		"asset_label": _as_str(kwargs.get("asset_label")) or None,
+		"asset_serial": _as_str(kwargs.get("asset_serial")) or None,
+		"asset_identifier": _as_str(kwargs.get("asset_identifier")) or None,
+		"asset_status": _as_str(kwargs.get("asset_status")) or None,
+	}
+	if _is_firelink_local_site():
+		return _upsert_fl_asset_local(payload)
+	try:
+		return _firelink_remote_bridge_call(
+			"/api/method/firtrackpro.api.integrations.firelink_asset_sync_bridge",
+			_remote_bridge_payload(payload),
+		)
+	except Exception:
+		remote = _upsert_remote_fl_doctype(
+			"FL Asset",
+			_as_str(payload.get("firelink_asset_id")) or _as_str(payload.get("local_asset_id")),
+			{
+				"asset_property": _as_str(payload.get("firelink_property_id")),
+				"asset_type_code": _as_str(payload.get("asset_type_code")),
+				"asset_label": _as_str(payload.get("asset_label")),
+				"asset_serial": _as_str(payload.get("asset_serial")),
+				"asset_identifier": _as_str(payload.get("asset_identifier")),
+				"asset_status": _as_str(payload.get("asset_status")),
+			},
+		)
+		return {"firelink_asset_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_asset_sync_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	return _upsert_fl_asset_local(kwargs)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_defect_sync(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	payload = {
+		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")),
+		"firelink_defect_id": _as_str(kwargs.get("firelink_defect_id")) or None,
+		"local_defect_id": _as_str(kwargs.get("local_defect_id")),
+		"firelink_asset_id": _as_str(kwargs.get("firelink_asset_id")) or None,
+		"defect_template_code": _as_str(kwargs.get("defect_template_code")) or None,
+		"defect_severity": _as_str(kwargs.get("defect_severity")) or None,
+		"defect_status": _as_str(kwargs.get("defect_status")) or None,
+		"defect_summary": _as_str(kwargs.get("defect_summary"))[:140] or None,
+	}
+	if _is_firelink_local_site():
+		return _upsert_fl_defect_local(payload)
+	try:
+		return _firelink_remote_bridge_call(
+			"/api/method/firtrackpro.api.integrations.firelink_defect_sync_bridge",
+			_remote_bridge_payload(payload),
+		)
+	except Exception:
+		remote = _upsert_remote_fl_doctype(
+			"FL Defect",
+			_as_str(payload.get("firelink_defect_id")) or _as_str(payload.get("local_defect_id")),
+			{
+				"defect_property": _as_str(payload.get("firelink_property_id")),
+				"defect_asset": _as_str(payload.get("firelink_asset_id")),
+				"defect_template_code": _as_str(payload.get("defect_template_code")),
+				"defect_severity": _as_str(payload.get("defect_severity")),
+				"defect_status": _as_str(payload.get("defect_status")),
+				"defect_summary": _as_str(payload.get("defect_summary"))[:140],
+			},
+		)
+		return {"firelink_defect_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_defect_sync_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	return _upsert_fl_defect_local(kwargs)
