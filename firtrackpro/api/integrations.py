@@ -172,7 +172,7 @@ def _get_google_maps_api_key() -> str:
 	try:
 		common_site_config_path = frappe.get_site_path("..", "common_site_config.json")
 		if common_site_config_path and os.path.exists(common_site_config_path):
-			with open(common_site_config_path, encoding="utf-8") as handle:
+			with open(common_site_config_path, "r", encoding="utf-8") as handle:
 				common_conf = json.load(handle) or {}
 			if isinstance(common_conf, dict):
 				for key in GOOGLE_KEY_CANDIDATES:
@@ -190,7 +190,7 @@ def _get_google_maps_api_key() -> str:
 		if reference_site:
 			reference_config_path = frappe.get_site_path("..", reference_site, "site_config.json")
 			if reference_config_path and os.path.exists(reference_config_path):
-				with open(reference_config_path, encoding="utf-8") as handle:
+				with open(reference_config_path, "r", encoding="utf-8") as handle:
 					reference_conf = json.load(handle) or {}
 				if isinstance(reference_conf, dict):
 					for key in GOOGLE_KEY_CANDIDATES:
@@ -3112,6 +3112,9 @@ def firelink_property_sync_bridge(**kwargs):
 def firelink_asset_sync(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
+	status = _as_str(kwargs.get("asset_status")).lower()
+	if status not in {"active", "inactive", "retired"}:
+		status = "active"
 	payload = {
 		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")),
 		"firelink_asset_id": _as_str(kwargs.get("firelink_asset_id")) or None,
@@ -3120,7 +3123,7 @@ def firelink_asset_sync(**kwargs):
 		"asset_label": _as_str(kwargs.get("asset_label")) or None,
 		"asset_serial": _as_str(kwargs.get("asset_serial")) or None,
 		"asset_identifier": _as_str(kwargs.get("asset_identifier")) or None,
-		"asset_status": _as_str(kwargs.get("asset_status")) or None,
+		"asset_status": status,
 	}
 	if _is_firelink_local_site():
 		return _upsert_fl_asset_local(payload)
