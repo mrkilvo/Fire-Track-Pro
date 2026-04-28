@@ -4,5 +4,5 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
-firtrackpro.patches.v16_0.seed_as1851_monthly_wet_pipe_suite.execute
-firtrackpro.patches.v16_0.seed_as1851_all_test_tables.execute
+firtrackpro.patches.v16_0.seed_as1851_monthly_wet_pipe_suite
+firtrackpro.patches.v16_0.seed_as1851_all_test_tables
