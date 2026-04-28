@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import re
 import shlex
 import subprocess
 from datetime import datetime, timezone
@@ -172,7 +173,7 @@ def _get_google_maps_api_key() -> str:
 	try:
 		common_site_config_path = frappe.get_site_path("..", "common_site_config.json")
 		if common_site_config_path and os.path.exists(common_site_config_path):
-			with open(common_site_config_path, "r", encoding="utf-8") as handle:
+			with open(common_site_config_path, encoding="utf-8") as handle:
 				common_conf = json.load(handle) or {}
 			if isinstance(common_conf, dict):
 				for key in GOOGLE_KEY_CANDIDATES:
@@ -190,7 +191,7 @@ def _get_google_maps_api_key() -> str:
 		if reference_site:
 			reference_config_path = frappe.get_site_path("..", reference_site, "site_config.json")
 			if reference_config_path and os.path.exists(reference_config_path):
-				with open(reference_config_path, "r", encoding="utf-8") as handle:
+				with open(reference_config_path, encoding="utf-8") as handle:
 					reference_conf = json.load(handle) or {}
 				if isinstance(reference_conf, dict):
 					for key in GOOGLE_KEY_CANDIDATES:
@@ -237,6 +238,37 @@ def _pick_component(components: list[dict[str, Any]], kind: str, short: bool = F
 
 def _norm(value: Any) -> str:
 	return _as_str(value).lower().strip()
+
+
+_ADDRESS_TOKEN_MAP = {
+	"street": "st",
+	"st.": "st",
+	"road": "rd",
+	"rd.": "rd",
+	"avenue": "ave",
+	"ave.": "ave",
+	"boulevard": "blvd",
+	"drive": "dr",
+	"dr.": "dr",
+	"lane": "ln",
+	"ln.": "ln",
+	"court": "ct",
+	"ct.": "ct",
+	"place": "pl",
+	"pl.": "pl",
+	"terrace": "tce",
+	"highway": "hwy",
+	"mount": "mt",
+}
+
+
+def _address_key(value: Any) -> str:
+	raw = _norm(value)
+	if not raw:
+		return ""
+	tokens = re.split(r"[^a-z0-9]+", raw)
+	normed = [_ADDRESS_TOKEN_MAP.get(tok, tok) for tok in tokens if tok]
+	return " ".join(normed)
 
 
 def _site_conf_value(*keys: str) -> str:
@@ -344,8 +376,8 @@ def _pick_existing_field(field_names: set[str], candidates: tuple[str, ...]) -> 
 
 
 def _strong_match(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
-	row_line1 = _norm(existing.get("address_line1"))
-	in_line1 = _norm(incoming.get("address_line1"))
+	row_line1 = _address_key(existing.get("address_line1"))
+	in_line1 = _address_key(incoming.get("address_line1"))
 	if not row_line1 or not in_line1 or row_line1 != in_line1:
 		return False
 	row_place_id = _norm(existing.get("place_id"))
@@ -363,6 +395,28 @@ def _strong_match(existing: dict[str, Any], incoming: dict[str, Any]) -> bool:
 	return bool(
 		row_city and in_city and row_state and in_state and row_city == in_city and row_state == in_state
 	)
+
+
+def _find_fl_property_by_address_id(address_id: str) -> str:
+	if not address_id or not frappe.db.exists("DocType", "FL Property"):
+		return ""
+	rows = frappe.get_all(
+		"FL Property",
+		fields=["name", "property_address_json"],
+		filters=[["property_address_json", "like", f"%{address_id}%"]],
+		limit_page_length=200,
+	)
+	for row in rows:
+		raw = _as_str(row.get("property_address_json"))
+		if not raw:
+			continue
+		try:
+			payload = json.loads(raw)
+		except Exception:
+			payload = {}
+		if _as_str((payload or {}).get("address_id")) == address_id:
+			return _as_str(row.get("name"))
+	return ""
 
 
 def _normalize_remote_row(row: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
@@ -2895,7 +2949,11 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 	address_id = _as_str(payload.get("firelink_address_id")) or _as_str(payload.get("address_id"))
 	if not address_id:
 		frappe.throw("firelink_address_id is required", frappe.ValidationError)
-	property_id = _as_str(payload.get("firelink_property_id")) or address_id
+	property_id = (
+		_as_str(payload.get("firelink_property_id"))
+		or _find_fl_property_by_address_id(address_id)
+		or address_id
+	)
 	display_name = (
 		_as_str(payload.get("property_display_name")) or _as_str(payload.get("address_title")) or address_id
 	)
@@ -2933,7 +2991,68 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 		)
 		doc.insert(ignore_permissions=True)
 		created = True
-	return {"firelink_property_id": doc.name, "created": created}
+	firelink_property_id = _as_str(doc.name)
+	ft_property_id = _upsert_ft_property_local(
+		{
+			"firelink_property_id": firelink_property_id,
+			"firelink_address_id": address_id,
+			"property_display_name": display_name,
+			"property_lat": lat,
+			"property_lng": lng,
+			"address_line1": _as_str(payload.get("address_line1")),
+			"address_line2": _as_str(payload.get("address_line2")),
+			"city": _as_str(payload.get("city")),
+			"state": _as_str(payload.get("state")),
+			"pincode": _as_str(payload.get("pincode")),
+			"country": _as_str(payload.get("country")) or "Australia",
+		}
+	)
+	return {
+		"firelink_property_id": firelink_property_id,
+		"firelink_ft_property_id": ft_property_id or None,
+		"firelink_address_id": address_id,
+		"created": created,
+	}
+
+
+def _upsert_ft_property_local(payload: dict[str, Any]) -> str:
+	if not frappe.db.exists("DocType", "FT Property"):
+		return ""
+	firelink_property_id = _as_str(payload.get("firelink_property_id"))
+	address_id = _as_str(payload.get("firelink_address_id"))
+	display_name = _as_str(payload.get("property_display_name")) or address_id or firelink_property_id
+
+	existing_name = ""
+	if firelink_property_id and frappe.db.has_column("FT Property", "firelink_uid"):
+		existing_name = _as_str(
+			frappe.db.get_value("FT Property", {"firelink_uid": firelink_property_id}, "name")
+		)
+	doc = frappe.get_doc("FT Property", existing_name) if existing_name else frappe.new_doc("FT Property")
+	meta = frappe.get_meta("FT Property")
+
+	def set_if(fieldname: str, value: Any):
+		if fieldname in meta.fields_map and value is not None and str(value) != "":
+			setattr(doc, fieldname, value)
+
+	set_if("property_name", display_name)
+	set_if("property_address", address_id)
+	set_if("firelink_uid", firelink_property_id)
+	if payload.get("property_lat") is not None:
+		set_if("property_lat", _as_float(payload.get("property_lat"), 0.0))
+	if payload.get("property_lng") is not None:
+		set_if("property_lng", _as_float(payload.get("property_lng"), 0.0))
+	set_if("ft_property_address_line1", _as_str(payload.get("address_line1")))
+	set_if("ft_property_address_line2", _as_str(payload.get("address_line2")))
+	set_if("ft_property_suburb", _as_str(payload.get("city")))
+	set_if("ft_property_state", _as_str(payload.get("state")))
+	set_if("ft_property_postcode", _as_str(payload.get("pincode")))
+	set_if("ft_property_country", _as_str(payload.get("country")) or "Australia")
+
+	if existing_name:
+		doc.save(ignore_permissions=True)
+	else:
+		doc.insert(ignore_permissions=True)
+	return _as_str(doc.name)
 
 
 def _upsert_fl_asset_local(payload: dict[str, Any]) -> dict[str, Any]:

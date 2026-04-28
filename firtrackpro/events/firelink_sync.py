@@ -39,6 +39,7 @@ def _address_payload_for_property(prop_doc) -> dict[str, Any]:
 
 	return {
 		"local_property_id": _safe_str(getattr(prop_doc, "name", "")),
+		"firelink_property_id": _safe_str(getattr(prop_doc, "firelink_uid", "")) or None,
 		"property_display_name": _safe_str(getattr(prop_doc, "property_name", "")),
 		"property_lat": getattr(prop_doc, "property_lat", None),
 		"property_lng": getattr(prop_doc, "property_lng", None),
