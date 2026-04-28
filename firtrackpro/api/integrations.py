@@ -3035,7 +3035,7 @@ def _upsert_ft_property_local(payload: dict[str, Any]) -> str:
 	meta = frappe.get_meta("FT Property")
 
 	def set_if(fieldname: str, value: Any):
-		if fieldname in meta.fields_map and value is not None and str(value) != "":
+		if meta.has_field(fieldname) and value is not None and len(str(value)) > 0:
 			setattr(doc, fieldname, value)
 
 	set_if("property_name", display_name)
