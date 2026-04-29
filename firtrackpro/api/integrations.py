@@ -80,7 +80,7 @@ PROVIDER_DEFAULTS = {
 		"baseUrl": "https://api.xero.com",
 		"authUrl": "https://login.xero.com/identity/connect/authorize",
 		"tokenUrl": "https://identity.xero.com/connect/token",
-		"scopes": "openid profile email accounting.transactions accounting.contacts offline_access",
+		"scopes": "openid profile email offline_access",
 	},
 	"QuickBooks": {
 		"baseUrl": "https://quickbooks.api.intuit.com",
