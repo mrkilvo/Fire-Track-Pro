@@ -956,16 +956,20 @@ def xero_oauth_callback(**kwargs):
 	state = _as_str(kwargs.get("state"))
 	error = _as_str(kwargs.get("error"))
 	error_description = _as_str(kwargs.get("error_description"))
+	target_host = _xero_parse_federated_state(state)
 	if error:
 		frappe.local.response["type"] = "redirect"
-		frappe.local.response["location"] = f"/portal/config/integrations?xero=error&message={quote(error_description or error)}"
+		if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
+			frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?xero=error&message={quote(error_description or error)}"
+		else:
+			frappe.local.response["location"] = f"/portal/config/integrations?xero=error&message={quote(error_description or error)}"
 		return
 
 	row = _integration_record("Xero")
 	expected_state = _as_str(row.get("xeroState"))
 	if not code:
 		frappe.throw("Missing Xero authorization code.", frappe.ValidationError)
-	if expected_state and state != expected_state:
+	if expected_state and not target_host and state != expected_state:
 		frappe.throw("Invalid Xero OAuth state.", frappe.PermissionError)
 
 	client_id = _as_str(row.get("clientId"))
@@ -1006,10 +1010,23 @@ def xero_oauth_callback(**kwargs):
 		first = connections[0] if isinstance(connections[0], dict) else {}
 		row["tenantId"] = _as_str(first.get("tenantId"))
 	_persist_integration_record("Xero", row)
+
+	if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
+		push = _xero_push_tokens_to_site(target_host, row, connections)
+		if not _as_bool(push.get("ok")):
+			msg = _as_str(push.get("message")) or "Failed to save Xero connection to target tenant."
+			details = _as_str(push.get("details"))
+			if details:
+				msg = f"{msg} {details}"
+			frappe.local.response["type"] = "redirect"
+			frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?xero=error&message={quote(msg)}"
+			return
+		frappe.local.response["type"] = "redirect"
+		frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?xero=connected"
+		return
+
 	frappe.local.response["type"] = "redirect"
 	frappe.local.response["location"] = "/portal/config/integrations?xero=connected"
-
-
 @frappe.whitelist()
 def xero_list_connections(**kwargs):
 	if frappe.session.user == "Guest":
