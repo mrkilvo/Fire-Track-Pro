@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -184,7 +186,23 @@ def _persist_integration_record(provider: str, row: dict[str, Any]) -> dict[str,
 	return records[provider]
 
 
-def _xero_redirect_uri() -> str:
+def _xero_redirect_uri(row: dict[str, Any] | None = None) -> str:
+	# Prefer explicit callback config to avoid host/proxy ambiguity (localhost/dev/prod).
+	row = row or {}
+	candidates = [
+		_as_str(row.get("xeroRedirectUri")),
+		_as_str(row.get("redirectUri")),
+		_as_str(frappe.conf.get("xero_oauth_redirect_uri")),
+		_as_str(frappe.conf.get("firtrackpro_xero_oauth_redirect_uri")),
+	]
+	for candidate in candidates:
+		if candidate:
+			return candidate.rstrip("/")
+
+	host_name = _as_str(frappe.conf.get("host_name")).rstrip("/")
+	if host_name:
+		return f"{host_name}/api/method/firtrackpro.api.integrations.xero_oauth_callback"
+
 	base = _as_str(frappe.utils.get_url()).rstrip("/")
 	return f"{base}/api/method/firtrackpro.api.integrations.xero_oauth_callback"
 
@@ -749,11 +767,11 @@ def xero_oauth_start(**kwargs):
 	params = {
 		"response_type": "code",
 		"client_id": client_id,
-		"redirect_uri": _xero_redirect_uri(),
+		"redirect_uri": _xero_redirect_uri(row),
 		"scope": scopes,
 		"state": state,
 	}
-	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _xero_redirect_uri()}
+	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _xero_redirect_uri(row)}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -787,7 +805,7 @@ def xero_oauth_callback(**kwargs):
 		"Content-Type": "application/x-www-form-urlencoded",
 		"Accept": "application/json",
 	}
-	form = {"grant_type": "authorization_code", "code": code, "redirect_uri": _xero_redirect_uri()}
+	form = {"grant_type": "authorization_code", "code": code, "redirect_uri": _xero_redirect_uri(row)}
 	resp = requests.post(token_url, headers=headers, data=form, timeout=20)
 	if not resp.ok:
 		detail = _as_str(resp.text)
@@ -3601,3 +3619,37 @@ def firelink_defect_sync_bridge(**kwargs):
 	if not _is_valid_bridge_call():
 		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
 	return _upsert_fl_defect_local(kwargs)
+
+
+def _xero_verify_webhook_signature(raw_body: bytes, signature_header: str, webhook_key: str) -> bool:
+	if not raw_body or not signature_header or not webhook_key:
+		return False
+	computed = base64.b64encode(hmac.new(webhook_key.encode("utf-8"), raw_body, hashlib.sha256).digest()).decode("utf-8")
+	return hmac.compare_digest(computed, signature_header)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def xero_webhook(**kwargs):
+	"""Xero webhook receiver supporting intent validation and event delivery."""
+	row = _integration_record("Xero")
+	webhook_key = _as_str(row.get("webhookSecret") or row.get("xeroWebhookKey") or frappe.conf.get("xero_webhook_key"))
+	signature = _as_str(getattr(frappe.request, "headers", {}).get("x-xero-signature"))
+	raw_body = frappe.request.get_data(cache=False, as_text=False) or b""
+
+	if not _xero_verify_webhook_signature(raw_body, signature, webhook_key):
+		frappe.local.response["http_status_code"] = 401
+		return {"ok": False, "message": "Invalid Xero webhook signature."}
+
+	# Signature valid: this is enough for Xero Intent-to-Receive handshake.
+	payload = {}
+	try:
+		payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+	except Exception:
+		payload = {}
+
+	events = payload.get("events") if isinstance(payload, dict) else None
+	if isinstance(events, list) and events:
+		frappe.logger("xero_webhook").info({"events": events})
+
+	frappe.local.response["http_status_code"] = 200
+	return {"ok": True}
