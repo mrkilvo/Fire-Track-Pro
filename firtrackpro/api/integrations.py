@@ -553,6 +553,133 @@ def _xero_fetch_invoices(config: dict[str, Any]) -> list[dict[str, Any]]:
 	return rows if isinstance(rows, list) else []
 
 
+def _xero_api_headers(config: dict[str, Any]) -> dict[str, str]:
+	access_token = _as_str(config.get("xeroAccessToken"))
+	tenant_id = _as_str(config.get("tenantId"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not tenant_id:
+		frappe.throw("Xero tenant is not linked yet. Click Check Xero Orgs first.", frappe.ValidationError)
+	return {
+		"Authorization": f"Bearer {access_token}",
+		"Accept": "application/json",
+		"Content-Type": "application/json",
+		"xero-tenant-id": tenant_id,
+	}
+
+
+def _xero_api_json(
+	config: dict[str, Any], method: str, path: str, payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	headers = _xero_api_headers(config)
+	url = f"https://api.xero.com/api.xro/2.0/{path.lstrip('/')}"
+	resp = requests.request(method.upper(), url, headers=headers, json=payload or {}, timeout=30)
+	if resp.status_code == 401:
+		config = _xero_refresh_if_needed(config)
+		headers = _xero_api_headers(config)
+		resp = requests.request(method.upper(), url, headers=headers, json=payload or {}, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero API {method.upper()} {path} failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	return data if isinstance(data, dict) else {}
+
+
+def _xero_push_contact(config: dict[str, Any], reference_name: str, doctype: str, document: dict[str, Any]) -> dict[str, Any]:
+	name_val = _as_str(document.get("customer_name") or document.get("supplier_name") or document.get("name"))
+	email_val = _as_str(document.get("email_id"))
+	phone_val = _as_str(document.get("mobile_no"))
+	if not name_val:
+		if doctype == "Customer" and reference_name and frappe.db.exists("Customer", reference_name):
+			name_val = _as_str(frappe.db.get_value("Customer", reference_name, "customer_name"))
+			email_val = email_val or _as_str(frappe.db.get_value("Customer", reference_name, "email_id"))
+			phone_val = phone_val or _as_str(frappe.db.get_value("Customer", reference_name, "mobile_no"))
+		elif doctype == "Supplier" and reference_name and frappe.db.exists("Supplier", reference_name):
+			name_val = _as_str(frappe.db.get_value("Supplier", reference_name, "supplier_name"))
+			email_val = email_val or _as_str(frappe.db.get_value("Supplier", reference_name, "email_id"))
+			phone_val = phone_val or _as_str(frappe.db.get_value("Supplier", reference_name, "mobile_no"))
+	if not name_val:
+		frappe.throw("Contact name is required for Xero sync.", frappe.ValidationError)
+
+	contact_id = _as_str(document.get("xero_contact_id"))
+	if not contact_id and reference_name and doctype and frappe.db.exists(doctype, reference_name):
+		contact_id = _as_str(frappe.db.get_value(doctype, reference_name, "xero_contact_id"))
+
+	contact_payload: dict[str, Any] = {"Name": name_val}
+	if contact_id:
+		contact_payload["ContactID"] = contact_id
+	if email_val:
+		contact_payload["EmailAddress"] = email_val
+	if phone_val:
+		contact_payload["Phones"] = [{"PhoneType": "MOBILE", "PhoneNumber": phone_val}]
+
+	out = _xero_api_json(config, "PUT", "Contacts", {"Contacts": [contact_payload]})
+	rows = out.get("Contacts") if isinstance(out.get("Contacts"), list) else []
+	return rows[0] if rows and isinstance(rows[0], dict) else {}
+
+
+def _xero_push_invoice(config: dict[str, Any], reference_name: str, document: dict[str, Any]) -> dict[str, Any]:
+	invoice_doc = document or {}
+	if reference_name and frappe.db.exists("Sales Invoice", reference_name):
+		src = frappe.get_doc("Sales Invoice", reference_name)
+		invoice_doc = {
+			**invoice_doc,
+			"customer": invoice_doc.get("customer") or _as_str(src.customer),
+			"posting_date": invoice_doc.get("posting_date") or _as_str(src.posting_date),
+			"due_date": invoice_doc.get("due_date") or _as_str(src.due_date),
+			"xero_invoice_id": invoice_doc.get("xero_invoice_id") or _as_str(getattr(src, "xero_invoice_id", "")),
+			"xero_invoice_number": invoice_doc.get("xero_invoice_number") or _as_str(getattr(src, "xero_invoice_number", "")),
+			"items": invoice_doc.get("items")
+			or [
+				{"item_code": _as_str(r.item_code), "qty": float(r.qty or 0), "rate": float(r.rate or 0)}
+				for r in (src.items or [])
+			],
+		}
+	customer_name = _as_str(invoice_doc.get("customer"))
+	if not customer_name:
+		frappe.throw("Invoice customer is required for Xero sync.", frappe.ValidationError)
+	contact_id = _as_str(frappe.db.get_value("Customer", customer_name, "xero_contact_id"))
+	if not contact_id:
+		frappe.throw(f"Customer {customer_name} is missing xero_contact_id; sync customer first.", frappe.ValidationError)
+
+	items = invoice_doc.get("items") if isinstance(invoice_doc.get("items"), list) else []
+	if not items:
+		frappe.throw("Invoice has no items to sync.", frappe.ValidationError)
+	line_items: list[dict[str, Any]] = []
+	for row in items:
+		if not isinstance(row, dict):
+			continue
+		qty = float(row.get("qty") or 1)
+		rate = float(row.get("rate") or 0)
+		item_code = _as_str(row.get("item_code")) or "Service"
+		line_items.append({
+			"Description": item_code,
+			"Quantity": qty,
+			"UnitAmount": rate,
+			"AccountCode": "200",
+		})
+	if not line_items:
+		frappe.throw("Invoice line mapping failed; no valid line items.", frappe.ValidationError)
+
+	payload: dict[str, Any] = {
+		"Type": "ACCREC",
+		"Contact": {"ContactID": contact_id},
+		"Date": _as_str(invoice_doc.get("posting_date")) or _as_str(frappe.utils.nowdate()),
+		"DueDate": _as_str(invoice_doc.get("due_date")) or _as_str(invoice_doc.get("posting_date")) or _as_str(frappe.utils.nowdate()),
+		"Status": "DRAFT",
+		"LineItems": line_items,
+	}
+	xero_invoice_id = _as_str(invoice_doc.get("xero_invoice_id"))
+	if xero_invoice_id:
+		payload["InvoiceID"] = xero_invoice_id
+
+	out = _xero_api_json(config, "PUT", "Invoices", {"Invoices": [payload]})
+	rows = out.get("Invoices") if isinstance(out.get("Invoices"), list) else []
+	return rows[0] if rows and isinstance(rows[0], dict) else {}
+
+
 def _ensure_xero_sync_item() -> str:
 	code = "XERO-SYNC-SERVICE"
 	if frappe.db.exists("Item", code):
@@ -1443,6 +1570,58 @@ def test_connection(**kwargs):
 @frappe.whitelist(methods=["POST"])
 def sync_entity(**kwargs):
 	entity = _as_str(kwargs.get("entity")).lower()
+	operation = _as_str(kwargs.get("operation")).lower() or "update"
+	reference_name = _as_str(kwargs.get("reference_name") or kwargs.get("referenceName"))
+	document = kwargs.get("document") if isinstance(kwargs.get("document"), dict) else {}
+	is_manual_pull = reference_name.startswith("__manual_xero_")
+	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
+	if is_push:
+		row = _integration_record("Xero")
+		row = _xero_apply_site_config_credentials(row)[0]
+		row = _xero_refresh_if_needed(row)
+		if entity == "customer":
+			if operation == "delete":
+				return {"ok": True, "message": "Customer delete push not enabled for Xero (safe mode)."}
+			out = _xero_push_contact(row, reference_name, "Customer", document)
+			contact_id = _as_str(out.get("ContactID"))
+			contact_number = _as_str(out.get("ContactNumber"))
+			if contact_id and reference_name and frappe.db.exists("Customer", reference_name):
+				frappe.db.set_value("Customer", reference_name, {
+					"xero_contact_id": contact_id,
+					"xero_contact_number": contact_number,
+					"xero_last_synced_at": frappe.utils.now_datetime(),
+				}, update_modified=False)
+				frappe.db.commit()
+			return {"ok": True, "message": f"Customer pushed to Xero ({contact_id or 'ok'})."}
+		if entity == "supplier":
+			if operation == "delete":
+				return {"ok": True, "message": "Supplier delete push not enabled for Xero (safe mode)."}
+			out = _xero_push_contact(row, reference_name, "Supplier", document)
+			contact_id = _as_str(out.get("ContactID"))
+			contact_number = _as_str(out.get("ContactNumber"))
+			if contact_id and reference_name and frappe.db.exists("Supplier", reference_name):
+				frappe.db.set_value("Supplier", reference_name, {
+					"xero_contact_id": contact_id,
+					"xero_contact_number": contact_number,
+					"xero_last_synced_at": frappe.utils.now_datetime(),
+				}, update_modified=False)
+				frappe.db.commit()
+			return {"ok": True, "message": f"Supplier pushed to Xero ({contact_id or 'ok'})."}
+		if entity == "invoice":
+			if operation == "delete":
+				return {"ok": True, "message": "Invoice delete push not enabled for Xero (safe mode)."}
+			out = _xero_push_invoice(row, reference_name, document)
+			invoice_id = _as_str(out.get("InvoiceID"))
+			invoice_number = _as_str(out.get("InvoiceNumber"))
+			if invoice_id and reference_name and frappe.db.exists("Sales Invoice", reference_name):
+				frappe.db.set_value("Sales Invoice", reference_name, {
+					"xero_invoice_id": invoice_id,
+					"xero_invoice_number": invoice_number,
+					"xero_last_synced_at": frappe.utils.now_datetime(),
+				}, update_modified=False)
+				frappe.db.commit()
+			return {"ok": True, "message": f"Invoice pushed to Xero ({invoice_number or invoice_id or 'ok'})."}
+
 	if entity == "customer":
 		return sync_customer(**kwargs)
 	if entity == "supplier":
