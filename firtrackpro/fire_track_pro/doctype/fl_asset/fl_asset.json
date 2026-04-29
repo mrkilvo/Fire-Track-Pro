@@ -10,7 +10,12 @@
   "asset_label",
   "asset_serial",
   "asset_identifier",
-  "asset_status"
+  "asset_status",
+  "asset_make",
+  "asset_model",
+  "asset_standard",
+  "asset_photo",
+  "additional_photos"
  ],
  "fields": [
   {
@@ -44,6 +49,31 @@
    "fieldtype": "Select",
    "label": "Status",
    "options": "active\ninactive\nretired"
+  },
+  {
+   "fieldname": "asset_make",
+   "fieldtype": "Data",
+   "label": "Make"
+  },
+  {
+   "fieldname": "asset_model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "asset_standard",
+   "fieldtype": "Data",
+   "label": "Standard"
+  },
+  {
+   "fieldname": "asset_photo",
+   "fieldtype": "Data",
+   "label": "Primary Photo URL"
+  },
+  {
+   "fieldname": "additional_photos",
+   "fieldtype": "Long Text",
+   "label": "Additional Photo URLs"
   }
  ],
  "grid_page_length": 50,

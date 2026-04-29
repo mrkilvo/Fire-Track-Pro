@@ -10,7 +10,10 @@
   "defect_template_code",
   "defect_severity",
   "defect_status",
-  "defect_summary"
+  "defect_summary",
+  "defect_notes",
+  "defect_photo",
+  "additional_photos"
  ],
  "fields": [
   {
@@ -44,6 +47,21 @@
    "fieldname": "defect_summary",
    "fieldtype": "Data",
    "label": "Summary"
+  },
+  {
+   "fieldname": "defect_notes",
+   "fieldtype": "Long Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "defect_photo",
+   "fieldtype": "Data",
+   "label": "Primary Photo URL"
+  },
+  {
+   "fieldname": "additional_photos",
+   "fieldtype": "Long Text",
+   "label": "Additional Photo URLs"
   }
  ],
  "grid_page_length": 50,

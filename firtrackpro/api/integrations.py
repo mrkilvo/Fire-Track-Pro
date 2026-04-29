@@ -3070,6 +3070,11 @@ def _upsert_fl_asset_local(payload: dict[str, Any]) -> dict[str, Any]:
 		"asset_serial": _as_str(payload.get("asset_serial")),
 		"asset_identifier": _as_str(payload.get("asset_identifier")),
 		"asset_status": _as_str(payload.get("asset_status")),
+		"asset_make": _as_str(payload.get("asset_make")),
+		"asset_model": _as_str(payload.get("asset_model")),
+		"asset_standard": _as_str(payload.get("asset_standard")),
+		"asset_photo": _as_str(payload.get("asset_photo")),
+		"additional_photos": _as_str(payload.get("additional_photos")),
 	}
 	if frappe.db.exists("FL Asset", asset_id):
 		doc = frappe.get_doc("FL Asset", asset_id)
@@ -3098,6 +3103,9 @@ def _upsert_fl_defect_local(payload: dict[str, Any]) -> dict[str, Any]:
 		"defect_severity": _as_str(payload.get("defect_severity")),
 		"defect_status": _as_str(payload.get("defect_status")),
 		"defect_summary": _as_str(payload.get("defect_summary"))[:140],
+		"defect_notes": _as_str(payload.get("defect_notes")),
+		"defect_photo": _as_str(payload.get("defect_photo")),
+		"additional_photos": _as_str(payload.get("additional_photos")),
 	}
 	if frappe.db.exists("FL Defect", defect_id):
 		doc = frappe.get_doc("FL Defect", defect_id)
@@ -3244,6 +3252,11 @@ def firelink_asset_sync(**kwargs):
 		"asset_serial": _as_str(kwargs.get("asset_serial")) or None,
 		"asset_identifier": _as_str(kwargs.get("asset_identifier")) or None,
 		"asset_status": status,
+		"asset_make": _as_str(kwargs.get("asset_make")) or None,
+		"asset_model": _as_str(kwargs.get("asset_model")) or None,
+		"asset_standard": _as_str(kwargs.get("asset_standard")) or None,
+		"asset_photo": _as_str(kwargs.get("asset_photo")) or None,
+		"additional_photos": _as_str(kwargs.get("additional_photos")) or None,
 	}
 	if _is_firelink_local_site():
 		return _upsert_fl_asset_local(payload)
@@ -3263,6 +3276,11 @@ def firelink_asset_sync(**kwargs):
 				"asset_serial": _as_str(payload.get("asset_serial")),
 				"asset_identifier": _as_str(payload.get("asset_identifier")),
 				"asset_status": _as_str(payload.get("asset_status")),
+				"asset_make": _as_str(payload.get("asset_make")),
+				"asset_model": _as_str(payload.get("asset_model")),
+				"asset_standard": _as_str(payload.get("asset_standard")),
+				"asset_photo": _as_str(payload.get("asset_photo")),
+				"additional_photos": _as_str(payload.get("additional_photos")),
 			},
 		)
 		return {"firelink_asset_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
@@ -3288,6 +3306,9 @@ def firelink_defect_sync(**kwargs):
 		"defect_severity": _as_str(kwargs.get("defect_severity")) or None,
 		"defect_status": _as_str(kwargs.get("defect_status")) or None,
 		"defect_summary": _as_str(kwargs.get("defect_summary"))[:140] or None,
+		"defect_notes": _as_str(kwargs.get("defect_notes")) or None,
+		"defect_photo": _as_str(kwargs.get("defect_photo")) or None,
+		"additional_photos": _as_str(kwargs.get("additional_photos")) or None,
 	}
 	if _is_firelink_local_site():
 		return _upsert_fl_defect_local(payload)
@@ -3307,6 +3328,9 @@ def firelink_defect_sync(**kwargs):
 				"defect_severity": _as_str(payload.get("defect_severity")),
 				"defect_status": _as_str(payload.get("defect_status")),
 				"defect_summary": _as_str(payload.get("defect_summary"))[:140],
+				"defect_notes": _as_str(payload.get("defect_notes")),
+				"defect_photo": _as_str(payload.get("defect_photo")),
+				"additional_photos": _as_str(payload.get("additional_photos")),
 			},
 		)
 		return {"firelink_defect_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
