@@ -6,7 +6,7 @@ import shlex
 import subprocess
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import frappe
 from frappe.utils.file_manager import save_file
@@ -148,6 +148,12 @@ def _load_records() -> dict[str, Any]:
 			"tenantId": _as_str(row.get("tenantId")),
 			"scopes": _as_str(row.get("scopes")) or _as_str(defaults.get("scopes")),
 			"webhookSecret": _as_str(row.get("webhookSecret")),
+			"xeroAccessToken": _as_str(row.get("xeroAccessToken")),
+			"xeroRefreshToken": _as_str(row.get("xeroRefreshToken")),
+			"xeroTokenExpiresAt": _as_str(row.get("xeroTokenExpiresAt")),
+			"xeroConnectedAt": _as_str(row.get("xeroConnectedAt")),
+			"xeroState": _as_str(row.get("xeroState")),
+			"xeroConnectionsJson": _as_str(row.get("xeroConnectionsJson")),
 			"syncCustomers": _as_bool(row.get("syncCustomers")),
 			"syncInvoices": _as_bool(row.get("syncInvoices")),
 			"syncPayments": _as_bool(row.get("syncPayments")),
@@ -158,6 +164,105 @@ def _load_records() -> dict[str, Any]:
 
 def _save_records(records: dict[str, Any]) -> None:
 	frappe.db.set_default(DEFAULTS_KEY, json.dumps(records))
+
+
+def _utc_iso_now() -> str:
+	return datetime.now(timezone.utc).isoformat()
+
+
+def _integration_record(provider: str) -> dict[str, Any]:
+	records = _load_records()
+	if provider not in records:
+		frappe.throw(f"Unknown provider: {provider}", frappe.ValidationError)
+	return records[provider]
+
+
+def _persist_integration_record(provider: str, row: dict[str, Any]) -> dict[str, Any]:
+	records = _load_records()
+	records[provider] = row
+	_save_records(records)
+	return records[provider]
+
+
+def _xero_redirect_uri() -> str:
+	base = _as_str(frappe.utils.get_url()).rstrip("/")
+	return f"{base}/api/method/firtrackpro.api.integrations.xero_oauth_callback"
+
+
+def _xero_basic_auth(client_id: str, client_secret: str) -> str:
+	raw = f"{client_id}:{client_secret}".encode("utf-8")
+	return base64.b64encode(raw).decode("utf-8")
+
+
+def _xero_refresh_if_needed(config: dict[str, Any]) -> dict[str, Any]:
+	access_token = _as_str(config.get("xeroAccessToken"))
+	refresh_token = _as_str(config.get("xeroRefreshToken"))
+	expires_at = _as_str(config.get("xeroTokenExpiresAt"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not refresh_token:
+		return config
+	if expires_at:
+		try:
+			exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+			if exp_dt > datetime.now(timezone.utc):
+				return config
+		except Exception:
+			pass
+
+	if requests is None:
+		frappe.throw("Xero token refresh is unavailable (requests library missing).")
+
+	client_id = _as_str(config.get("clientId"))
+	client_secret = _as_str(config.get("clientSecret"))
+	token_url = _as_str(config.get("tokenUrl")) or _as_str(PROVIDER_DEFAULTS["Xero"].get("tokenUrl"))
+	if not client_id or not client_secret or not token_url:
+		frappe.throw("Xero Client ID/Secret and Token URL are required for refresh.", frappe.ValidationError)
+
+	headers = {
+		"Authorization": f"Basic {_xero_basic_auth(client_id, client_secret)}",
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Accept": "application/json",
+	}
+	form = {"grant_type": "refresh_token", "refresh_token": refresh_token}
+	resp = requests.post(token_url, headers=headers, data=form, timeout=20)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero refresh failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	config["xeroAccessToken"] = _as_str(data.get("access_token")) or access_token
+	config["xeroRefreshToken"] = _as_str(data.get("refresh_token")) or refresh_token
+	expires_in = _as_int(data.get("expires_in"), 1800)
+	config["xeroTokenExpiresAt"] = (datetime.now(timezone.utc).timestamp() + expires_in)
+	config["xeroTokenExpiresAt"] = datetime.fromtimestamp(float(config["xeroTokenExpiresAt"]), tz=timezone.utc).isoformat()
+	config["xeroConnectedAt"] = _utc_iso_now()
+	return config
+
+
+def _xero_fetch_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	access_token = _as_str(config.get("xeroAccessToken"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	resp = requests.get(
+		"https://api.xero.com/connections",
+		headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+		timeout=20,
+	)
+	if resp.status_code == 401:
+		config = _xero_refresh_if_needed(config)
+		access_token = _as_str(config.get("xeroAccessToken"))
+		resp = requests.get(
+			"https://api.xero.com/connections",
+			headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+			timeout=20,
+		)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero connections failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	rows = resp.json() if hasattr(resp, "json") else []
+	return rows if isinstance(rows, list) else []
 
 
 def _get_google_maps_api_key() -> str:
@@ -618,6 +723,115 @@ def save_config(**kwargs):
 
 
 @frappe.whitelist(methods=["POST"])
+def xero_oauth_start(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	row = _integration_record("Xero")
+	client_id = _as_str(kwargs.get("client_id") or kwargs.get("clientId") or row.get("clientId"))
+	client_secret = _as_str(kwargs.get("client_secret") or kwargs.get("clientSecret") or row.get("clientSecret"))
+	auth_url = _as_str(kwargs.get("auth_url") or kwargs.get("authUrl") or row.get("authUrl")) or _as_str(
+		PROVIDER_DEFAULTS["Xero"].get("authUrl")
+	)
+	scopes = _as_str(kwargs.get("scopes") or row.get("scopes")) or _as_str(PROVIDER_DEFAULTS["Xero"].get("scopes"))
+	if not client_id or not client_secret:
+		frappe.throw("Xero Client ID and Client Secret are required.", frappe.ValidationError)
+	if not auth_url:
+		frappe.throw("Xero Auth URL is required.", frappe.ValidationError)
+
+	state = frappe.generate_hash(length=28)
+	row["clientId"] = client_id
+	row["clientSecret"] = client_secret
+	row["authUrl"] = auth_url
+	row["scopes"] = scopes
+	row["xeroState"] = state
+	_persist_integration_record("Xero", row)
+
+	params = {
+		"response_type": "code",
+		"client_id": client_id,
+		"redirect_uri": _xero_redirect_uri(),
+		"scope": scopes,
+		"state": state,
+	}
+	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _xero_redirect_uri()}
+
+
+@frappe.whitelist(allow_guest=True)
+def xero_oauth_callback(**kwargs):
+	code = _as_str(kwargs.get("code"))
+	state = _as_str(kwargs.get("state"))
+	error = _as_str(kwargs.get("error"))
+	error_description = _as_str(kwargs.get("error_description"))
+	if error:
+		frappe.local.response["type"] = "redirect"
+		frappe.local.response["location"] = f"/portal/config/integrations?xero=error&message={quote(error_description or error)}"
+		return
+
+	row = _integration_record("Xero")
+	expected_state = _as_str(row.get("xeroState"))
+	if not code:
+		frappe.throw("Missing Xero authorization code.", frappe.ValidationError)
+	if expected_state and state != expected_state:
+		frappe.throw("Invalid Xero OAuth state.", frappe.PermissionError)
+
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	token_url = _as_str(row.get("tokenUrl")) or _as_str(PROVIDER_DEFAULTS["Xero"].get("tokenUrl"))
+	if not client_id or not client_secret or not token_url:
+		frappe.throw("Xero Client ID/Secret and Token URL must be configured before OAuth callback.", frappe.ValidationError)
+	if requests is None:
+		frappe.throw("Xero callback unavailable (requests library missing).")
+
+	headers = {
+		"Authorization": f"Basic {_xero_basic_auth(client_id, client_secret)}",
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Accept": "application/json",
+	}
+	form = {"grant_type": "authorization_code", "code": code, "redirect_uri": _xero_redirect_uri()}
+	resp = requests.post(token_url, headers=headers, data=form, timeout=20)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero token exchange failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	access_token = _as_str(data.get("access_token"))
+	refresh_token = _as_str(data.get("refresh_token"))
+	expires_in = _as_int(data.get("expires_in"), 1800)
+	if not access_token:
+		frappe.throw("Xero token exchange did not return access_token.", frappe.ValidationError)
+	row["xeroAccessToken"] = access_token
+	row["xeroRefreshToken"] = refresh_token
+	row["xeroTokenExpiresAt"] = datetime.fromtimestamp(
+		datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
+	).isoformat()
+	row["xeroConnectedAt"] = _utc_iso_now()
+	row["xeroState"] = ""
+
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+	_persist_integration_record("Xero", row)
+	frappe.local.response["type"] = "redirect"
+	frappe.local.response["location"] = "/portal/config/integrations?xero=connected"
+
+
+@frappe.whitelist()
+def xero_list_connections(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	row = _integration_record("Xero")
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "connections": connections, "tenantId": _as_str(row.get("tenantId"))}
+
+
+@frappe.whitelist(methods=["POST"])
 def test_connection(**kwargs):
 	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider"))
 	client_id = _as_str(kwargs.get("client_id") or kwargs.get("clientId"))
@@ -631,6 +845,20 @@ def test_connection(**kwargs):
 
 	if not provider:
 		frappe.throw("provider is required")
+
+	if provider == "Xero":
+		row = _integration_record("Xero")
+		row = _xero_refresh_if_needed(row)
+		try:
+			connections = _xero_fetch_connections(row)
+			row["xeroConnectionsJson"] = json.dumps(connections)
+			if connections and not _as_str(row.get("tenantId")):
+				first = connections[0] if isinstance(connections[0], dict) else {}
+				row["tenantId"] = _as_str(first.get("tenantId"))
+			_persist_integration_record("Xero", row)
+			return f"Xero connected. {len(connections)} organization connection(s) visible."
+		except Exception:
+			pass
 
 	test_url = base_url or auth_url or token_url
 	if not test_url:
