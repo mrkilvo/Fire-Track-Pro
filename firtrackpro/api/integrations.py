@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import quote, urlencode, urlparse
 
 import frappe
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils.file_manager import save_file
 
 try:
@@ -290,6 +291,131 @@ def _xero_fetch_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
 		frappe.throw(f"Xero connections failed ({resp.status_code}): {detail}", frappe.ValidationError)
 	rows = resp.json() if hasattr(resp, "json") else []
 	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_contacts(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	access_token = _as_str(config.get("xeroAccessToken"))
+	tenant_id = _as_str(config.get("tenantId"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not tenant_id:
+		frappe.throw("Xero tenant is not linked yet. Click Check Xero Orgs first.", frappe.ValidationError)
+
+	headers = {
+		"Authorization": f"Bearer {access_token}",
+		"Accept": "application/json",
+		"xero-tenant-id": tenant_id,
+	}
+	resp = requests.get("https://api.xero.com/api.xro/2.0/Contacts", headers=headers, timeout=25)
+	if resp.status_code == 401:
+		config = _xero_refresh_if_needed(config)
+		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		resp = requests.get("https://api.xero.com/api.xro/2.0/Contacts", headers=headers, timeout=25)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero contacts fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("Contacts") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _ensure_customer_xero_fields() -> None:
+	fields = {
+		"Customer": [
+			{
+				"fieldname": "xero_contact_id",
+				"label": "Xero Contact ID",
+				"fieldtype": "Data",
+				"insert_after": "customer_name",
+				"read_only": 1,
+				"no_copy": 1,
+				"unique": 1,
+			},
+			{
+				"fieldname": "xero_contact_number",
+				"label": "Xero Contact Number",
+				"fieldtype": "Data",
+				"insert_after": "xero_contact_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "xero_last_synced_at",
+				"label": "Xero Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "xero_contact_number",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		]
+	}
+	create_custom_fields(fields, update=True)
+
+
+@frappe.whitelist(methods=["POST"])
+def ensure_xero_sync_fields(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	_ensure_customer_xero_fields()
+	return {"ok": True, "message": "Xero customer sync fields are ready."}
+
+
+def _first_contact_value(contact: dict[str, Any], field_name: str) -> str:
+	rows = contact.get("Phones")
+	if isinstance(rows, list):
+		for row in rows:
+			if not isinstance(row, dict):
+				continue
+			if field_name == "PhoneNumber":
+				val = _as_str(row.get("PhoneNumber"))
+				if val:
+					return val
+	return ""
+
+
+def _primary_email(contact: dict[str, Any]) -> str:
+	rows = contact.get("EmailAddress")
+	return _as_str(rows)
+
+
+def _upsert_customer_from_xero_contact(contact: dict[str, Any]) -> str:
+	contact_id = _as_str(contact.get("ContactID"))
+	contact_name = _as_str(contact.get("Name"))
+	contact_number = _as_str(contact.get("ContactNumber"))
+	email = _primary_email(contact)
+	phone = _first_contact_value(contact, "PhoneNumber")
+	if not contact_id or not contact_name:
+		return ""
+
+	customer_name = ""
+	if frappe.db.exists("Customer", {"xero_contact_id": contact_id}):
+		customer_name = frappe.db.get_value("Customer", {"xero_contact_id": contact_id}, "name")
+	elif email and frappe.db.exists("Customer", {"email_id": email}):
+		customer_name = frappe.db.get_value("Customer", {"email_id": email}, "name")
+	elif frappe.db.exists("Customer", {"customer_name": contact_name}):
+		customer_name = frappe.db.get_value("Customer", {"customer_name": contact_name}, "name")
+
+	if customer_name:
+		doc = frappe.get_doc("Customer", customer_name)
+	else:
+		doc = frappe.new_doc("Customer")
+		doc.customer_name = contact_name
+		doc.customer_type = "Company"
+
+	doc.customer_name = contact_name
+	if email:
+		doc.email_id = email
+	if phone:
+		doc.mobile_no = phone
+	doc.xero_contact_id = contact_id
+	doc.xero_contact_number = contact_number
+	doc.xero_last_synced_at = frappe.utils.now_datetime()
+
+	doc.flags.ignore_permissions = True
+	doc.save(ignore_permissions=True)
+	return _as_str(doc.name)
 
 
 def _get_google_maps_api_key() -> str:
@@ -957,6 +1083,7 @@ def xero_oauth_callback(**kwargs):
 	error = _as_str(kwargs.get("error"))
 	error_description = _as_str(kwargs.get("error_description"))
 	target_host = _xero_parse_federated_state(state)
+	_ensure_customer_xero_fields()
 	if error:
 		frappe.local.response["type"] = "redirect"
 		if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
@@ -1005,10 +1132,14 @@ def xero_oauth_callback(**kwargs):
 	row["xeroState"] = ""
 
 	connections = _xero_fetch_connections(row)
+	if not connections:
+		frappe.local.response["type"] = "redirect"
+		frappe.local.response["location"] = "/portal/config/integrations?xero=error&message=No%20Xero%20organization%20connection%20was%20returned."
+		return
 	row["xeroConnectionsJson"] = json.dumps(connections)
-	if connections and not _as_str(row.get("tenantId")):
-		first = connections[0] if isinstance(connections[0], dict) else {}
-		row["tenantId"] = _as_str(first.get("tenantId"))
+	first = connections[0] if isinstance(connections[0], dict) else {}
+	row["tenantId"] = _as_str(first.get("tenantId"))
+	row["enabled"] = True
 	_persist_integration_record("Xero", row)
 
 	if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
@@ -1031,13 +1162,16 @@ def xero_oauth_callback(**kwargs):
 def xero_list_connections(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
+	_ensure_customer_xero_fields()
 	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
 	row["xeroConnectionsJson"] = json.dumps(connections)
-	if connections and not _as_str(row.get("tenantId")):
+	if connections:
 		first = connections[0] if isinstance(connections[0], dict) else {}
 		row["tenantId"] = _as_str(first.get("tenantId"))
+		row["enabled"] = True
 	_persist_integration_record("Xero", row)
 	return {"ok": True, "connections": connections, "tenantId": _as_str(row.get("tenantId"))}
 
@@ -1056,16 +1190,20 @@ def test_connection(**kwargs):
 
 	if not provider:
 		frappe.throw("provider is required")
+	if provider == "Xero":
+		_ensure_customer_xero_fields()
 
 	if provider == "Xero":
 		row = _integration_record("Xero")
+		row = _xero_apply_site_config_credentials(row)[0]
 		row = _xero_refresh_if_needed(row)
 		try:
 			connections = _xero_fetch_connections(row)
 			row["xeroConnectionsJson"] = json.dumps(connections)
-			if connections and not _as_str(row.get("tenantId")):
+			if connections:
 				first = connections[0] if isinstance(connections[0], dict) else {}
 				row["tenantId"] = _as_str(first.get("tenantId"))
+				row["enabled"] = True
 			_persist_integration_record("Xero", row)
 			return f"Xero connected. {len(connections)} organization connection(s) visible."
 		except Exception:
@@ -1092,14 +1230,64 @@ def test_connection(**kwargs):
 
 @frappe.whitelist(methods=["POST"])
 def sync_entity(**kwargs):
-	frappe.throw(
-		"External sync pipeline is not yet wired for this provider. Save/test works; OAuth token + entity mapping is still pending."
-	)
+	entity = _as_str(kwargs.get("entity")).lower()
+	if entity == "customer":
+		return sync_customer(**kwargs)
+	frappe.throw(f"Sync for entity '{entity or 'unknown'}' is not implemented yet.", frappe.ValidationError)
 
 
 @frappe.whitelist(methods=["POST"])
 def sync_customer(**kwargs):
-	return sync_entity(**kwargs)
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero customer sync is implemented right now.", frappe.ValidationError)
+
+	_ensure_customer_xero_fields()
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+
+	contacts = _xero_fetch_contacts(row)
+	created = 0
+	updated = 0
+	errors: list[str] = []
+
+	for contact in contacts:
+		try:
+			if not isinstance(contact, dict):
+				continue
+			contact_id = _as_str(contact.get("ContactID"))
+			existed = bool(contact_id and frappe.db.exists("Customer", {"xero_contact_id": contact_id}))
+			name = _upsert_customer_from_xero_contact(contact)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+
+	_persist_integration_record("Xero", row)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"provider": "Xero",
+		"entity": "customer",
+		"count": len(contacts),
+		"created": created,
+		"updated": updated,
+		"errors": errors[:20],
+		"message": f"Xero customer sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+	}
 
 
 @frappe.whitelist(methods=["POST"])
