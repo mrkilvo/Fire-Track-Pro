@@ -199,11 +199,20 @@ def _xero_redirect_uri(row: dict[str, Any] | None = None) -> str:
 		if candidate:
 			return candidate.rstrip("/")
 
-	host_name = _as_str(frappe.conf.get("host_name")).rstrip("/")
+	def _force_https_if_firetrack(url: str) -> str:
+		value = _as_str(url).strip()
+		if not value:
+			return value
+		lower = value.lower()
+		if ".firetrackpro.com.au" in lower and lower.startswith("http://"):
+			return "https://" + value[7:]
+		return value
+
+	host_name = _force_https_if_firetrack(_as_str(frappe.conf.get("host_name")).rstrip("/"))
 	if host_name:
 		return f"{host_name}/api/method/firtrackpro.api.integrations.xero_oauth_callback"
 
-	base = _as_str(frappe.utils.get_url()).rstrip("/")
+	base = _force_https_if_firetrack(_as_str(frappe.utils.get_url()).rstrip("/"))
 	return f"{base}/api/method/firtrackpro.api.integrations.xero_oauth_callback"
 
 
@@ -741,6 +750,173 @@ def save_config(**kwargs):
 
 
 @frappe.whitelist()
+def _xero_site_config_credentials() -> tuple[str, str]:
+	client_id = _as_str(frappe.conf.get("firtrackpro_xero_client_id") or frappe.conf.get("xero_client_id"))
+	client_secret = _as_str(frappe.conf.get("firtrackpro_xero_client_secret") or frappe.conf.get("xero_client_secret"))
+	return client_id, client_secret
+
+
+def _xero_apply_site_config_credentials(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+	client_id, client_secret = _xero_site_config_credentials()
+	changed = False
+	if client_id and _as_str(row.get("clientId")) != client_id:
+		row["clientId"] = client_id
+		changed = True
+	if client_secret and _as_str(row.get("clientSecret")) != client_secret:
+		row["clientSecret"] = client_secret
+		changed = True
+	return row, changed
+
+
+def _xero_is_unauthorized_client(resp: Any) -> bool:
+	try:
+		payload = resp.json() if hasattr(resp, "json") else {}
+	except Exception:
+		payload = {}
+	error = _as_str(payload.get("error"))
+	text = _as_str(getattr(resp, "text", ""))
+	return error == "unauthorized_client" or "unauthorized_client" in text.lower()
+
+
+def _xero_state_secret() -> str:
+	return _as_str(_firelink_bridge_token()) or _as_str(frappe.local.site) or "firetrack-xero"
+
+
+def _xero_build_federated_state(site_host: str) -> str:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return frappe.generate_hash(length=28)
+	payload = {
+		"v": 1,
+		"h": host,
+		"n": frappe.generate_hash(length=10),
+		"t": int(datetime.now(timezone.utc).timestamp()),
+	}
+	raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+	raw_b64 = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+	sig = hmac.new(_xero_state_secret().encode("utf-8"), raw_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+	return f"ftx1.{raw_b64}.{sig}"
+
+
+def _xero_parse_federated_state(state: str) -> str:
+	value = _as_str(state)
+	if not value.startswith("ftx1."):
+		return ""
+	parts = value.split(".")
+	if len(parts) != 3:
+		return ""
+	_, raw_b64, sig = parts
+	expected = hmac.new(_xero_state_secret().encode("utf-8"), raw_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+	if not hmac.compare_digest(expected, sig):
+		return ""
+	try:
+		padded = raw_b64 + "=" * ((4 - len(raw_b64) % 4) % 4)
+		decoded = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
+		payload = json.loads(decoded)
+	except Exception:
+		return ""
+	host = _normalize_site_host((payload or {}).get("h"))
+	return host
+
+
+def xero_receive_tokens_local(**kwargs):
+	target_host = _normalize_site_host(kwargs.get("target_host") or getattr(frappe.local, "site", ""))
+	if not target_host:
+		return {"ok": False, "message": "target_host is required."}
+	row = _integration_record("Xero")
+	row["clientId"] = _as_str(kwargs.get("client_id") or row.get("clientId"))
+	row["clientSecret"] = _as_str(kwargs.get("client_secret") or row.get("clientSecret"))
+	row["authUrl"] = _as_str(kwargs.get("auth_url") or row.get("authUrl") or PROVIDER_DEFAULTS["Xero"].get("authUrl"))
+	row["tokenUrl"] = _as_str(kwargs.get("token_url") or row.get("tokenUrl") or PROVIDER_DEFAULTS["Xero"].get("tokenUrl"))
+	row["scopes"] = _as_str(kwargs.get("scopes") or row.get("scopes") or PROVIDER_DEFAULTS["Xero"].get("scopes"))
+	row["webhookSecret"] = _as_str(kwargs.get("webhook_secret") or row.get("webhookSecret"))
+	row["xeroAccessToken"] = _as_str(kwargs.get("xero_access_token"))
+	row["xeroRefreshToken"] = _as_str(kwargs.get("xero_refresh_token"))
+	row["xeroTokenExpiresAt"] = _as_str(kwargs.get("xero_token_expires_at"))
+	row["xeroConnectedAt"] = _as_str(kwargs.get("xero_connected_at")) or _utc_iso_now()
+	row["xeroState"] = ""
+	connections = kwargs.get("xero_connections")
+	if isinstance(connections, list):
+		row["xeroConnectionsJson"] = json.dumps(connections)
+		if connections and not _as_str(row.get("tenantId")):
+			first = connections[0] if isinstance(connections[0], dict) else {}
+			row["tenantId"] = _as_str(first.get("tenantId"))
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "site_host": target_host}
+
+
+def _xero_push_tokens_to_site(target_host: str, row: dict[str, Any], connections: list[dict[str, Any]]) -> dict[str, Any]:
+	host = _normalize_site_host(target_host)
+	if not host:
+		return {"ok": False, "message": "target_host is required"}
+	kwargs_payload = {
+		"target_host": host,
+		"client_id": _as_str(row.get("clientId")),
+		"client_secret": _as_str(row.get("clientSecret")),
+		"auth_url": _as_str(row.get("authUrl")),
+		"token_url": _as_str(row.get("tokenUrl")),
+		"scopes": _as_str(row.get("scopes")),
+		"webhook_secret": _as_str(row.get("webhookSecret")),
+		"xero_access_token": _as_str(row.get("xeroAccessToken")),
+		"xero_refresh_token": _as_str(row.get("xeroRefreshToken")),
+		"xero_token_expires_at": _as_str(row.get("xeroTokenExpiresAt")),
+		"xero_connected_at": _as_str(row.get("xeroConnectedAt")),
+		"xero_connections": connections,
+	}
+	try:
+		res = subprocess.run(
+			[
+				"bench",
+				"--site",
+				host,
+				"execute",
+				"firtrackpro.api.integrations.xero_receive_tokens_local",
+				"--kwargs",
+				json.dumps(kwargs_payload),
+			],
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=180,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"token push failed to start: {exc}"}
+	if int(res.returncode or 0) != 0:
+		detail = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+		if len(detail) > 800:
+			detail = detail[-800:]
+		return {"ok": False, "message": f"token push failed for {host}", "details": detail}
+	return {"ok": True, "site_host": host}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_xero_oauth_start_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	target_host = _normalize_site_host(kwargs.get("site_host"))
+	if not target_host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	row = _integration_record("Xero")
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	auth_url = _as_str(row.get("authUrl")) or _as_str(PROVIDER_DEFAULTS["Xero"].get("authUrl"))
+	scopes = _as_str(row.get("scopes")) or _as_str(PROVIDER_DEFAULTS["Xero"].get("scopes"))
+	if not client_id or not client_secret:
+		frappe.throw("Xero Client ID and Client Secret are required on FireLink.", frappe.ValidationError)
+	state = _xero_build_federated_state(target_host)
+	row["xeroState"] = state
+	_persist_integration_record("Xero", row)
+	params = {
+		"response_type": "code",
+		"client_id": client_id,
+		"redirect_uri": _xero_redirect_uri(row),
+		"scope": scopes,
+		"state": state,
+	}
+	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _xero_redirect_uri(row), "target_site": target_host}
+
+
 def xero_oauth_start(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
@@ -3096,6 +3272,147 @@ def _attach_xero_seed_result(result: dict[str, Any], site_host: str) -> dict[str
 	if details:
 		result["xero_seed_details"] = details
 	return result
+
+
+def _list_seedable_site_hosts() -> list[str]:
+	root = _sites_root_path()
+	excluded = {
+		"assets",
+		"archived_sites",
+		"logs",
+		"private",
+		"public",
+		".git",
+		"patches.txt",
+		"apps.txt",
+		"currentsite.txt",
+		"common_site_config.json",
+	}
+	hosts: list[str] = []
+	try:
+		entries = sorted(os.listdir(root))
+	except Exception:
+		return hosts
+	for entry in entries:
+		if entry in excluded:
+			continue
+		site_dir = os.path.join(root, entry)
+		config_path = os.path.join(site_dir, "site_config.json")
+		if not os.path.isdir(site_dir) or not os.path.isfile(config_path):
+			continue
+		if "." not in entry:
+			continue
+		host = _normalize_site_host(entry)
+		if host:
+			hosts.append(host)
+	return hosts
+
+
+def _parse_site_hosts_arg(raw_value: Any) -> list[str]:
+	if isinstance(raw_value, list | tuple):
+		raw_items = [str(v or "").strip() for v in raw_value]
+	else:
+		raw = _as_str(raw_value)
+		raw_items = [part.strip() for part in raw.replace("\n", ",").split(",") if part.strip()]
+	hosts: list[str] = []
+	seen: set[str] = set()
+	for item in raw_items:
+		host = _normalize_site_host(item)
+		if host and host not in seen:
+			seen.add(host)
+			hosts.append(host)
+	return hosts
+
+
+def _seed_xero_site_from_firelink(site_host: str) -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return {"ok": False, "message": "site_host is required."}
+	if _is_firelink_local_site():
+		return _seed_xero_site_config(host)
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_seed_xero_for_site_bridge",
+		_remote_bridge_payload({"site_host": host}),
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_seed_xero_for_site(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host") or getattr(frappe.local, "site", ""))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	result = _seed_xero_site_from_firelink(host)
+	result["site_host"] = host
+	return result
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_seed_xero_for_site_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	result = _seed_xero_site_config(host)
+	result["site_host"] = host
+	return result
+
+
+def _rotate_xero_credentials_for_sites(site_hosts: list[str]) -> dict[str, Any]:
+	results: list[dict[str, Any]] = []
+	success = 0
+	failed = 0
+	for host in site_hosts:
+		seed = _seed_xero_site_config(host)
+		ok = _as_bool(seed.get("ok"))
+		if ok:
+			success += 1
+		else:
+			failed += 1
+		results.append(
+			{
+				"site_host": host,
+				"status": "success" if ok else "failed",
+				"message": _as_str(seed.get("message")),
+				"details": _as_str(seed.get("details")),
+			}
+		)
+	return {
+		"ok": failed == 0,
+		"total": len(site_hosts),
+		"success": success,
+		"failed": failed,
+		"results": results,
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_rotate_xero_credentials(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	sites = _parse_site_hosts_arg(kwargs.get("sites"))
+	if _is_firelink_local_site():
+		target_sites = sites or _list_seedable_site_hosts()
+		if not target_sites:
+			return {"ok": False, "message": "No tenant sites found to seed.", "total": 0, "success": 0, "failed": 0, "results": []}
+		return _rotate_xero_credentials_for_sites(target_sites)
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_rotate_xero_credentials_bridge",
+		_remote_bridge_payload({"sites": sites}),
+	)
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_rotate_xero_credentials_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	sites = _parse_site_hosts_arg(kwargs.get("sites"))
+	target_sites = sites or _list_seedable_site_hosts()
+	if not target_sites:
+		return {"ok": False, "message": "No tenant sites found to seed.", "total": 0, "success": 0, "failed": 0, "results": []}
+	return _rotate_xero_credentials_for_sites(target_sites)
 
 
 @frappe.whitelist(methods=["POST"])

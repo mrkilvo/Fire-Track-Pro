@@ -9,6 +9,10 @@ from firtrackpro.api.integrations import (
     PROVIDER_DEFAULTS,
     _as_str,
     _firelink_http,
+    _firelink_remote_bridge_call,
+    _is_firelink_local_site,
+    _normalize_site_host,
+    _remote_bridge_payload,
     _integration_record,
     _persist_integration_record,
     _xero_redirect_uri,
@@ -73,6 +77,19 @@ def _load_firelink_xero_config() -> dict[str, Any]:
 def xero_oauth_start_shared(**kwargs):
     if frappe.session.user == "Guest":
         frappe.throw("Login required", frappe.PermissionError)
+
+    # For tenant sites, always start OAuth via FireLink so only one callback URI is needed in Xero.
+    if not _is_firelink_local_site():
+        host = _normalize_site_host(getattr(frappe.local, "site", ""))
+        if not host:
+            frappe.throw("Unable to determine tenant host for Xero connect.", frappe.ValidationError)
+        bridge = _firelink_remote_bridge_call(
+            "/api/method/firtrackpro.api.integrations.firelink_xero_oauth_start_bridge",
+            _remote_bridge_payload({"site_host": host}),
+        )
+        if isinstance(bridge, dict):
+            return bridge
+        frappe.throw("Invalid FireLink Xero bridge response", frappe.ValidationError)
 
     row = _integration_record("Xero")
     site_cfg = _site_xero_config()
