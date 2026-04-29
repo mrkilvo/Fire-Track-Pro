@@ -3055,6 +3055,49 @@ def _attach_domain_result(result: dict[str, Any], **kwargs) -> dict[str, Any]:
 	return result
 
 
+def _seed_xero_site_config(site_host: str) -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return {"ok": False, "message": "site_host is required for Xero seed."}
+	row = _integration_record("Xero")
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	if not client_id or not client_secret:
+		return {"ok": False, "message": "FireLink Xero credentials are empty."}
+	pairs = [
+		("firtrackpro_xero_client_id", client_id),
+		("firtrackpro_xero_client_secret", client_secret),
+	]
+	for key, value in pairs:
+		try:
+			res = subprocess.run(
+				["bench", "--site", host, "set-config", key, value],
+				check=False,
+				text=True,
+				capture_output=True,
+				timeout=120,
+				cwd=_sites_root_path(),
+			)
+		except Exception as exc:
+			return {"ok": False, "message": f"Xero seed failed to start for {host}: {exc}"}
+		if int(res.returncode or 0) != 0:
+			detail = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+			if len(detail) > 600:
+				detail = detail[-600:]
+			return {"ok": False, "message": f"Xero seed failed for {host} on key {key}.", "details": detail}
+	return {"ok": True, "message": f"Xero credentials seeded for {host}."}
+
+
+def _attach_xero_seed_result(result: dict[str, Any], site_host: str) -> dict[str, Any]:
+	seed = _seed_xero_site_config(site_host)
+	result["xero_seed_status"] = "success" if _as_bool(seed.get("ok")) else "failed"
+	result["xero_seed_message"] = _as_str(seed.get("message"))
+	details = _as_str(seed.get("details"))
+	if details:
+		result["xero_seed_details"] = details
+	return result
+
+
 @frappe.whitelist(methods=["POST"])
 def firelink_admin_site_status(**kwargs):
 	if frappe.session.user == "Guest":
@@ -3090,7 +3133,7 @@ def firelink_admin_provision_site(**kwargs):
 	if _is_firelink_local_site():
 		before = _local_site_status_payload(host)
 		if _as_bool(before.get("exists_in_k8s")):
-			return _attach_domain_result(
+			result = _attach_domain_result(
 				{
 					**before,
 					"status": "success",
@@ -3098,6 +3141,7 @@ def firelink_admin_provision_site(**kwargs):
 				},
 				**kwargs,
 			)
+			return _attach_xero_seed_result(result, host)
 
 		run = _run_provision_command(
 			site_host=host,
@@ -3109,7 +3153,7 @@ def firelink_admin_provision_site(**kwargs):
 		)
 		after = _local_site_status_payload(host)
 		if _as_bool(after.get("exists_in_k8s")):
-			return _attach_domain_result(
+			result = _attach_domain_result(
 				{
 					**after,
 					"status": "success",
@@ -3118,6 +3162,7 @@ def firelink_admin_provision_site(**kwargs):
 				},
 				**kwargs,
 			)
+			return _attach_xero_seed_result(result, host)
 		return _attach_domain_result(
 			{
 				**after,
@@ -3153,7 +3198,7 @@ def firelink_admin_provision_site_bridge(**kwargs):
 		frappe.throw("site_host is required", frappe.ValidationError)
 	before = _local_site_status_payload(host)
 	if _as_bool(before.get("exists_in_k8s")):
-		return _attach_domain_result(
+		result = _attach_domain_result(
 			{
 				**before,
 				"status": "success",
@@ -3161,6 +3206,7 @@ def firelink_admin_provision_site_bridge(**kwargs):
 			},
 			**kwargs,
 		)
+		return _attach_xero_seed_result(result, host)
 
 	run = _run_provision_command(
 		site_host=host,
@@ -3172,7 +3218,7 @@ def firelink_admin_provision_site_bridge(**kwargs):
 	)
 	after = _local_site_status_payload(host)
 	if _as_bool(after.get("exists_in_k8s")):
-		return _attach_domain_result(
+		result = _attach_domain_result(
 			{
 				**after,
 				"status": "success",
@@ -3181,6 +3227,7 @@ def firelink_admin_provision_site_bridge(**kwargs):
 			},
 			**kwargs,
 		)
+		return _attach_xero_seed_result(result, host)
 	return _attach_domain_result(
 		{
 			**after,

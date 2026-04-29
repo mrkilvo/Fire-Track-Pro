@@ -15,6 +15,31 @@ from firtrackpro.api.integrations import (
 )
 
 
+def _site_xero_config() -> dict[str, str]:
+    client_id = ""
+    client_secret = ""
+    for key in (
+        "firtrackpro_xero_client_id",
+        "xero_client_id",
+    ):
+        value = _as_str(frappe.conf.get(key))
+        if value:
+            client_id = value
+            break
+    for key in (
+        "firtrackpro_xero_client_secret",
+        "xero_client_secret",
+    ):
+        value = _as_str(frappe.conf.get(key))
+        if value:
+            client_secret = value
+            break
+    return {
+        "clientId": client_id,
+        "clientSecret": client_secret,
+    }
+
+
 def _load_firelink_xero_config() -> dict[str, Any]:
     """Read central Xero config from FireLink source-of-truth."""
     try:
@@ -50,18 +75,21 @@ def xero_oauth_start_shared(**kwargs):
         frappe.throw("Login required", frappe.PermissionError)
 
     row = _integration_record("Xero")
+    site_cfg = _site_xero_config()
     shared = _load_firelink_xero_config()
 
     client_id = _as_str(
         kwargs.get("client_id")
         or kwargs.get("clientId")
         or row.get("clientId")
+        or site_cfg.get("clientId")
         or shared.get("clientId")
     )
     client_secret = _as_str(
         kwargs.get("client_secret")
         or kwargs.get("clientSecret")
         or row.get("clientSecret")
+        or site_cfg.get("clientSecret")
         or shared.get("clientSecret")
     )
     auth_url = _as_str(
@@ -74,7 +102,6 @@ def xero_oauth_start_shared(**kwargs):
         PROVIDER_DEFAULTS["Xero"].get("scopes")
     )
 
-    # Keep tenant row hydrated with centrally managed values so callback can complete locally.
     if not _as_str(row.get("tokenUrl")) and _as_str(shared.get("tokenUrl")):
         row["tokenUrl"] = _as_str(shared.get("tokenUrl"))
     if not _as_str(row.get("webhookSecret")) and _as_str(shared.get("webhookSecret")):
@@ -82,7 +109,7 @@ def xero_oauth_start_shared(**kwargs):
 
     if not client_id or not client_secret:
         frappe.throw(
-            "Xero Client ID and Client Secret are required (tenant + FireLink fallback both empty).",
+            "Xero Client ID and Client Secret are required (tenant/site config/FireLink fallback all empty).",
             frappe.ValidationError,
         )
     if not auth_url:
