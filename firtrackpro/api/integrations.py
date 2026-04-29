@@ -3293,15 +3293,47 @@ def firelink_asset_sync_bridge(**kwargs):
 	return _upsert_fl_asset_local(kwargs)
 
 
+def _resolve_defect_asset_firelink_id(raw_asset_id: str, local_defect_id: str) -> str:
+	asset_id = _as_str(raw_asset_id)
+	defect_id = _as_str(local_defect_id)
+	if _is_firelink_local_site():
+		return asset_id
+
+	# If caller passed a local FT Asset name, map it to the canonical FireLink uid.
+	if asset_id and frappe.db.exists("FT Asset", asset_id):
+		mapped = _as_str(frappe.db.get_value("FT Asset", asset_id, "asset_firelink_uid"))
+		if mapped:
+			return mapped
+
+	# If caller passed no usable asset id, use defect->asset->asset_firelink_uid.
+	if defect_id and frappe.db.exists("FT Defect", defect_id):
+		defect_asset = _as_str(frappe.db.get_value("FT Defect", defect_id, "defect_asset"))
+		if defect_asset:
+			mapped = _as_str(frappe.db.get_value("FT Asset", defect_asset, "asset_firelink_uid"))
+			if mapped:
+				return mapped
+			frappe.throw(
+				f"Defect {defect_id} is linked to local asset {defect_asset}, but that asset has no asset_firelink_uid. "
+				"Sync the asset to FireLink first so strict asset linkage is preserved.",
+				frappe.ValidationError,
+			)
+	return asset_id
+
+
 @frappe.whitelist(methods=["POST"])
 def firelink_defect_sync(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
+	local_defect_id = _as_str(kwargs.get("local_defect_id"))
+	resolved_firelink_asset_id = _resolve_defect_asset_firelink_id(
+		_as_str(kwargs.get("firelink_asset_id")),
+		local_defect_id,
+	)
 	payload = {
 		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")),
 		"firelink_defect_id": _as_str(kwargs.get("firelink_defect_id")) or None,
-		"local_defect_id": _as_str(kwargs.get("local_defect_id")),
-		"firelink_asset_id": _as_str(kwargs.get("firelink_asset_id")) or None,
+		"local_defect_id": local_defect_id,
+		"firelink_asset_id": resolved_firelink_asset_id or None,
 		"defect_template_code": _as_str(kwargs.get("defect_template_code")) or None,
 		"defect_severity": _as_str(kwargs.get("defect_severity")) or None,
 		"defect_status": _as_str(kwargs.get("defect_status")) or None,
