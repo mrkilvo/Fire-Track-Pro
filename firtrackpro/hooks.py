@@ -55,3 +55,11 @@ doc_events = {
 		"on_update": "firtrackpro.events.firelink_sync.sync_defect_after_save",
 	},
 }
+
+scheduler_events = {
+	"cron": {
+		"*/10 * * * *": [
+			"firtrackpro.api.integrations.run_accounting_auto_sync",
+		],
+	},
+}

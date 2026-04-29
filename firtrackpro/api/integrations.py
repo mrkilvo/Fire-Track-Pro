@@ -354,11 +354,79 @@ def _ensure_customer_xero_fields() -> None:
 	create_custom_fields(fields, update=True)
 
 
+def _ensure_supplier_xero_fields() -> None:
+	fields = {
+		"Supplier": [
+			{
+				"fieldname": "xero_contact_id",
+				"label": "Xero Contact ID",
+				"fieldtype": "Data",
+				"insert_after": "supplier_name",
+				"read_only": 1,
+				"no_copy": 1,
+				"unique": 1,
+			},
+			{
+				"fieldname": "xero_contact_number",
+				"label": "Xero Contact Number",
+				"fieldtype": "Data",
+				"insert_after": "xero_contact_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "xero_last_synced_at",
+				"label": "Xero Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "xero_contact_number",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		]
+	}
+	create_custom_fields(fields, update=True)
+
+
+def _ensure_sales_invoice_xero_fields() -> None:
+	fields = {
+		"Sales Invoice": [
+			{
+				"fieldname": "xero_invoice_id",
+				"label": "Xero Invoice ID",
+				"fieldtype": "Data",
+				"insert_after": "customer",
+				"read_only": 1,
+				"no_copy": 1,
+				"unique": 1,
+			},
+			{
+				"fieldname": "xero_invoice_number",
+				"label": "Xero Invoice Number",
+				"fieldtype": "Data",
+				"insert_after": "xero_invoice_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "xero_last_synced_at",
+				"label": "Xero Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "xero_invoice_number",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		]
+	}
+	create_custom_fields(fields, update=True)
+
+
 @frappe.whitelist(methods=["POST"])
 def ensure_xero_sync_fields(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	_ensure_customer_xero_fields()
+	_ensure_supplier_xero_fields()
+	_ensure_sales_invoice_xero_fields()
 	return {"ok": True, "message": "Xero customer sync fields are ready."}
 
 
@@ -415,6 +483,144 @@ def _upsert_customer_from_xero_contact(contact: dict[str, Any]) -> str:
 
 	doc.flags.ignore_permissions = True
 	doc.save(ignore_permissions=True)
+	return _as_str(doc.name)
+
+
+def _upsert_supplier_from_xero_contact(contact: dict[str, Any]) -> str:
+	contact_id = _as_str(contact.get("ContactID"))
+	contact_name = _as_str(contact.get("Name"))
+	contact_number = _as_str(contact.get("ContactNumber"))
+	email = _primary_email(contact)
+	phone = _first_contact_value(contact, "PhoneNumber")
+	if not contact_id or not contact_name:
+		return ""
+
+	supplier_name = ""
+	if frappe.db.exists("Supplier", {"xero_contact_id": contact_id}):
+		supplier_name = frappe.db.get_value("Supplier", {"xero_contact_id": contact_id}, "name")
+	elif email and frappe.db.exists("Supplier", {"email_id": email}):
+		supplier_name = frappe.db.get_value("Supplier", {"email_id": email}, "name")
+	elif frappe.db.exists("Supplier", {"supplier_name": contact_name}):
+		supplier_name = frappe.db.get_value("Supplier", {"supplier_name": contact_name}, "name")
+
+	if supplier_name:
+		doc = frappe.get_doc("Supplier", supplier_name)
+	else:
+		doc = frappe.new_doc("Supplier")
+		doc.supplier_name = contact_name
+		doc.supplier_group = frappe.db.get_single_value("Buying Settings", "supplier_group") or "All Supplier Groups"
+		doc.supplier_type = "Company"
+
+	doc.supplier_name = contact_name
+	if email:
+		doc.email_id = email
+	if phone:
+		doc.mobile_no = phone
+	doc.xero_contact_id = contact_id
+	doc.xero_contact_number = contact_number
+	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.flags.ignore_permissions = True
+	doc.save(ignore_permissions=True)
+	return _as_str(doc.name)
+
+
+def _xero_fetch_invoices(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	access_token = _as_str(config.get("xeroAccessToken"))
+	tenant_id = _as_str(config.get("tenantId"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not tenant_id:
+		frappe.throw("Xero tenant is not linked yet. Click Check Xero Orgs first.", frappe.ValidationError)
+
+	headers = {
+		"Authorization": f"Bearer {access_token}",
+		"Accept": "application/json",
+		"xero-tenant-id": tenant_id,
+	}
+	params = {"where": 'Type=="ACCREC"'}
+	resp = requests.get("https://api.xero.com/api.xro/2.0/Invoices", headers=headers, params=params, timeout=30)
+	if resp.status_code == 401:
+		config = _xero_refresh_if_needed(config)
+		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		resp = requests.get("https://api.xero.com/api.xro/2.0/Invoices", headers=headers, params=params, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero invoices fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("Invoices") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _ensure_xero_sync_item() -> str:
+	code = "XERO-SYNC-SERVICE"
+	if frappe.db.exists("Item", code):
+		return code
+	item = frappe.new_doc("Item")
+	item.item_code = code
+	item.item_name = "Xero Imported Service"
+	item.item_group = frappe.db.get_single_value("Stock Settings", "item_group") or "All Item Groups"
+	item.stock_uom = "Nos"
+	item.is_stock_item = 0
+	item.include_item_in_manufacturing = 0
+	item.flags.ignore_permissions = True
+	item.insert(ignore_permissions=True)
+	return code
+
+
+def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
+	invoice_id = _as_str(invoice.get("InvoiceID"))
+	invoice_number = _as_str(invoice.get("InvoiceNumber"))
+	contact = invoice.get("Contact") if isinstance(invoice.get("Contact"), dict) else {}
+	contact_id = _as_str(contact.get("ContactID"))
+	customer = ""
+	if contact_id and frappe.db.exists("Customer", {"xero_contact_id": contact_id}):
+		customer = _as_str(frappe.db.get_value("Customer", {"xero_contact_id": contact_id}, "name"))
+	if not customer:
+		customer = _upsert_customer_from_xero_contact(contact if isinstance(contact, dict) else {})
+	if not customer:
+		return ""
+
+	doc_name = ""
+	if invoice_id and frappe.db.exists("Sales Invoice", {"xero_invoice_id": invoice_id}):
+		doc_name = _as_str(frappe.db.get_value("Sales Invoice", {"xero_invoice_id": invoice_id}, "name"))
+	elif invoice_number and frappe.db.exists("Sales Invoice", {"bill_no": invoice_number}):
+		doc_name = _as_str(frappe.db.get_value("Sales Invoice", {"bill_no": invoice_number}, "name"))
+
+	item_code = _ensure_xero_sync_item()
+	total = float(invoice.get("Total") or 0)
+	date_val = _as_str(invoice.get("DateString") or invoice.get("Date") or frappe.utils.nowdate())[:10]
+	due_val = _as_str(invoice.get("DueDateString") or invoice.get("DueDate") or date_val)[:10]
+
+	if doc_name:
+		doc = frappe.get_doc("Sales Invoice", doc_name)
+		if int(doc.docstatus or 0) != 0:
+			return _as_str(doc.name)
+		doc.customer = customer
+		doc.bill_no = invoice_number or doc.bill_no
+		doc.posting_date = date_val
+		doc.due_date = due_val
+		doc.xero_invoice_id = invoice_id
+		doc.xero_invoice_number = invoice_number
+		doc.xero_last_synced_at = frappe.utils.now_datetime()
+		doc.items = []
+		doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
+		doc.flags.ignore_permissions = True
+		doc.save(ignore_permissions=True)
+		return _as_str(doc.name)
+
+	doc = frappe.new_doc("Sales Invoice")
+	doc.customer = customer
+	doc.bill_no = invoice_number
+	doc.posting_date = date_val
+	doc.due_date = due_val
+	doc.xero_invoice_id = invoice_id
+	doc.xero_invoice_number = invoice_number
+	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
 	return _as_str(doc.name)
 
 
@@ -1084,6 +1290,8 @@ def xero_oauth_callback(**kwargs):
 	error_description = _as_str(kwargs.get("error_description"))
 	target_host = _xero_parse_federated_state(state)
 	_ensure_customer_xero_fields()
+	_ensure_supplier_xero_fields()
+	_ensure_sales_invoice_xero_fields()
 	if error:
 		frappe.local.response["type"] = "redirect"
 		if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
@@ -1163,6 +1371,8 @@ def xero_list_connections(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	_ensure_customer_xero_fields()
+	_ensure_supplier_xero_fields()
+	_ensure_sales_invoice_xero_fields()
 	row = _integration_record("Xero")
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
@@ -1192,6 +1402,8 @@ def test_connection(**kwargs):
 		frappe.throw("provider is required")
 	if provider == "Xero":
 		_ensure_customer_xero_fields()
+		_ensure_supplier_xero_fields()
+		_ensure_sales_invoice_xero_fields()
 
 	if provider == "Xero":
 		row = _integration_record("Xero")
@@ -1233,6 +1445,10 @@ def sync_entity(**kwargs):
 	entity = _as_str(kwargs.get("entity")).lower()
 	if entity == "customer":
 		return sync_customer(**kwargs)
+	if entity == "supplier":
+		return sync_supplier(**kwargs)
+	if entity == "invoice":
+		return sync_invoice(**kwargs)
 	frappe.throw(f"Sync for entity '{entity or 'unknown'}' is not implemented yet.", frappe.ValidationError)
 
 
@@ -1292,17 +1508,159 @@ def sync_customer(**kwargs):
 
 @frappe.whitelist(methods=["POST"])
 def sync_supplier(**kwargs):
-	return sync_entity(**kwargs)
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero supplier sync is implemented right now.", frappe.ValidationError)
+
+	_ensure_supplier_xero_fields()
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+
+	contacts = _xero_fetch_contacts(row)
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for contact in contacts:
+		try:
+			if not isinstance(contact, dict):
+				continue
+			contact_id = _as_str(contact.get("ContactID"))
+			existed = bool(contact_id and frappe.db.exists("Supplier", {"xero_contact_id": contact_id}))
+			name = _upsert_supplier_from_xero_contact(contact)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+
+	_persist_integration_record("Xero", row)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"provider": "Xero",
+		"entity": "supplier",
+		"count": len(contacts),
+		"created": created,
+		"updated": updated,
+		"errors": errors[:20],
+		"message": f"Xero supplier sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+	}
 
 
 @frappe.whitelist(methods=["POST"])
 def sync_invoice(**kwargs):
-	return sync_entity(**kwargs)
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero invoice sync is implemented right now.", frappe.ValidationError)
+
+	_ensure_sales_invoice_xero_fields()
+	_ensure_customer_xero_fields()
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+
+	invoices = _xero_fetch_invoices(row)
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for invoice in invoices:
+		try:
+			if not isinstance(invoice, dict):
+				continue
+			invoice_id = _as_str(invoice.get("InvoiceID"))
+			existed = bool(invoice_id and frappe.db.exists("Sales Invoice", {"xero_invoice_id": invoice_id}))
+			name = _upsert_sales_invoice_from_xero_invoice(invoice)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+
+	_persist_integration_record("Xero", row)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"provider": "Xero",
+		"entity": "invoice",
+		"count": len(invoices),
+		"created": created,
+		"updated": updated,
+		"errors": errors[:20],
+		"message": f"Xero invoice sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+	}
 
 
 @frappe.whitelist(methods=["POST"])
 def sync_payment(**kwargs):
 	return sync_entity(**kwargs)
+
+
+def run_accounting_auto_sync():
+	"""Cron-driven auto sync profile:
+	- every 10m: invoices
+	- every 30m: customers
+	- every 60m: suppliers
+	"""
+	try:
+		row = _integration_record("Xero")
+	except Exception:
+		return {"ok": False, "message": "Xero integration record unavailable."}
+
+	row = _xero_apply_site_config_credentials(row)[0]
+	enabled = _as_bool(row.get("enabled"))
+	tenant_id = _as_str(row.get("tenantId"))
+	if not enabled and not tenant_id:
+		return {"ok": True, "message": "Auto sync skipped: Xero not enabled/connected."}
+
+	sync_customers = _as_bool(row.get("syncCustomers"))
+	sync_invoices = _as_bool(row.get("syncInvoices"))
+	sync_suppliers = _as_bool(row.get("syncSuppliers"))
+
+	now = datetime.now(timezone.utc)
+	minute = int(now.minute)
+	results: dict[str, Any] = {"ok": True, "ran": [], "errors": []}
+
+	def _run(label: str, fn):
+		try:
+			out = fn(provider="Xero")
+			results["ran"].append({"entity": label, "result": out})
+		except Exception as exc:
+			results["errors"].append({"entity": label, "error": _as_str(exc)})
+
+	if sync_invoices:
+		_run("invoice", sync_invoice)
+	if sync_customers and minute % 30 == 0:
+		_run("customer", sync_customer)
+	if sync_suppliers and minute == 0:
+		_run("supplier", sync_supplier)
+
+	if results["errors"]:
+		try:
+			frappe.log_error(json.dumps(results, default=str), "Xero Auto Sync Errors")
+		except Exception:
+			pass
+	return results
 
 
 @frappe.whitelist()
