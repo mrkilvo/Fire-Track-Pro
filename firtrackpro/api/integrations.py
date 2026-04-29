@@ -740,7 +740,7 @@ def save_config(**kwargs):
 	return {"ok": True, "provider": provider}
 
 
-@frappe.whitelist(methods=["POST"])
+@frappe.whitelist()
 def xero_oauth_start(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
