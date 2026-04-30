@@ -340,6 +340,44 @@ def _xero_fetch_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
 	return rows if isinstance(rows, list) else []
 
 
+
+
+def _xero_remote_disconnect(config: dict[str, Any]) -> dict[str, Any]:
+	if requests is None:
+		return {"ok": False, "message": "requests library missing"}
+	access_token = _as_str(config.get("xeroAccessToken"))
+	if not access_token:
+		return {"ok": True, "message": "No Xero access token to revoke."}
+	connections = []
+	try:
+		connections = _xero_fetch_connections(config)
+	except Exception:
+		connections = []
+	failures: list[str] = []
+	for row in (connections or []):
+		if not isinstance(row, dict):
+			continue
+		conn_id = _as_str(row.get("id"))
+		if not conn_id:
+			continue
+		resp = requests.delete(
+			f"https://api.xero.com/connections/{conn_id}",
+			headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+			timeout=20,
+		)
+		if resp.status_code == 401:
+			config = _xero_refresh_if_needed(config)
+			access_token = _as_str(config.get("xeroAccessToken"))
+			resp = requests.delete(
+				f"https://api.xero.com/connections/{conn_id}",
+				headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+				timeout=20,
+			)
+		if not resp.ok:
+			failures.append(f"{conn_id}:{resp.status_code}")
+	if failures:
+		return {"ok": False, "message": f"Some Xero connections could not be revoked: {', '.join(failures)}"}
+	return {"ok": True, "message": "Xero organization connections revoked."}
 def _xero_fetch_contacts(config: dict[str, Any]) -> list[dict[str, Any]]:
 	if requests is None:
 		frappe.throw("Xero calls are unavailable (requests library missing).")
@@ -1576,6 +1614,8 @@ def xero_disconnect(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	revoke_result = _xero_remote_disconnect(row)
 	row["xeroAccessToken"] = ""
 	row["xeroRefreshToken"] = ""
 	row["xeroTokenExpiresAt"] = ""
@@ -1585,7 +1625,12 @@ def xero_disconnect(**kwargs):
 	row["tenantId"] = ""
 	row["enabled"] = False
 	_persist_integration_record("Xero", row)
-	return {"ok": True, "message": "Xero disconnected."}
+	msg = "Xero disconnected."
+	if isinstance(revoke_result, dict):
+		remote_msg = _as_str(revoke_result.get("message"))
+		if remote_msg:
+			msg = f"{msg} {remote_msg}"
+	return {"ok": True, "message": msg.strip()}
 
 
 @frappe.whitelist()
