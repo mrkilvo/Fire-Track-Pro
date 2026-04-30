@@ -293,10 +293,11 @@ def _xero_is_auth_unsuccessful(resp: Any) -> bool:
 
 def _xero_refresh_and_reselect_tenant(config: dict[str, Any]) -> dict[str, Any]:
 	config = _xero_refresh_if_needed(config)
+	connections: list[dict[str, Any]] = []
 	try:
 		connections = _xero_fetch_connections(config)
 	except Exception:
-		return config
+		connections = []
 	current = _as_str(config.get("tenantId"))
 	tenant_ids = [
 		_as_str((row or {}).get("tenantId") or (row or {}).get("tenant_id"))
@@ -306,6 +307,10 @@ def _xero_refresh_and_reselect_tenant(config: dict[str, Any]) -> dict[str, Any]:
 	tenant_ids = [x for x in tenant_ids if x]
 	if tenant_ids and current not in tenant_ids:
 		config["tenantId"] = tenant_ids[0]
+	if not _as_str(config.get("tenantId")) and tenant_ids:
+		config["tenantId"] = tenant_ids[0]
+	if connections:
+		config["xeroConnectionsJson"] = json.dumps(connections)
 	return config
 
 
@@ -1566,6 +1571,23 @@ def xero_oauth_callback(**kwargs):
 
 	frappe.local.response["type"] = "redirect"
 	frappe.local.response["location"] = "/portal/config/integrations?xero=connected"
+@frappe.whitelist(methods=["POST", "GET"])
+def xero_disconnect(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	row = _integration_record("Xero")
+	row["xeroAccessToken"] = ""
+	row["xeroRefreshToken"] = ""
+	row["xeroTokenExpiresAt"] = ""
+	row["xeroConnectedAt"] = ""
+	row["xeroState"] = ""
+	row["xeroConnectionsJson"] = "[]"
+	row["tenantId"] = ""
+	row["enabled"] = False
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "message": "Xero disconnected."}
+
+
 @frappe.whitelist()
 def xero_list_connections(**kwargs):
 	if frappe.session.user == "Guest":
@@ -1651,7 +1673,8 @@ def sync_entity(**kwargs):
 	if is_push:
 		row = _integration_record("Xero")
 		row = _xero_apply_site_config_credentials(row)[0]
-		row = _xero_refresh_if_needed(row)
+		row = _xero_refresh_and_reselect_tenant(_xero_refresh_if_needed(row))
+		_persist_integration_record("Xero", row)
 		if entity == "customer":
 			if operation == "delete":
 				return {"ok": True, "message": "Customer delete push not enabled for Xero (safe mode)."}
@@ -1665,6 +1688,7 @@ def sync_entity(**kwargs):
 					"xero_last_synced_at": frappe.utils.now_datetime(),
 				}, update_modified=False)
 				frappe.db.commit()
+			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Customer pushed to Xero ({contact_id or 'ok'})."}
 		if entity == "supplier":
 			if operation == "delete":
@@ -1679,6 +1703,7 @@ def sync_entity(**kwargs):
 					"xero_last_synced_at": frappe.utils.now_datetime(),
 				}, update_modified=False)
 				frappe.db.commit()
+			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Supplier pushed to Xero ({contact_id or 'ok'})."}
 		if entity == "invoice":
 			if operation == "delete":
@@ -1693,6 +1718,7 @@ def sync_entity(**kwargs):
 					"xero_last_synced_at": frappe.utils.now_datetime(),
 				}, update_modified=False)
 				frappe.db.commit()
+			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Invoice pushed to Xero ({invoice_number or invoice_id or 'ok'})."}
 
 	if entity == "customer":
