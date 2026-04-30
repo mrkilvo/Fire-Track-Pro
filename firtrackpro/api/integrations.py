@@ -256,6 +256,18 @@ def _xero_refresh_if_needed(config: dict[str, Any]) -> dict[str, Any]:
 	resp = requests.post(token_url, headers=headers, data=form, timeout=20)
 	if not resp.ok:
 		detail = _as_str(resp.text)
+		detail_l = detail.lower()
+		if resp.status_code == 400 and ("invalid_grant" in detail_l or "refresh token not found" in detail_l):
+			# Xero no longer accepts the refresh token (revoked/rotated/expired).
+			# Clear local oauth tokens so the portal can force a clean reconnect flow.
+			config["xeroAccessToken"] = ""
+			config["xeroRefreshToken"] = ""
+			config["xeroTokenExpiresAt"] = ""
+			config["xeroConnectionsJson"] = "[]"
+			frappe.throw(
+				"Xero refresh token is invalid or missing in Xero. Reconnect Xero in Integrations to continue sync.",
+				frappe.ValidationError,
+			)
 		frappe.throw(f"Xero refresh failed ({resp.status_code}): {detail}", frappe.ValidationError)
 	data = resp.json() if hasattr(resp, "json") else {}
 	config["xeroAccessToken"] = _as_str(data.get("access_token")) or access_token
