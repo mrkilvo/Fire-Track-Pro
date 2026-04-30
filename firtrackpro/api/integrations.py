@@ -279,6 +279,36 @@ def _xero_refresh_if_needed(config: dict[str, Any]) -> dict[str, Any]:
 	return config
 
 
+def _xero_is_auth_unsuccessful(resp: Any) -> bool:
+	if resp is None:
+		return False
+	status = int(getattr(resp, "status_code", 0) or 0)
+	detail = _as_str(getattr(resp, "text", "")).lower()
+	if status == 401:
+		return True
+	if status == 403 and "authenticationunsuccessful" in detail:
+		return True
+	return False
+
+
+def _xero_refresh_and_reselect_tenant(config: dict[str, Any]) -> dict[str, Any]:
+	config = _xero_refresh_if_needed(config)
+	try:
+		connections = _xero_fetch_connections(config)
+	except Exception:
+		return config
+	current = _as_str(config.get("tenantId"))
+	tenant_ids = [
+		_as_str((row or {}).get("tenantId") or (row or {}).get("tenant_id"))
+		for row in (connections or [])
+		if isinstance(row, dict)
+	]
+	tenant_ids = [x for x in tenant_ids if x]
+	if tenant_ids and current not in tenant_ids:
+		config["tenantId"] = tenant_ids[0]
+	return config
+
+
 def _xero_fetch_connections(config: dict[str, Any]) -> list[dict[str, Any]]:
 	if requests is None:
 		frappe.throw("Xero calls are unavailable (requests library missing).")
@@ -321,12 +351,15 @@ def _xero_fetch_contacts(config: dict[str, Any]) -> list[dict[str, Any]]:
 		"xero-tenant-id": tenant_id,
 	}
 	resp = requests.get("https://api.xero.com/api.xro/2.0/Contacts", headers=headers, timeout=25)
-	if resp.status_code == 401:
-		config = _xero_refresh_if_needed(config)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
 		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		headers["xero-tenant-id"] = _as_str(config.get("tenantId"))
 		resp = requests.get("https://api.xero.com/api.xro/2.0/Contacts", headers=headers, timeout=25)
 	if not resp.ok:
 		detail = _as_str(resp.text)
+		if _xero_is_auth_unsuccessful(resp):
+			frappe.throw("Xero authentication failed for the selected organization. Reconnect Xero and re-select the org in Integrations.", frappe.ValidationError)
 		frappe.throw(f"Xero contacts fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
 	payload = resp.json() if hasattr(resp, "json") else {}
 	rows = payload.get("Contacts") if isinstance(payload, dict) else []
@@ -553,12 +586,15 @@ def _xero_fetch_invoices(config: dict[str, Any]) -> list[dict[str, Any]]:
 	}
 	params = {"where": 'Type=="ACCREC"'}
 	resp = requests.get("https://api.xero.com/api.xro/2.0/Invoices", headers=headers, params=params, timeout=30)
-	if resp.status_code == 401:
-		config = _xero_refresh_if_needed(config)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
 		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		headers["xero-tenant-id"] = _as_str(config.get("tenantId"))
 		resp = requests.get("https://api.xero.com/api.xro/2.0/Invoices", headers=headers, params=params, timeout=30)
 	if not resp.ok:
 		detail = _as_str(resp.text)
+		if _xero_is_auth_unsuccessful(resp):
+			frappe.throw("Xero authentication failed for the selected organization. Reconnect Xero and re-select the org in Integrations.", frappe.ValidationError)
 		frappe.throw(f"Xero invoices fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
 	payload = resp.json() if hasattr(resp, "json") else {}
 	rows = payload.get("Invoices") if isinstance(payload, dict) else []
@@ -588,12 +624,14 @@ def _xero_api_json(
 	headers = _xero_api_headers(config)
 	url = f"https://api.xero.com/api.xro/2.0/{path.lstrip('/')}"
 	resp = requests.request(method.upper(), url, headers=headers, json=payload or {}, timeout=30)
-	if resp.status_code == 401:
-		config = _xero_refresh_if_needed(config)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
 		headers = _xero_api_headers(config)
 		resp = requests.request(method.upper(), url, headers=headers, json=payload or {}, timeout=30)
 	if not resp.ok:
 		detail = _as_str(resp.text)
+		if _xero_is_auth_unsuccessful(resp):
+			frappe.throw("Xero authentication failed for the selected organization. Reconnect Xero and re-select the org in Integrations.", frappe.ValidationError)
 		frappe.throw(f"Xero API {method.upper()} {path} failed ({resp.status_code}): {detail}", frappe.ValidationError)
 	data = resp.json() if hasattr(resp, "json") else {}
 	return data if isinstance(data, dict) else {}
