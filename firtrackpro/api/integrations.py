@@ -493,6 +493,29 @@ def _primary_email(contact: dict[str, Any]) -> str:
 	return _as_str(rows)
 
 
+def _xero_contact_matches_entity(contact: dict[str, Any], entity: str) -> bool:
+	entity_key = _as_str(entity).strip().lower()
+	if not isinstance(contact, dict):
+		return False
+	if entity_key not in {"customer", "supplier"}:
+		return True
+	has_customer = "IsCustomer" in contact
+	has_supplier = "IsSupplier" in contact
+	is_customer = _as_bool(contact.get("IsCustomer")) if has_customer else False
+	is_supplier = _as_bool(contact.get("IsSupplier")) if has_supplier else False
+	if entity_key == "customer":
+		if has_customer:
+			return is_customer
+		if has_supplier and is_supplier:
+			return False
+		return True
+	if has_supplier:
+		return is_supplier
+	if has_customer and is_customer:
+		return False
+	return True
+
+
 def _upsert_customer_from_xero_contact(contact: dict[str, Any]) -> str:
 	contact_id = _as_str(contact.get("ContactID"))
 	contact_name = _as_str(contact.get("Name"))
@@ -1709,6 +1732,8 @@ def sync_customer(**kwargs):
 		try:
 			if not isinstance(contact, dict):
 				continue
+			if not _xero_contact_matches_entity(contact, "customer"):
+				continue
 			contact_id = _as_str(contact.get("ContactID"))
 			existed = bool(contact_id and frappe.db.exists("Customer", {"xero_contact_id": contact_id}))
 			name = _upsert_customer_from_xero_contact(contact)
@@ -1760,6 +1785,8 @@ def sync_supplier(**kwargs):
 	for contact in contacts:
 		try:
 			if not isinstance(contact, dict):
+				continue
+			if not _xero_contact_matches_entity(contact, "supplier"):
 				continue
 			contact_id = _as_str(contact.get("ContactID"))
 			existed = bool(contact_id and frappe.db.exists("Supplier", {"xero_contact_id": contact_id}))
