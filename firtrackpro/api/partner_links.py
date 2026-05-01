@@ -1,5 +1,6 @@
 import json
 import uuid
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -259,6 +260,71 @@ def _ensure_supplier_for_partner(company_name, host):
             frappe.db.rollback()
             continue
     return ""
+
+
+def _supplier_score(label, company_name, host):
+    label_norm = str(label or "").strip().lower()
+    company_norm = str(company_name or "").strip().lower()
+    host_norm = str(host or "").strip().lower()
+    if not label_norm:
+        return 0.0
+    candidates = [x for x in [company_norm, host_norm, host_norm.split(".")[0] if host_norm else ""] if x]
+    if not candidates:
+        return 0.0
+    best = 0.0
+    for cand in candidates:
+        if label_norm == cand:
+            return 1.0
+        if cand in label_norm or label_norm in cand:
+            best = max(best, 0.92)
+        best = max(best, SequenceMatcher(None, label_norm, cand).ratio())
+    return round(best, 4)
+
+
+def _suggest_suppliers_for_partner(company_name, host, query=None, limit=12):
+    q = str(query or "").strip().lower()
+    fields = ["name", "supplier_name"]
+    supplier_rows = []
+    try:
+        if q:
+            supplier_rows = frappe.get_all(
+                "Supplier",
+                fields=fields,
+                filters=[["Supplier", "supplier_name", "like", "%{0}%".format(q)]],
+                limit_page_length=80,
+                order_by="modified desc",
+            )
+            if len(supplier_rows) < 40:
+                more = frappe.get_all(
+                    "Supplier",
+                    fields=fields,
+                    filters=[["Supplier", "name", "like", "%{0}%".format(q)]],
+                    limit_page_length=80,
+                    order_by="modified desc",
+                )
+                supplier_rows.extend(more or [])
+        else:
+            supplier_rows = frappe.get_all("Supplier", fields=fields, limit_page_length=250, order_by="modified desc")
+    except Exception:
+        supplier_rows = []
+
+    dedup = {}
+    for row in supplier_rows or []:
+        name = str((row or {}).get("name") or "").strip()
+        supplier_name = str((row or {}).get("supplier_name") or "").strip()
+        if not name:
+            continue
+        label = supplier_name or name
+        score = _supplier_score(label, company_name, host)
+        if q and q not in label.lower() and q not in name.lower():
+            continue
+        prior = dedup.get(name)
+        current = {"name": name, "supplier_name": supplier_name, "score": score}
+        if not prior or float(current.get("score") or 0) > float(prior.get("score") or 0):
+            dedup[name] = current
+
+    ranked = sorted(dedup.values(), key=lambda x: (float(x.get("score") or 0), str(x.get("supplier_name") or x.get("name") or "").lower()), reverse=True)
+    return ranked[: max(1, int(limit or 12))]
 
 def _mark_request_status(request_id, status):
     rows = _load_requests()
@@ -540,6 +606,8 @@ def respond_partner_link_request(id=None, action=None):
 
     source_host = _normalize_host(target.get("from_host"))
     source_company = str(target.get("from_company") or "").strip()
+    selected_supplier = str(frappe.form_dict.get("supplier") or "").strip()
+    create_new_supplier = str(frappe.form_dict.get("create_new_supplier") or "0").strip().lower() in {"1", "true", "yes"}
 
     import requests
 
@@ -547,8 +615,23 @@ def respond_partner_link_request(id=None, action=None):
         incoming_key = random_string(40)
         outgoing_key = random_string(40)
 
+        supplier_name = ""
+        if selected_supplier:
+            if not frappe.db.exists("Supplier", selected_supplier):
+                frappe.throw("Selected supplier does not exist.")
+            supplier_name = selected_supplier
+        elif create_new_supplier:
+            supplier_name = _ensure_supplier_for_partner(source_company, source_host)
+            if not supplier_name:
+                frappe.throw("Unable to create supplier for this partner.")
+        else:
+            exact = _find_supplier(source_company, source_host)
+            if exact:
+                supplier_name = exact
+            else:
+                frappe.throw("Select an existing supplier or choose create new before accepting.")
+
         # Local side receives calls signed by remote outgoing_key, and sends using local outgoing_key.
-        supplier_name = _ensure_supplier_for_partner(source_company, source_host)
         _create_or_update_link_for_request(source_host, source_company, outbound_key=outgoing_key, inbound_key=incoming_key, supplier=supplier_name)
 
         finalize_url = "https://{0}/api/method/firtrackpro.api.partner_links.finalize_partner_link_request".format(source_host)
@@ -570,7 +653,7 @@ def respond_partner_link_request(id=None, action=None):
         target["updated_at"] = _now_iso()
         target["responded_at"] = _now_iso()
         _save_requests(rows)
-        return {"ok": True, "message": "Request accepted. Link activated and keys exchanged."}
+        return {"ok": True, "message": "Request accepted. Link activated and keys exchanged.", "supplier": supplier_name}
 
     if act == "decline":
         target["status"] = "declined"
@@ -671,6 +754,27 @@ def get_partner_link_supplier(partner_link_id=None, ensure=1):
         target["supplier"] = supplier
         _upsert_link(target)
     return {"ok": True, "supplier": supplier}
+
+
+@frappe.whitelist(allow_guest=False)
+def suggest_partner_link_suppliers(request_id=None, query=None):
+    rid = str(request_id or "").strip()
+    if not rid:
+        frappe.throw("request_id is required.")
+    rows = _load_requests()
+    target = next((row for row in rows if str(row.get("id") or row.get("request_id") or "") == rid), None)
+    if not target:
+        frappe.throw("Request not found.")
+
+    source_host = _normalize_host(target.get("from_host"))
+    source_company = str(target.get("from_company") or "").strip()
+    candidates = _suggest_suppliers_for_partner(source_company, source_host, query=query, limit=14)
+    return {
+        "ok": True,
+        "host": source_host,
+        "company_name": source_company,
+        "candidates": candidates,
+    }
 
 @frappe.whitelist(allow_guest=False)
 def create_handover_job(job_name=None, partner_link_id=None, notes=None):
