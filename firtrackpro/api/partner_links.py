@@ -637,8 +637,10 @@ def respond_partner_link_request(id=None, action=None):
         finalize_url = "https://{0}/api/method/firtrackpro.api.partner_links.finalize_partner_link_request".format(source_host)
         payload = {
             "request_id": rid,
-            "remote_inbound_key": outgoing_key,
-            "remote_outbound_key": incoming_key,
+            # Remote inbound = what remote expects from us.
+            # Remote outbound = what remote sends to us.
+            "remote_inbound_key": incoming_key,
+            "remote_outbound_key": outgoing_key,
             "remote_host": _site_host(),
             "remote_company": _primary_company_name(),
         }
@@ -860,7 +862,15 @@ def _push_handover_to_partner(link, row):
                         item["updated_at"] = _now_iso()
                 _save_handovers(rows)
         else:
-            _mark_handover_failed(str(row.get("id") or ""), "Partner API HTTP {0}".format(res.status_code))
+            body = ""
+            try:
+                body = str(res.text or "").strip()
+            except Exception:
+                body = ""
+            detail = "Partner API HTTP {0}".format(res.status_code)
+            if body:
+                detail = "{0}: {1}".format(detail, body[:1200])
+            _mark_handover_failed(str(row.get("id") or ""), detail)
     except Exception as exc:
         _mark_handover_failed(str(row.get("id") or ""), "Partner push failed: {0}".format(exc))
 
