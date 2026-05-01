@@ -90,6 +90,11 @@ def xero_oauth_start_shared(**kwargs):
         if isinstance(bridge, dict):
             return bridge
         frappe.throw("Invalid FireLink Xero bridge response", frappe.ValidationError)
+    elif not _as_str(kwargs.get("allow_firelink_direct")) in {"1", "true", "yes"}:
+        frappe.throw(
+            "Connect Xero from the tenant site. FireLink is the OAuth broker and direct connect here can disrupt tenant links.",
+            frappe.ValidationError,
+        )
 
     row = _integration_record("Xero")
     site_cfg = _site_xero_config()

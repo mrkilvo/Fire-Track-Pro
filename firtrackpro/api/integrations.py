@@ -1027,6 +1027,64 @@ def _ensure_xero_sync_item() -> str:
 	return code
 
 
+def _ensure_xero_sync_item_for_line(line: dict[str, Any]) -> str:
+	source_code = _as_str(line.get("ItemCode") or line.get("AccountCode")).strip()
+	description = _as_str(line.get("Description")).strip()
+	if source_code:
+		candidate = f"XERO-{source_code.upper()}"
+	elif description:
+		slug = re.sub(r"[^A-Za-z0-9]+", "-", description).strip("-").upper()
+		candidate = f"XERO-{slug[:40]}" if slug else "XERO-SYNC-SERVICE"
+	else:
+		candidate = "XERO-SYNC-SERVICE"
+	code = candidate[:140] if candidate else "XERO-SYNC-SERVICE"
+	if frappe.db.exists("Item", code):
+		return code
+
+	item = frappe.new_doc("Item")
+	item.item_code = code
+	item.item_name = description[:140] or source_code[:140] or "Xero Imported Service"
+	item.description = description or f"Imported from Xero ({source_code or 'service'})"
+	item.item_group = frappe.db.get_single_value("Stock Settings", "item_group") or "All Item Groups"
+	item.stock_uom = "Nos"
+	item.is_stock_item = 0
+	item.include_item_in_manufacturing = 0
+	item.flags.ignore_permissions = True
+	item.insert(ignore_permissions=True)
+	return code
+
+
+def _xero_invoice_lines_to_erp_items(invoice: dict[str, Any], fallback_total: float) -> list[dict[str, Any]]:
+	line_items = invoice.get("LineItems")
+	rows = line_items if isinstance(line_items, list) else []
+	out: list[dict[str, Any]] = []
+	for line in rows:
+		if not isinstance(line, dict):
+			continue
+		amount = float(line.get("LineAmount") or 0)
+		if amount <= 0:
+			continue
+		qty = float(line.get("Quantity") or 1) or 1
+		rate = float(line.get("UnitAmount") or 0)
+		if rate <= 0:
+			rate = amount / qty if qty else amount
+		item_code = _ensure_xero_sync_item_for_line(line)
+		description = _as_str(line.get("Description"))
+		row = {
+			"item_code": item_code,
+			"qty": qty,
+			"rate": rate,
+			"amount": amount,
+		}
+		if description:
+			row["description"] = description
+		out.append(row)
+	if out:
+		return out
+	item_code = _ensure_xero_sync_item()
+	return [{"item_code": item_code, "qty": 1, "rate": fallback_total, "amount": fallback_total}]
+
+
 def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 	invoice_id = _as_str(invoice.get("InvoiceID"))
 	invoice_number = _as_str(invoice.get("InvoiceNumber"))
@@ -1046,10 +1104,10 @@ def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 	elif invoice_number and frappe.db.exists("Sales Invoice", {"bill_no": invoice_number}):
 		doc_name = _as_str(frappe.db.get_value("Sales Invoice", {"bill_no": invoice_number}, "name"))
 
-	item_code = _ensure_xero_sync_item()
 	total = float(invoice.get("Total") or 0)
 	date_val = _as_str(invoice.get("DateString") or invoice.get("Date") or frappe.utils.nowdate())[:10]
 	due_val = _as_str(invoice.get("DueDateString") or invoice.get("DueDate") or date_val)[:10]
+	erp_items = _xero_invoice_lines_to_erp_items(invoice, total)
 
 	if doc_name:
 		doc = frappe.get_doc("Sales Invoice", doc_name)
@@ -1068,7 +1126,8 @@ def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 		doc.accounting_external_id = invoice_id
 		doc.accounting_sync_error = ""
 		doc.items = []
-		doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
+		for row in erp_items:
+			doc.append("items", row)
 		doc.flags.ignore_permissions = True
 		doc.save(ignore_permissions=True)
 		return _as_str(doc.name)
@@ -1086,7 +1145,8 @@ def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 	doc.accounting_provider = "Xero"
 	doc.accounting_external_id = invoice_id
 	doc.accounting_sync_error = ""
-	doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
+	for row in erp_items:
+		doc.append("items", row)
 	doc.flags.ignore_permissions = True
 	doc.insert(ignore_permissions=True)
 	return _as_str(doc.name)
@@ -1840,7 +1900,15 @@ def xero_disconnect(**kwargs):
 		frappe.throw("Login required", frappe.PermissionError)
 	row = _integration_record("Xero")
 	row = _xero_apply_site_config_credentials(row)[0]
-	revoke_result = _xero_remote_disconnect(row)
+	is_firelink_site = _is_firelink_local_site()
+	force_revoke = _as_bool(kwargs.get("force_revoke") or kwargs.get("forceRevoke"))
+	# FireLink acts as the OAuth broker for tenant connections. Revoking remote connections
+	# from FireLink can invalidate other tenant links unexpectedly.
+	should_revoke_remote = (not is_firelink_site) or force_revoke
+	revoke_result = _xero_remote_disconnect(row) if should_revoke_remote else {
+		"ok": True,
+		"message": "Skipped remote revoke on FireLink broker site.",
+	}
 	row["xeroAccessToken"] = ""
 	row["xeroRefreshToken"] = ""
 	row["xeroTokenExpiresAt"] = ""
