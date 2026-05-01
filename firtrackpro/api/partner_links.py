@@ -151,6 +151,8 @@ def _build_handover_row(row):
         "notes": str(row.get("notes") or ""),
         "source_property_name": str(row.get("source_property_name") or ""),
         "source_property_address": str(row.get("source_property_address") or ""),
+        "source_property_firelink_uid": str(row.get("source_property_firelink_uid") or ""),
+        "source_tasks": row.get("source_tasks") if isinstance(row.get("source_tasks"), list) else [],
         "source_customer": str(row.get("source_customer") or ""),
         "source_quote_ref": str(row.get("source_quote_ref") or ""),
         "created_at": str(row.get("created_at") or ""),
@@ -818,6 +820,8 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         or getattr(job_doc, "job_property_name", None)
         or ""
     ).strip()
+    source_property_firelink_uid = ""
+    source_tasks = []
     if source_property:
         try:
             prop = frappe.db.get_value(
@@ -843,10 +847,44 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                     or prop.get("primary_address")
                     or ""
                 ).strip()
+                source_property_firelink_uid = str(
+                    prop.get("firelink_uid")
+                    or prop.get("firelink_property_uid")
+                    or prop.get("property_uid")
+                    or ""
+                ).strip()
                 if not source_customer:
                     source_customer = str(prop.get("property_customer") or prop.get("customer") or "").strip()
         except Exception:
             source_property_name = source_property
+    try:
+        task_rows = list(getattr(job_doc, "job_tasks", None) or [])
+        for tr in task_rows:
+            if not tr:
+                continue
+            title = str(
+                getattr(tr, "task_name", None)
+                or getattr(tr, "title", None)
+                or getattr(tr, "description", None)
+                or getattr(tr, "task", None)
+                or ""
+            ).strip()
+            status = str(getattr(tr, "status", None) or "").strip()
+            item_code = str(getattr(tr, "item_code", None) or "").strip()
+            qty = getattr(tr, "qty", None)
+            if not title and not item_code:
+                continue
+            source_tasks.append(
+                {
+                    "title": title,
+                    "status": status,
+                    "item_code": item_code,
+                    "qty": float(qty) if qty not in (None, "") else None,
+                }
+            )
+    except Exception:
+        source_tasks = []
+
     now = _now_iso()
     row = {
         "id": str(uuid.uuid4()),
@@ -861,6 +899,8 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         "notes": str(notes or "").strip(),
         "source_property_name": source_property_name,
         "source_property_address": source_property_address,
+        "source_property_firelink_uid": source_property_firelink_uid,
+        "source_tasks": source_tasks,
         "source_customer": source_customer,
         "source_quote_ref": source_quote_ref,
         "created_at": now,
@@ -889,6 +929,9 @@ def _push_handover_to_partner(link, row):
     if outbound_api_key:
         headers["X-FireTrack-Partner-Key"] = outbound_api_key
 
+    source_tasks = row.get("source_tasks") if isinstance(row.get("source_tasks"), list) else []
+    source_property_firelink_uid = str(row.get("source_property_firelink_uid") or "").strip()
+
     payload = {
         "handover_id": row.get("id"),
         "source_job_name": row.get("job_name"),
@@ -897,6 +940,8 @@ def _push_handover_to_partner(link, row):
         "notes": row.get("notes") or "",
         "source_property_name": row.get("source_property_name") or "",
         "source_property_address": row.get("source_property_address") or "",
+        "source_property_firelink_uid": source_property_firelink_uid,
+        "source_tasks": source_tasks,
         "source_customer": row.get("source_customer") or "",
         "source_quote_ref": row.get("source_quote_ref") or "",
         "partner_link_id": row.get("partner_link_id") or "",
@@ -957,6 +1002,8 @@ def receive_handover_job(
     partner_link_id=None,
     source_property_name=None,
     source_property_address=None,
+    source_property_firelink_uid=None,
+    source_tasks=None,
     source_customer=None,
     source_quote_ref=None,
 ):
@@ -977,6 +1024,17 @@ def receive_handover_job(
         frappe.throw("Unauthorized partner key.")
 
     now = _now_iso()
+    parsed_tasks = []
+    if isinstance(source_tasks, list):
+        parsed_tasks = source_tasks
+    elif isinstance(source_tasks, str) and source_tasks.strip():
+        try:
+            candidate = json.loads(source_tasks)
+            if isinstance(candidate, list):
+                parsed_tasks = candidate
+        except Exception:
+            parsed_tasks = []
+
     incoming = {
         "id": str(handover_id or uuid.uuid4()),
         "job_name": str(source_job_name or "").strip(),
@@ -990,6 +1048,8 @@ def receive_handover_job(
         "notes": str(notes or "").strip(),
         "source_property_name": str(source_property_name or "").strip(),
         "source_property_address": str(source_property_address or "").strip(),
+        "source_property_firelink_uid": str(source_property_firelink_uid or "").strip(),
+        "source_tasks": parsed_tasks,
         "source_customer": str(source_customer or "").strip(),
         "source_quote_ref": str(source_quote_ref or "").strip(),
         "created_at": now,
