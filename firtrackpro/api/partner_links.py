@@ -149,6 +149,10 @@ def _build_handover_row(row):
         "direction": str(row.get("direction") or "outbound"),
         "partner_job_ref": str(row.get("partner_job_ref") or ""),
         "notes": str(row.get("notes") or ""),
+        "source_property_name": str(row.get("source_property_name") or ""),
+        "source_property_address": str(row.get("source_property_address") or ""),
+        "source_customer": str(row.get("source_customer") or ""),
+        "source_quote_ref": str(row.get("source_quote_ref") or ""),
         "created_at": str(row.get("created_at") or ""),
         "updated_at": str(row.get("updated_at") or ""),
     }
@@ -794,6 +798,55 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         frappe.throw("Partner link is inactive.")
 
     job_doc = frappe.get_doc("FT Job", job_id)
+    source_property_name = ""
+    source_property_address = ""
+    source_customer = str(
+        getattr(job_doc, "job_customer", None)
+        or getattr(job_doc, "customer", None)
+        or getattr(job_doc, "property_customer", None)
+        or ""
+    ).strip()
+    source_quote_ref = str(
+        getattr(job_doc, "job_quote", None)
+        or getattr(job_doc, "quotation", None)
+        or getattr(job_doc, "quote", None)
+        or ""
+    ).strip()
+    source_property = str(
+        getattr(job_doc, "job_property", None)
+        or getattr(job_doc, "property", None)
+        or getattr(job_doc, "job_property_name", None)
+        or ""
+    ).strip()
+    if source_property:
+        try:
+            prop = frappe.db.get_value(
+                "FT Property",
+                source_property,
+                [
+                    "name",
+                    "property_name",
+                    "property_title",
+                    "property_address",
+                    "address",
+                    "primary_address",
+                    "property_customer",
+                    "customer",
+                ],
+                as_dict=True,
+            )
+            if isinstance(prop, dict):
+                source_property_name = str(prop.get("name") or prop.get("property_name") or prop.get("property_title") or source_property).strip()
+                source_property_address = str(
+                    prop.get("property_address")
+                    or prop.get("address")
+                    or prop.get("primary_address")
+                    or ""
+                ).strip()
+                if not source_customer:
+                    source_customer = str(prop.get("property_customer") or prop.get("customer") or "").strip()
+        except Exception:
+            source_property_name = source_property
     now = _now_iso()
     row = {
         "id": str(uuid.uuid4()),
@@ -806,6 +859,10 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         "direction": "outbound",
         "partner_job_ref": "",
         "notes": str(notes or "").strip(),
+        "source_property_name": source_property_name,
+        "source_property_address": source_property_address,
+        "source_customer": source_customer,
+        "source_quote_ref": source_quote_ref,
         "created_at": now,
         "updated_at": now,
     }
@@ -838,6 +895,10 @@ def _push_handover_to_partner(link, row):
         "source_job_title": row.get("job_title"),
         "source_tenant_host": _site_host(),
         "notes": row.get("notes") or "",
+        "source_property_name": row.get("source_property_name") or "",
+        "source_property_address": row.get("source_property_address") or "",
+        "source_customer": row.get("source_customer") or "",
+        "source_quote_ref": row.get("source_quote_ref") or "",
         "partner_link_id": row.get("partner_link_id") or "",
     }
 
@@ -887,7 +948,18 @@ def _mark_handover_failed(handover_id, error_text):
 
 
 @frappe.whitelist(allow_guest=True)
-def receive_handover_job(handover_id=None, source_job_name=None, source_job_title=None, source_tenant_host=None, notes=None, partner_link_id=None):
+def receive_handover_job(
+    handover_id=None,
+    source_job_name=None,
+    source_job_title=None,
+    source_tenant_host=None,
+    notes=None,
+    partner_link_id=None,
+    source_property_name=None,
+    source_property_address=None,
+    source_customer=None,
+    source_quote_ref=None,
+):
     provided_key = frappe.get_request_header("X-FireTrack-Partner-Key") or ""
     link = None
 
@@ -916,6 +988,10 @@ def receive_handover_job(handover_id=None, source_job_name=None, source_job_titl
         "direction": "inbound",
         "partner_job_ref": "",
         "notes": str(notes or "").strip(),
+        "source_property_name": str(source_property_name or "").strip(),
+        "source_property_address": str(source_property_address or "").strip(),
+        "source_customer": str(source_customer or "").strip(),
+        "source_quote_ref": str(source_quote_ref or "").strip(),
         "created_at": now,
         "updated_at": now,
     }
