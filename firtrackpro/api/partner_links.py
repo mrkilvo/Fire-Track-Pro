@@ -870,7 +870,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                 or ""
             ).strip()
             status = str(getattr(tr, "status", None) or "").strip()
-            item_code = str(getattr(tr, "item_code", None) or "").strip()
+            item_code = str(getattr(tr, "item_code", None) or getattr(tr, "asset", None) or "").strip()
             qty = getattr(tr, "qty", None)
             if not title and not item_code:
                 continue
