@@ -508,13 +508,218 @@ def _ensure_sales_invoice_xero_fields() -> None:
 	create_custom_fields(fields, update=True)
 
 
+def _ensure_accounting_sync_meta_fields() -> None:
+	fields = {
+		"Customer": [
+			{
+				"fieldname": "accounting_sync_status",
+				"label": "Accounting Sync Status",
+				"fieldtype": "Select",
+				"options": "\nNot Synced\nSynced\nError",
+				"insert_after": "xero_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_last_synced_at",
+				"label": "Accounting Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "accounting_sync_status",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_provider",
+				"label": "Accounting Provider",
+				"fieldtype": "Data",
+				"insert_after": "accounting_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_external_id",
+				"label": "Accounting External ID",
+				"fieldtype": "Data",
+				"insert_after": "accounting_provider",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_sync_error",
+				"label": "Accounting Sync Error",
+				"fieldtype": "Small Text",
+				"insert_after": "accounting_external_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		],
+		"Supplier": [
+			{
+				"fieldname": "accounting_sync_status",
+				"label": "Accounting Sync Status",
+				"fieldtype": "Select",
+				"options": "\nNot Synced\nSynced\nError",
+				"insert_after": "xero_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_last_synced_at",
+				"label": "Accounting Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "accounting_sync_status",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_provider",
+				"label": "Accounting Provider",
+				"fieldtype": "Data",
+				"insert_after": "accounting_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_external_id",
+				"label": "Accounting External ID",
+				"fieldtype": "Data",
+				"insert_after": "accounting_provider",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_sync_error",
+				"label": "Accounting Sync Error",
+				"fieldtype": "Small Text",
+				"insert_after": "accounting_external_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		],
+		"Sales Invoice": [
+			{
+				"fieldname": "accounting_sync_status",
+				"label": "Accounting Sync Status",
+				"fieldtype": "Select",
+				"options": "\nNot Synced\nSynced\nError",
+				"insert_after": "xero_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_last_synced_at",
+				"label": "Accounting Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "accounting_sync_status",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_provider",
+				"label": "Accounting Provider",
+				"fieldtype": "Data",
+				"insert_after": "accounting_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_external_id",
+				"label": "Accounting External ID",
+				"fieldtype": "Data",
+				"insert_after": "accounting_provider",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_sync_error",
+				"label": "Accounting Sync Error",
+				"fieldtype": "Small Text",
+				"insert_after": "accounting_external_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		],
+		"Payment Entry": [
+			{
+				"fieldname": "accounting_sync_status",
+				"label": "Accounting Sync Status",
+				"fieldtype": "Select",
+				"options": "\nNot Synced\nSynced\nError",
+				"insert_after": "reference_no",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_last_synced_at",
+				"label": "Accounting Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "accounting_sync_status",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_provider",
+				"label": "Accounting Provider",
+				"fieldtype": "Data",
+				"insert_after": "accounting_last_synced_at",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_external_id",
+				"label": "Accounting External ID",
+				"fieldtype": "Data",
+				"insert_after": "accounting_provider",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "accounting_sync_error",
+				"label": "Accounting Sync Error",
+				"fieldtype": "Small Text",
+				"insert_after": "accounting_external_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		],
+	}
+	create_custom_fields(fields, update=True)
+
+
+def _set_accounting_sync_meta(
+	doctype: str,
+	docname: str,
+	provider: str,
+	status: str,
+	external_id: str = "",
+	error_message: str = "",
+) -> None:
+	if not docname or not frappe.db.exists(doctype, docname):
+		return
+	frappe.db.set_value(
+		doctype,
+		docname,
+		{
+			"accounting_sync_status": status,
+			"accounting_last_synced_at": frappe.utils.now_datetime(),
+			"accounting_provider": provider,
+			"accounting_external_id": external_id or "",
+			"accounting_sync_error": error_message or "",
+		},
+		update_modified=False,
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def ensure_xero_sync_fields(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	_ensure_customer_xero_fields()
+	_ensure_accounting_sync_meta_fields()
 	_ensure_supplier_xero_fields()
+	_ensure_accounting_sync_meta_fields()
 	_ensure_sales_invoice_xero_fields()
+	_ensure_accounting_sync_meta_fields()
 	return {"ok": True, "message": "Xero customer sync fields are ready."}
 
 
@@ -591,6 +796,11 @@ def _upsert_customer_from_xero_contact(contact: dict[str, Any]) -> str:
 	doc.xero_contact_id = contact_id
 	doc.xero_contact_number = contact_number
 	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_sync_status = "Synced"
+	doc.accounting_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_provider = "Xero"
+	doc.accounting_external_id = contact_id
+	doc.accounting_sync_error = ""
 
 	doc.flags.ignore_permissions = True
 	doc.save(ignore_permissions=True)
@@ -630,6 +840,11 @@ def _upsert_supplier_from_xero_contact(contact: dict[str, Any]) -> str:
 	doc.xero_contact_id = contact_id
 	doc.xero_contact_number = contact_number
 	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_sync_status = "Synced"
+	doc.accounting_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_provider = "Xero"
+	doc.accounting_external_id = contact_id
+	doc.accounting_sync_error = ""
 	doc.flags.ignore_permissions = True
 	doc.save(ignore_permissions=True)
 	return _as_str(doc.name)
@@ -847,6 +1062,11 @@ def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 		doc.xero_invoice_id = invoice_id
 		doc.xero_invoice_number = invoice_number
 		doc.xero_last_synced_at = frappe.utils.now_datetime()
+		doc.accounting_sync_status = "Synced"
+		doc.accounting_last_synced_at = frappe.utils.now_datetime()
+		doc.accounting_provider = "Xero"
+		doc.accounting_external_id = invoice_id
+		doc.accounting_sync_error = ""
 		doc.items = []
 		doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
 		doc.flags.ignore_permissions = True
@@ -861,6 +1081,11 @@ def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
 	doc.xero_invoice_id = invoice_id
 	doc.xero_invoice_number = invoice_number
 	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_sync_status = "Synced"
+	doc.accounting_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_provider = "Xero"
+	doc.accounting_external_id = invoice_id
+	doc.accounting_sync_error = ""
 	doc.append("items", {"item_code": item_code, "qty": 1, "rate": total, "amount": total})
 	doc.flags.ignore_permissions = True
 	doc.insert(ignore_permissions=True)
@@ -1715,6 +1940,7 @@ def sync_entity(**kwargs):
 	document = kwargs.get("document") if isinstance(kwargs.get("document"), dict) else {}
 	is_manual_pull = reference_name.startswith("__manual_xero_")
 	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
+	_ensure_accounting_sync_meta_fields()
 	if is_push:
 		row = _integration_record("Xero")
 		row = _xero_apply_site_config_credentials(row)[0]
@@ -1723,46 +1949,67 @@ def sync_entity(**kwargs):
 		if entity == "customer":
 			if operation == "delete":
 				return {"ok": True, "message": "Customer delete push not enabled for Xero (safe mode)."}
-			out = _xero_push_contact(row, reference_name, "Customer", document)
-			contact_id = _as_str(out.get("ContactID"))
-			contact_number = _as_str(out.get("ContactNumber"))
-			if contact_id and reference_name and frappe.db.exists("Customer", reference_name):
-				frappe.db.set_value("Customer", reference_name, {
-					"xero_contact_id": contact_id,
-					"xero_contact_number": contact_number,
-					"xero_last_synced_at": frappe.utils.now_datetime(),
-				}, update_modified=False)
-				frappe.db.commit()
+			try:
+				out = _xero_push_contact(row, reference_name, "Customer", document)
+				contact_id = _as_str(out.get("ContactID"))
+				contact_number = _as_str(out.get("ContactNumber"))
+				if contact_id and reference_name and frappe.db.exists("Customer", reference_name):
+					frappe.db.set_value("Customer", reference_name, {
+						"xero_contact_id": contact_id,
+						"xero_contact_number": contact_number,
+						"xero_last_synced_at": frappe.utils.now_datetime(),
+					}, update_modified=False)
+					_set_accounting_sync_meta("Customer", reference_name, "Xero", "Synced", contact_id, "")
+					frappe.db.commit()
+			except Exception as exc:
+				if reference_name and frappe.db.exists("Customer", reference_name):
+					_set_accounting_sync_meta("Customer", reference_name, "Xero", "Error", "", _as_str(exc))
+					frappe.db.commit()
+				raise
 			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Customer pushed to Xero ({contact_id or 'ok'})."}
 		if entity == "supplier":
 			if operation == "delete":
 				return {"ok": True, "message": "Supplier delete push not enabled for Xero (safe mode)."}
-			out = _xero_push_contact(row, reference_name, "Supplier", document)
-			contact_id = _as_str(out.get("ContactID"))
-			contact_number = _as_str(out.get("ContactNumber"))
-			if contact_id and reference_name and frappe.db.exists("Supplier", reference_name):
-				frappe.db.set_value("Supplier", reference_name, {
-					"xero_contact_id": contact_id,
-					"xero_contact_number": contact_number,
-					"xero_last_synced_at": frappe.utils.now_datetime(),
-				}, update_modified=False)
-				frappe.db.commit()
+			try:
+				out = _xero_push_contact(row, reference_name, "Supplier", document)
+				contact_id = _as_str(out.get("ContactID"))
+				contact_number = _as_str(out.get("ContactNumber"))
+				if contact_id and reference_name and frappe.db.exists("Supplier", reference_name):
+					frappe.db.set_value("Supplier", reference_name, {
+						"xero_contact_id": contact_id,
+						"xero_contact_number": contact_number,
+						"xero_last_synced_at": frappe.utils.now_datetime(),
+					}, update_modified=False)
+					_set_accounting_sync_meta("Supplier", reference_name, "Xero", "Synced", contact_id, "")
+					frappe.db.commit()
+			except Exception as exc:
+				if reference_name and frappe.db.exists("Supplier", reference_name):
+					_set_accounting_sync_meta("Supplier", reference_name, "Xero", "Error", "", _as_str(exc))
+					frappe.db.commit()
+				raise
 			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Supplier pushed to Xero ({contact_id or 'ok'})."}
 		if entity == "invoice":
 			if operation == "delete":
 				return {"ok": True, "message": "Invoice delete push not enabled for Xero (safe mode)."}
-			out = _xero_push_invoice(row, reference_name, document)
-			invoice_id = _as_str(out.get("InvoiceID"))
-			invoice_number = _as_str(out.get("InvoiceNumber"))
-			if invoice_id and reference_name and frappe.db.exists("Sales Invoice", reference_name):
-				frappe.db.set_value("Sales Invoice", reference_name, {
-					"xero_invoice_id": invoice_id,
-					"xero_invoice_number": invoice_number,
-					"xero_last_synced_at": frappe.utils.now_datetime(),
-				}, update_modified=False)
-				frappe.db.commit()
+			try:
+				out = _xero_push_invoice(row, reference_name, document)
+				invoice_id = _as_str(out.get("InvoiceID"))
+				invoice_number = _as_str(out.get("InvoiceNumber"))
+				if invoice_id and reference_name and frappe.db.exists("Sales Invoice", reference_name):
+					frappe.db.set_value("Sales Invoice", reference_name, {
+						"xero_invoice_id": invoice_id,
+						"xero_invoice_number": invoice_number,
+						"xero_last_synced_at": frappe.utils.now_datetime(),
+					}, update_modified=False)
+					_set_accounting_sync_meta("Sales Invoice", reference_name, "Xero", "Synced", invoice_id, "")
+					frappe.db.commit()
+			except Exception as exc:
+				if reference_name and frappe.db.exists("Sales Invoice", reference_name):
+					_set_accounting_sync_meta("Sales Invoice", reference_name, "Xero", "Error", "", _as_str(exc))
+					frappe.db.commit()
+				raise
 			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Invoice pushed to Xero ({invoice_number or invoice_id or 'ok'})."}
 
@@ -1895,6 +2142,7 @@ def sync_invoice(**kwargs):
 
 	_ensure_sales_invoice_xero_fields()
 	_ensure_customer_xero_fields()
+	_ensure_accounting_sync_meta_fields()
 	row = _integration_record("Xero")
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
