@@ -542,3 +542,257 @@ def enforce_user_seat_limit(doc, method=None):
 			f"User limit reached ({used_without_target}/{allowed_users}). "
 			f"No remaining seats ({remaining}) for new active system users.{source_note}"
 		)
+
+
+def _generate_temp_password(length=12):
+	import secrets
+	import string
+	alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+	return "".join(secrets.choice(alphabet) for _ in range(max(8, int(length or 12))))
+
+
+def _first_name_from_full_name(full_name):
+	value = str(full_name or "").strip()
+	if not value:
+		return "Client"
+	parts = value.split()
+	return parts[0] if parts else "Client"
+
+
+def _safe_set_if_field(doc, fieldname, value):
+	try:
+		meta = doc.meta if getattr(doc, "meta", None) else frappe.get_meta(doc.doctype)
+		if meta and meta.has_field(fieldname):
+			doc.set(fieldname, value)
+	except Exception:
+		pass
+
+
+@frappe.whitelist(allow_guest=False)
+def provision_client_portal_login(login_name=None, customer=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
+	if not frappe.has_permission("User", "write"):
+		frappe.throw("You do not have permission to provision client portal logins.")
+
+	has_login_doctype = bool(frappe.db.exists("DocType", "FT Client Portal Login"))
+
+	customer = str(customer or "").strip()
+	full_name = str(full_name or "").strip()
+	email = str(email or "").strip().lower()
+	mobile_no = str(mobile_no or "").strip()
+	notes = str(notes or "").strip()
+	enabled_int = 1 if str(enabled).strip().lower() not in ("0", "false", "no") else 0
+
+	if not customer:
+		frappe.throw("Customer is required.")
+	if not full_name:
+		frappe.throw("Full name is required.")
+	if not email:
+		frappe.throw("Email is required.")
+
+	login_doc = None
+	if has_login_doctype:
+		key = str(login_name or "").strip()
+		if key and frappe.db.exists("FT Client Portal Login", key):
+			login_doc = frappe.get_doc("FT Client Portal Login", key)
+		else:
+			rows = frappe.get_all(
+				"FT Client Portal Login",
+				filters={"customer": customer, "email": email},
+				fields=["name"],
+				limit_page_length=1,
+			)
+			if rows:
+				login_doc = frappe.get_doc("FT Client Portal Login", rows[0]["name"])
+
+		if not login_doc:
+			login_doc = frappe.new_doc("FT Client Portal Login")
+			login_doc.customer = customer
+
+		login_doc.customer = customer
+		login_doc.full_name = full_name
+		login_doc.email = email
+		_safe_set_if_field(login_doc, "mobile_no", mobile_no or None)
+		_safe_set_if_field(login_doc, "notes", notes or None)
+		_safe_set_if_field(login_doc, "enabled", enabled_int)
+
+		if login_doc.is_new():
+			login_doc.insert(ignore_permissions=True)
+		else:
+			login_doc.save(ignore_permissions=True)
+
+	user_name = email
+	if frappe.db.exists("User", user_name):
+		user_doc = frappe.get_doc("User", user_name)
+	else:
+		user_doc = frappe.new_doc("User")
+		user_doc.email = user_name
+		user_doc.username = user_name
+		user_doc.send_welcome_email = 0
+		user_doc.user_type = "Website User"
+
+	user_doc.first_name = _first_name_from_full_name(full_name)
+	user_doc.full_name = full_name
+	user_doc.mobile_no = mobile_no or None
+	user_doc.enabled = enabled_int
+	user_doc.user_type = "Website User"
+	user_doc.send_welcome_email = 0
+	if user_doc.is_new():
+		user_doc.insert(ignore_permissions=True)
+	else:
+		user_doc.save(ignore_permissions=True)
+
+	# Keep this user out of paid staff-seat counts by enforcing Website User type.
+	temp_password = _generate_temp_password(12)
+	try:
+		from frappe.utils.password import update_password
+		update_password(user_name, temp_password, logout_all_sessions=True)
+	except Exception:
+		frappe.throw("Unable to set temporary password for client user.")
+
+	if login_doc:
+		_safe_set_if_field(login_doc, "provisioned_at", frappe.utils.now_datetime())
+		_safe_set_if_field(login_doc, "provisioned_user", user_name)
+		_safe_set_if_field(login_doc, "requires_password_reset", 1)
+		_safe_set_if_field(login_doc, "user", user_name)
+		_safe_set_if_field(login_doc, "portal_user", user_name)
+		login_doc.save(ignore_permissions=True)
+
+	site = (frappe.utils.get_url() or "").rstrip("/")
+	client_login_url = f"{site}/client/login"
+	subject = "Your FireTrack Client Portal Access"
+	message = (
+		f"Hi {full_name},<br><br>"
+		"Your client portal login is ready.<br><br>"
+		f"Login URL: <a href=\"{client_login_url}\">{client_login_url}</a><br>"
+		f"Username: {user_name}<br>"
+		f"Temporary Password: {temp_password}<br><br>"
+		"After first login, go to Account and change your password.<br><br>"
+		"If you did not request this access, contact your FireTrack administrator."
+	)
+	try:
+		frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
+	except Exception as exc:
+		frappe.log_error(frappe.get_traceback(), "Client Portal Invite Email Failed")
+		frappe.throw(f"Client login was provisioned but invite email failed: {exc}")
+
+	return {
+		"ok": True,
+		"login_name": (login_doc.name if login_doc else user_name),
+		"user": user_name,
+		"email": user_name,
+		"temporary_password_sent": True,
+		"login_url": client_login_url,
+		"has_login_doctype": has_login_doctype,
+		"message": "Client portal login provisioned and invite email sent.",
+	}
+
+
+@frappe.whitelist(allow_guest=False)
+def provision_client_login(**kwargs):
+	return provision_client_portal_login(**kwargs)
+
+
+@frappe.whitelist(allow_guest=False)
+def provision_contractor_portal_login(login_name=None, supplier=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
+	if not frappe.has_permission("User", "write"):
+		frappe.throw("You do not have permission to provision contractor portal logins.")
+	has_login_doctype = bool(frappe.db.exists("DocType", "FT Contractor Portal Login"))
+	supplier = str(supplier or "").strip()
+	full_name = str(full_name or "").strip()
+	email = str(email or "").strip().lower()
+	mobile_no = str(mobile_no or "").strip()
+	notes = str(notes or "").strip()
+	enabled_int = 1 if str(enabled).strip().lower() not in ("0", "false", "no") else 0
+	if not supplier:
+		frappe.throw("Supplier is required.")
+	if not full_name:
+		frappe.throw("Full name is required.")
+	if not email:
+		frappe.throw("Email is required.")
+	login_doc = None
+	if has_login_doctype:
+		key = str(login_name or "").strip()
+		if key and frappe.db.exists("FT Contractor Portal Login", key):
+			login_doc = frappe.get_doc("FT Contractor Portal Login", key)
+		else:
+			rows = frappe.get_all("FT Contractor Portal Login", filters={"supplier": supplier, "email": email}, fields=["name"], limit_page_length=1)
+			if rows:
+				login_doc = frappe.get_doc("FT Contractor Portal Login", rows[0]["name"])
+		if not login_doc:
+			login_doc = frappe.new_doc("FT Contractor Portal Login")
+		_safe_set_if_field(login_doc, "supplier", supplier)
+		_safe_set_if_field(login_doc, "full_name", full_name)
+		_safe_set_if_field(login_doc, "email", email)
+		_safe_set_if_field(login_doc, "mobile_no", mobile_no or None)
+		_safe_set_if_field(login_doc, "notes", notes or None)
+		_safe_set_if_field(login_doc, "enabled", enabled_int)
+		if login_doc.is_new():
+			login_doc.insert(ignore_permissions=True)
+		else:
+			login_doc.save(ignore_permissions=True)
+	user_name = email
+	if frappe.db.exists("User", user_name):
+		user_doc = frappe.get_doc("User", user_name)
+	else:
+		user_doc = frappe.new_doc("User")
+		user_doc.email = user_name
+		user_doc.username = user_name
+		user_doc.send_welcome_email = 0
+		user_doc.user_type = "Website User"
+	user_doc.first_name = _first_name_from_full_name(full_name)
+	user_doc.full_name = full_name
+	user_doc.mobile_no = mobile_no or None
+	user_doc.enabled = enabled_int
+	user_doc.user_type = "Website User"
+	user_doc.send_welcome_email = 0
+	if user_doc.is_new():
+		user_doc.insert(ignore_permissions=True)
+	else:
+		user_doc.save(ignore_permissions=True)
+	temp_password = _generate_temp_password(12)
+	from frappe.utils.password import update_password
+	update_password(user_name, temp_password, logout_all_sessions=True)
+	for role_name in ("Contractor Portal User", "Contractor"):
+		if frappe.db.exists("Role", role_name) and not frappe.db.exists("Has Role", {"parent": user_name, "role": role_name}):
+			try:
+				user_doc.append("roles", {"role": role_name})
+			except Exception:
+				pass
+	try:
+		user_doc.save(ignore_permissions=True)
+	except Exception:
+		pass
+	if login_doc:
+		_safe_set_if_field(login_doc, "provisioned_at", frappe.utils.now_datetime())
+		_safe_set_if_field(login_doc, "provisioned_user", user_name)
+		_safe_set_if_field(login_doc, "requires_password_reset", 1)
+		_safe_set_if_field(login_doc, "user", user_name)
+		_safe_set_if_field(login_doc, "portal_user", user_name)
+		login_doc.save(ignore_permissions=True)
+	site = (frappe.utils.get_url() or "").rstrip("/")
+	contractor_login_url = f"{site}/contractor/login"
+	subject = "Your FireTrack Contractor Portal Access"
+	message = (
+		f"Hi {full_name},<br><br>"
+		"Your contractor portal login is ready.<br><br>"
+		f"Login URL: <a href=\"{contractor_login_url}\">{contractor_login_url}</a><br>"
+		f"Username: {user_name}<br>"
+		f"Temporary Password: {temp_password}<br><br>"
+		"After first login, go to Account and change your password."
+	)
+	frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
+	return {
+		"ok": True,
+		"login_name": (login_doc.name if login_doc else user_name),
+		"user": user_name,
+		"email": user_name,
+		"temporary_password_sent": True,
+		"login_url": contractor_login_url,
+		"has_login_doctype": has_login_doctype,
+		"message": "Contractor portal login provisioned and invite email sent.",
+	}
+
+
+@frappe.whitelist(allow_guest=False)
+def provision_contractor_login(**kwargs):
+	return provision_contractor_portal_login(**kwargs)

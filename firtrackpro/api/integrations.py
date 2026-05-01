@@ -508,6 +508,72 @@ def _ensure_sales_invoice_xero_fields() -> None:
 	create_custom_fields(fields, update=True)
 
 
+def _ensure_payment_entry_xero_fields() -> None:
+	fields = {
+		"Payment Entry": [
+			{
+				"fieldname": "xero_payment_id",
+				"label": "Xero Payment ID",
+				"fieldtype": "Data",
+				"insert_after": "reference_no",
+				"read_only": 1,
+				"no_copy": 1,
+				"unique": 1,
+			},
+			{
+				"fieldname": "xero_payment_ref",
+				"label": "Xero Payment Reference",
+				"fieldtype": "Data",
+				"insert_after": "xero_payment_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "xero_last_synced_at",
+				"label": "Xero Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "xero_payment_ref",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		]
+	}
+	create_custom_fields(fields, update=True)
+
+
+def _ensure_item_xero_fields() -> None:
+	fields = {
+		"Item": [
+			{
+				"fieldname": "xero_item_id",
+				"label": "Xero Item ID",
+				"fieldtype": "Data",
+				"insert_after": "item_name",
+				"read_only": 1,
+				"no_copy": 1,
+				"unique": 1,
+			},
+			{
+				"fieldname": "xero_item_code",
+				"label": "Xero Item Code",
+				"fieldtype": "Data",
+				"insert_after": "xero_item_id",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "xero_last_synced_at",
+				"label": "Xero Last Synced At",
+				"fieldtype": "Datetime",
+				"insert_after": "xero_item_code",
+				"read_only": 1,
+				"no_copy": 1,
+			},
+		]
+	}
+	create_custom_fields(fields, update=True)
+
+
 def _ensure_accounting_sync_meta_fields() -> None:
 	fields = {
 		"Customer": [
@@ -715,10 +781,10 @@ def ensure_xero_sync_fields(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	_ensure_customer_xero_fields()
-	_ensure_accounting_sync_meta_fields()
 	_ensure_supplier_xero_fields()
-	_ensure_accounting_sync_meta_fields()
 	_ensure_sales_invoice_xero_fields()
+	_ensure_payment_entry_xero_fields()
+	_ensure_item_xero_fields()
 	_ensure_accounting_sync_meta_fields()
 	return {"ok": True, "message": "Xero customer sync fields are ready."}
 
@@ -882,6 +948,146 @@ def _xero_fetch_invoices(config: dict[str, Any]) -> list[dict[str, Any]]:
 	return rows if isinstance(rows, list) else []
 
 
+def _xero_fetch_items(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	access_token = _as_str(config.get("xeroAccessToken"))
+	tenant_id = _as_str(config.get("tenantId"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not tenant_id:
+		frappe.throw("Xero tenant is not linked yet. Click Check Xero Orgs first.", frappe.ValidationError)
+
+	headers = {
+		"Authorization": f"Bearer {access_token}",
+		"Accept": "application/json",
+		"xero-tenant-id": tenant_id,
+	}
+	resp = requests.get("https://api.xero.com/api.xro/2.0/Items", headers=headers, timeout=30)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		headers["xero-tenant-id"] = _as_str(config.get("tenantId"))
+		resp = requests.get("https://api.xero.com/api.xro/2.0/Items", headers=headers, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		if _xero_is_auth_unsuccessful(resp):
+			frappe.throw("Xero authentication failed for the selected organization. Reconnect Xero and re-select the org in Integrations.", frappe.ValidationError)
+		frappe.throw(f"Xero items fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("Items") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_payments(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	access_token = _as_str(config.get("xeroAccessToken"))
+	tenant_id = _as_str(config.get("tenantId"))
+	if not access_token:
+		frappe.throw("Xero is not connected. Run Connect Xero first.", frappe.ValidationError)
+	if not tenant_id:
+		frappe.throw("Xero tenant is not linked yet. Click Check Xero Orgs first.", frappe.ValidationError)
+
+	headers = {
+		"Authorization": f"Bearer {access_token}",
+		"Accept": "application/json",
+		"xero-tenant-id": tenant_id,
+	}
+	resp = requests.get("https://api.xero.com/api.xro/2.0/Payments", headers=headers, timeout=30)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers["Authorization"] = f"Bearer {_as_str(config.get('xeroAccessToken'))}"
+		headers["xero-tenant-id"] = _as_str(config.get("tenantId"))
+		resp = requests.get("https://api.xero.com/api.xro/2.0/Payments", headers=headers, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		if _xero_is_auth_unsuccessful(resp):
+			frappe.throw("Xero authentication failed for the selected organization. Reconnect Xero and re-select the org in Integrations.", frappe.ValidationError)
+		frappe.throw(f"Xero payments fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("Payments") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_credit_notes(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	headers = _xero_api_headers(config)
+	resp = requests.get(
+		"https://api.xero.com/api.xro/2.0/CreditNotes",
+		headers=headers,
+		params={"where": 'Type=="ACCRECCREDIT"'},
+		timeout=30,
+	)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers = _xero_api_headers(config)
+		resp = requests.get(
+			"https://api.xero.com/api.xro/2.0/CreditNotes",
+			headers=headers,
+			params={"where": 'Type=="ACCRECCREDIT"'},
+			timeout=30,
+		)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero credit notes fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("CreditNotes") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_accounts(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	headers = _xero_api_headers(config)
+	resp = requests.get("https://api.xero.com/api.xro/2.0/Accounts", headers=headers, timeout=30)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers = _xero_api_headers(config)
+		resp = requests.get("https://api.xero.com/api.xro/2.0/Accounts", headers=headers, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero accounts fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("Accounts") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_tax_rates(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	headers = _xero_api_headers(config)
+	resp = requests.get("https://api.xero.com/api.xro/2.0/TaxRates", headers=headers, timeout=30)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers = _xero_api_headers(config)
+		resp = requests.get("https://api.xero.com/api.xro/2.0/TaxRates", headers=headers, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero tax rates fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("TaxRates") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
+def _xero_fetch_tracking_categories(config: dict[str, Any]) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("Xero calls are unavailable (requests library missing).")
+	headers = _xero_api_headers(config)
+	resp = requests.get("https://api.xero.com/api.xro/2.0/TrackingCategories", headers=headers, timeout=30)
+	if _xero_is_auth_unsuccessful(resp):
+		config = _xero_refresh_and_reselect_tenant(config)
+		headers = _xero_api_headers(config)
+		resp = requests.get("https://api.xero.com/api.xro/2.0/TrackingCategories", headers=headers, timeout=30)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"Xero tracking categories fetch failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	payload = resp.json() if hasattr(resp, "json") else {}
+	rows = payload.get("TrackingCategories") if isinstance(payload, dict) else []
+	return rows if isinstance(rows, list) else []
+
+
 def _xero_api_headers(config: dict[str, Any]) -> dict[str, str]:
 	access_token = _as_str(config.get("xeroAccessToken"))
 	tenant_id = _as_str(config.get("tenantId"))
@@ -1011,6 +1217,47 @@ def _xero_push_invoice(config: dict[str, Any], reference_name: str, document: di
 	return rows[0] if rows and isinstance(rows[0], dict) else {}
 
 
+def _xero_push_payment(config: dict[str, Any], reference_name: str, document: dict[str, Any]) -> dict[str, Any]:
+	payment_doc = document or {}
+	if reference_name and frappe.db.exists("Payment Entry", reference_name):
+		src = frappe.get_doc("Payment Entry", reference_name)
+		payment_doc = {
+			**payment_doc,
+			"reference_no": payment_doc.get("reference_no") or _as_str(getattr(src, "reference_no", "")),
+			"posting_date": payment_doc.get("posting_date") or _as_str(getattr(src, "posting_date", "")),
+			"paid_amount": payment_doc.get("paid_amount") or float(getattr(src, "paid_amount", 0) or 0),
+			"references": payment_doc.get("references")
+			or [
+				{
+					"reference_doctype": _as_str(getattr(r, "reference_doctype", "")),
+					"reference_name": _as_str(getattr(r, "reference_name", "")),
+					"allocated_amount": float(getattr(r, "allocated_amount", 0) or 0),
+				}
+				for r in (getattr(src, "references", []) or [])
+			],
+		}
+	refs = payment_doc.get("references") if isinstance(payment_doc.get("references"), list) else []
+	first_ref = refs[0] if refs and isinstance(refs[0], dict) else {}
+	invoice_name = _as_str(first_ref.get("reference_name"))
+	if not invoice_name or not frappe.db.exists("Sales Invoice", invoice_name):
+		frappe.throw("Payment push requires a linked Sales Invoice reference.", frappe.ValidationError)
+	invoice_id = _as_str(frappe.db.get_value("Sales Invoice", invoice_name, "xero_invoice_id"))
+	if not invoice_id:
+		frappe.throw("Linked Sales Invoice is not mapped to Xero yet.", frappe.ValidationError)
+	amount = float(first_ref.get("allocated_amount") or payment_doc.get("paid_amount") or 0)
+	if amount <= 0:
+		frappe.throw("Payment amount must be greater than zero.", frappe.ValidationError)
+	payload = {
+		"Invoice": {"InvoiceID": invoice_id},
+		"Date": _as_str(payment_doc.get("posting_date")) or _as_str(frappe.utils.nowdate()),
+		"Amount": amount,
+		"Reference": _as_str(payment_doc.get("reference_no") or reference_name),
+	}
+	out = _xero_api_json(config, "PUT", "Payments", {"Payments": [payload]})
+	rows = out.get("Payments") if isinstance(out.get("Payments"), list) else []
+	return rows[0] if rows and isinstance(rows[0], dict) else {}
+
+
 def _ensure_xero_sync_item() -> str:
 	code = "XERO-SYNC-SERVICE"
 	if frappe.db.exists("Item", code):
@@ -1028,16 +1275,40 @@ def _ensure_xero_sync_item() -> str:
 
 
 def _ensure_xero_sync_item_for_line(line: dict[str, Any]) -> str:
-	source_code = _as_str(line.get("ItemCode") or line.get("AccountCode")).strip()
+	item_obj = line.get("Item") if isinstance(line.get("Item"), dict) else {}
+	xero_item_id = _as_str(line.get("ItemID") or item_obj.get("ItemID")).strip()
+	xero_item_code = _as_str(
+		line.get("ItemCode")
+		or line.get("Code")
+		or item_obj.get("Code")
+		or line.get("AccountCode")
+	).strip()
+	if xero_item_id and frappe.db.exists("Item", {"xero_item_id": xero_item_id}):
+		return _as_str(frappe.db.get_value("Item", {"xero_item_id": xero_item_id}, "name"))
+	if xero_item_code and frappe.db.exists("Item", {"xero_item_code": xero_item_code}):
+		return _as_str(frappe.db.get_value("Item", {"xero_item_code": xero_item_code}, "name"))
+	if xero_item_code and frappe.db.exists("Item", {"item_code": xero_item_code}):
+		return _as_str(frappe.db.get_value("Item", {"item_code": xero_item_code}, "name"))
+
+	source_code = _as_str(
+		xero_item_code
+	).strip()
 	description = _as_str(line.get("Description")).strip()
+	line_id = _as_str(line.get("LineItemID")).strip()
 	if source_code:
 		candidate = f"XERO-{source_code.upper()}"
 	elif description:
 		slug = re.sub(r"[^A-Za-z0-9]+", "-", description).strip("-").upper()
-		candidate = f"XERO-{slug[:40]}" if slug else "XERO-SYNC-SERVICE"
+		candidate = f"XERO-{slug[:40]}" if slug else ""
+	elif line_id:
+		candidate = f"XERO-LINE-{line_id.replace('-', '')[:24].upper()}"
 	else:
-		candidate = "XERO-SYNC-SERVICE"
-	code = candidate[:140] if candidate else "XERO-SYNC-SERVICE"
+		candidate = ""
+	if not candidate:
+		signature = f"{_as_str(line.get('AccountCode'))}|{_as_str(line.get('Description'))}|{_as_str(line.get('Quantity'))}|{_as_str(line.get('UnitAmount'))}|{_as_str(line.get('LineAmount'))}"
+		digest = hashlib.md5(signature.encode("utf-8")).hexdigest()[:12].upper()
+		candidate = f"XERO-LINE-{digest}"
+	code = candidate[:140]
 	if frappe.db.exists("Item", code):
 		return code
 
@@ -1085,6 +1356,147 @@ def _xero_invoice_lines_to_erp_items(invoice: dict[str, Any], fallback_total: fl
 		return out
 	item_code = _ensure_xero_sync_item()
 	return [{"item_code": item_code, "qty": 1, "rate": fallback_total, "amount": fallback_total}]
+
+
+def _default_bank_account(company: str) -> str:
+	if company:
+		row = frappe.db.sql(
+			"""
+			select name
+			from `tabAccount`
+			where company=%s and is_group=0 and (account_type='Bank' or account_type='Cash')
+			order by account_type='Bank' desc, modified desc
+			limit 1
+			""",
+			(company,),
+			as_dict=True,
+		)
+		if row:
+			return _as_str(row[0].get("name"))
+	row = frappe.db.sql(
+		"""
+		select name
+		from `tabAccount`
+		where is_group=0 and (account_type='Bank' or account_type='Cash')
+		order by account_type='Bank' desc, modified desc
+		limit 1
+		""",
+		as_dict=True,
+	)
+	return _as_str(row[0].get("name")) if row else ""
+
+
+def _upsert_payment_entry_from_xero_payment(payment: dict[str, Any]) -> str:
+	payment_id = _as_str(payment.get("PaymentID"))
+	if not payment_id:
+		return ""
+	if frappe.db.exists("Payment Entry", {"xero_payment_id": payment_id}):
+		return _as_str(frappe.db.get_value("Payment Entry", {"xero_payment_id": payment_id}, "name"))
+
+	invoice = payment.get("Invoice") if isinstance(payment.get("Invoice"), dict) else {}
+	invoice_id = _as_str(invoice.get("InvoiceID"))
+	invoice_name = _as_str(frappe.db.get_value("Sales Invoice", {"xero_invoice_id": invoice_id}, "name")) if invoice_id else ""
+	if not invoice_name:
+		return ""
+	invoice_doc = frappe.get_doc("Sales Invoice", invoice_name)
+	customer = _as_str(getattr(invoice_doc, "customer", ""))
+	company = _as_str(getattr(invoice_doc, "company", ""))
+	paid_from = _as_str(getattr(invoice_doc, "debit_to", ""))
+	paid_to = _default_bank_account(company)
+	if not customer or not paid_from or not paid_to:
+		return ""
+
+	amount = float(payment.get("Amount") or 0)
+	if amount <= 0:
+		return ""
+	date_val = _as_str(payment.get("Date") or payment.get("DateString") or frappe.utils.nowdate())[:10]
+	ref = _as_str(payment.get("Reference") or payment.get("PaymentID"))
+	currency = _as_str(getattr(invoice_doc, "currency", "")) or _as_str(getattr(invoice_doc, "party_account_currency", "")) or "AUD"
+
+	doc = frappe.new_doc("Payment Entry")
+	doc.payment_type = "Receive"
+	doc.party_type = "Customer"
+	doc.party = customer
+	doc.company = company
+	doc.posting_date = date_val
+	doc.paid_from = paid_from
+	doc.paid_to = paid_to
+	doc.paid_amount = amount
+	doc.received_amount = amount
+	doc.reference_no = ref[:140]
+	doc.reference_date = date_val
+	doc.mode_of_payment = frappe.db.get_value("Mode of Payment", {}, "name") or "Bank"
+	doc.paid_from_account_currency = currency
+	doc.paid_to_account_currency = currency
+	doc.append(
+		"references",
+		{
+			"reference_doctype": "Sales Invoice",
+			"reference_name": invoice_name,
+			"allocated_amount": amount,
+			"due_date": _as_str(getattr(invoice_doc, "due_date", "")) or date_val,
+			"total_amount": float(getattr(invoice_doc, "grand_total", amount) or amount),
+			"outstanding_amount": float(getattr(invoice_doc, "outstanding_amount", amount) or amount),
+		},
+	)
+	doc.xero_payment_id = payment_id
+	doc.xero_payment_ref = ref
+	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_sync_status = "Synced"
+	doc.accounting_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_provider = "Xero"
+	doc.accounting_external_id = payment_id
+	doc.accounting_sync_error = ""
+	doc.flags.ignore_permissions = True
+	doc.insert(ignore_permissions=True)
+	return _as_str(doc.name)
+
+
+def _upsert_item_from_xero_item(item_row: dict[str, Any]) -> str:
+	xero_item_id = _as_str(item_row.get("ItemID"))
+	xero_item_code = _as_str(item_row.get("Code"))
+	name = _as_str(item_row.get("Name")) or xero_item_code
+	description = _as_str(item_row.get("Description"))
+	sales_price = float(item_row.get("SalesDetails", {}).get("UnitPrice") or 0) if isinstance(item_row.get("SalesDetails"), dict) else 0.0
+	if not xero_item_id and not xero_item_code:
+		return ""
+
+	item_name = ""
+	if xero_item_id and frappe.db.exists("Item", {"xero_item_id": xero_item_id}):
+		item_name = _as_str(frappe.db.get_value("Item", {"xero_item_id": xero_item_id}, "name"))
+	elif xero_item_code and frappe.db.exists("Item", xero_item_code):
+		item_name = xero_item_code
+	elif xero_item_code and frappe.db.exists("Item", {"item_code": xero_item_code}):
+		item_name = _as_str(frappe.db.get_value("Item", {"item_code": xero_item_code}, "name"))
+
+	if item_name:
+		doc = frappe.get_doc("Item", item_name)
+	else:
+		doc = frappe.new_doc("Item")
+		doc.item_code = xero_item_code or f"XERO-ITEM-{xero_item_id[:12]}"
+		doc.item_name = name or doc.item_code
+		doc.item_group = frappe.db.get_single_value("Stock Settings", "item_group") or "All Item Groups"
+		doc.stock_uom = "Nos"
+		doc.is_stock_item = 0
+		doc.include_item_in_manufacturing = 0
+
+	if name:
+		doc.item_name = name
+	if description:
+		doc.description = description
+	if sales_price > 0:
+		doc.standard_rate = sales_price
+	doc.xero_item_id = xero_item_id
+	doc.xero_item_code = xero_item_code
+	doc.xero_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_sync_status = "Synced"
+	doc.accounting_last_synced_at = frappe.utils.now_datetime()
+	doc.accounting_provider = "Xero"
+	doc.accounting_external_id = xero_item_id or xero_item_code
+	doc.accounting_sync_error = ""
+	doc.flags.ignore_permissions = True
+	doc.save(ignore_permissions=True)
+	return _as_str(doc.name)
 
 
 def _upsert_sales_invoice_from_xero_invoice(invoice: dict[str, Any]) -> str:
@@ -2082,6 +2494,28 @@ def sync_entity(**kwargs):
 				raise
 			_persist_integration_record("Xero", row)
 			return {"ok": True, "message": f"Invoice pushed to Xero ({invoice_number or invoice_id or 'ok'})."}
+		if entity == "payment":
+			if operation == "delete":
+				return {"ok": True, "message": "Payment delete push not enabled for Xero (safe mode)."}
+			try:
+				out = _xero_push_payment(row, reference_name, document)
+				payment_id = _as_str(out.get("PaymentID"))
+				payment_ref = _as_str(out.get("Reference"))
+				if payment_id and reference_name and frappe.db.exists("Payment Entry", reference_name):
+					frappe.db.set_value("Payment Entry", reference_name, {
+						"xero_payment_id": payment_id,
+						"xero_payment_ref": payment_ref,
+						"xero_last_synced_at": frappe.utils.now_datetime(),
+					}, update_modified=False)
+					_set_accounting_sync_meta("Payment Entry", reference_name, "Xero", "Synced", payment_id, "")
+					frappe.db.commit()
+			except Exception as exc:
+				if reference_name and frappe.db.exists("Payment Entry", reference_name):
+					_set_accounting_sync_meta("Payment Entry", reference_name, "Xero", "Error", "", _as_str(exc))
+					frappe.db.commit()
+				raise
+			_persist_integration_record("Xero", row)
+			return {"ok": True, "message": f"Payment pushed to Xero ({payment_id or 'ok'})."}
 
 	if entity == "customer":
 		return sync_customer(**kwargs)
@@ -2089,6 +2523,10 @@ def sync_entity(**kwargs):
 		return sync_supplier(**kwargs)
 	if entity == "invoice":
 		return sync_invoice(**kwargs)
+	if entity == "item":
+		return sync_item(**kwargs)
+	if entity == "payment":
+		return sync_payment(**kwargs)
 	frappe.throw(f"Sync for entity '{entity or 'unknown'}' is not implemented yet.", frappe.ValidationError)
 
 
@@ -2257,8 +2695,317 @@ def sync_invoice(**kwargs):
 
 
 @frappe.whitelist(methods=["POST"])
+def sync_item(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero item sync is implemented right now.", frappe.ValidationError)
+
+	_ensure_item_xero_fields()
+	_ensure_accounting_sync_meta_fields()
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+
+	items = _xero_fetch_items(row)
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for item_row in items:
+		try:
+			if not isinstance(item_row, dict):
+				continue
+			xero_item_id = _as_str(item_row.get("ItemID"))
+			existed = bool(xero_item_id and frappe.db.exists("Item", {"xero_item_id": xero_item_id}))
+			name = _upsert_item_from_xero_item(item_row)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+
+	_persist_integration_record("Xero", row)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"provider": "Xero",
+		"entity": "item",
+		"count": len(items),
+		"created": created,
+		"updated": updated,
+		"errors": errors[:20],
+		"message": f"Xero item sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
 def sync_payment(**kwargs):
-	return sync_entity(**kwargs)
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero payment sync is implemented right now.", frappe.ValidationError)
+
+	_ensure_payment_entry_xero_fields()
+	_ensure_sales_invoice_xero_fields()
+	_ensure_accounting_sync_meta_fields()
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	connections = _xero_fetch_connections(row)
+	row["xeroConnectionsJson"] = json.dumps(connections)
+	if connections and not _as_str(row.get("tenantId")):
+		first = connections[0] if isinstance(connections[0], dict) else {}
+		row["tenantId"] = _as_str(first.get("tenantId"))
+
+	payments = _xero_fetch_payments(row)
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for payment in payments:
+		try:
+			if not isinstance(payment, dict):
+				continue
+			payment_id = _as_str(payment.get("PaymentID"))
+			existed = bool(payment_id and frappe.db.exists("Payment Entry", {"xero_payment_id": payment_id}))
+			name = _upsert_payment_entry_from_xero_payment(payment)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+
+	_persist_integration_record("Xero", row)
+	frappe.db.commit()
+	return {
+		"ok": True,
+		"provider": "Xero",
+		"entity": "payment",
+		"count": len(payments),
+		"created": created,
+		"updated": updated,
+		"errors": errors[:20],
+		"message": f"Xero payment sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+	}
+
+
+def _as_mapping_rows(raw: Any) -> list[dict[str, Any]]:
+	if isinstance(raw, list):
+		return [row for row in raw if isinstance(row, dict)]
+	if isinstance(raw, str):
+		try:
+			parsed = json.loads(raw)
+			if isinstance(parsed, list):
+				return [row for row in parsed if isinstance(row, dict)]
+		except Exception:
+			return []
+	return []
+
+
+@frappe.whitelist(methods=["POST"])
+def import_chart_of_accounts(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero chart import is implemented right now.", frappe.ValidationError)
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	accounts = _xero_fetch_accounts(row)
+	out: list[dict[str, Any]] = []
+	for acc in accounts:
+		if not isinstance(acc, dict):
+			continue
+		out.append(
+			{
+				"id": _as_str(acc.get("AccountID")),
+				"code": _as_str(acc.get("Code")),
+				"name": _as_str(acc.get("Name")),
+				"type": _as_str(acc.get("Type")),
+				"active": _as_str(acc.get("Status")).upper() != "ARCHIVED",
+			}
+		)
+	row["xeroChartAccountsJson"] = json.dumps(out)
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "provider": "Xero", "accounts": out, "count": len(out)}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def list_chart_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(row.get("chartMappingsJson"))
+	return {"ok": True, "provider": provider, "mappings": mappings}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_chart_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(kwargs.get("mappings"))
+	row["chartMappingsJson"] = json.dumps(mappings)
+	_persist_integration_record(provider if provider in PROVIDERS else "Xero", row)
+	return {"ok": True, "provider": provider, "saved": len(mappings)}
+
+
+@frappe.whitelist(methods=["POST"])
+def import_tax_codes(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero tax import is implemented right now.", frappe.ValidationError)
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	tax_rates = _xero_fetch_tax_rates(row)
+	out: list[dict[str, Any]] = []
+	for rate in tax_rates:
+		if not isinstance(rate, dict):
+			continue
+		out.append(
+			{
+				"id": _as_str(rate.get("TaxType") or rate.get("TaxRateID")),
+				"code": _as_str(rate.get("TaxType")),
+				"name": _as_str(rate.get("Name")),
+				"rate": _as_float(rate.get("EffectiveRate"), 0.0),
+				"active": _as_str(rate.get("Status")).upper() != "DELETED",
+			}
+		)
+	row["xeroTaxCodesJson"] = json.dumps(out)
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "provider": "Xero", "taxCodes": out, "count": len(out)}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def list_tax_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(row.get("taxMappingsJson"))
+	return {"ok": True, "provider": provider, "mappings": mappings}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_tax_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(kwargs.get("mappings"))
+	row["taxMappingsJson"] = json.dumps(mappings)
+	_persist_integration_record(provider if provider in PROVIDERS else "Xero", row)
+	return {"ok": True, "provider": provider, "saved": len(mappings)}
+
+
+@frappe.whitelist(methods=["POST"])
+def import_tracking_categories(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero tracking category import is implemented right now.", frappe.ValidationError)
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	categories = _xero_fetch_tracking_categories(row)
+	out: list[dict[str, Any]] = []
+	for cat in categories:
+		if not isinstance(cat, dict):
+			continue
+		options = cat.get("Options") if isinstance(cat.get("Options"), list) else []
+		out.append(
+			{
+				"id": _as_str(cat.get("TrackingCategoryID")),
+				"name": _as_str(cat.get("Name")),
+				"status": _as_str(cat.get("Status")),
+				"options": [
+					{
+						"id": _as_str(opt.get("TrackingOptionID")) if isinstance(opt, dict) else "",
+						"name": _as_str(opt.get("Name")) if isinstance(opt, dict) else "",
+						"status": _as_str(opt.get("Status")) if isinstance(opt, dict) else "",
+					}
+					for opt in options
+					if isinstance(opt, dict)
+				],
+			}
+		)
+	row["xeroTrackingCategoriesJson"] = json.dumps(out)
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "provider": "Xero", "categories": out, "count": len(out)}
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def list_tracking_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(row.get("trackingMappingsJson"))
+	return {"ok": True, "provider": provider, "mappings": mappings}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_tracking_mappings(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	row = _integration_record(provider if provider in PROVIDERS else "Xero")
+	mappings = _as_mapping_rows(kwargs.get("mappings"))
+	row["trackingMappingsJson"] = json.dumps(mappings)
+	_persist_integration_record(provider if provider in PROVIDERS else "Xero", row)
+	return {"ok": True, "provider": provider, "saved": len(mappings)}
+
+
+@frappe.whitelist(methods=["POST"])
+def import_credit_notes(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	if provider != "Xero":
+		frappe.throw("Only Xero credit note import is implemented right now.", frappe.ValidationError)
+	row = _integration_record("Xero")
+	row = _xero_apply_site_config_credentials(row)[0]
+	row = _xero_refresh_if_needed(row)
+	credit_notes = _xero_fetch_credit_notes(row)
+	out: list[dict[str, Any]] = []
+	for note in credit_notes:
+		if not isinstance(note, dict):
+			continue
+		contact = note.get("Contact") if isinstance(note.get("Contact"), dict) else {}
+		out.append(
+			{
+				"id": _as_str(note.get("CreditNoteID")),
+				"number": _as_str(note.get("CreditNoteNumber")),
+				"status": _as_str(note.get("Status")),
+				"date": _as_str(note.get("Date") or note.get("DateString")),
+				"total": _as_float(note.get("Total"), 0.0),
+				"customer_name": _as_str(contact.get("Name")),
+				"customer_contact_id": _as_str(contact.get("ContactID")),
+				"currency": _as_str(note.get("CurrencyCode")),
+			}
+		)
+	row["xeroCreditNotesJson"] = json.dumps(out)
+	_persist_integration_record("Xero", row)
+	return {"ok": True, "provider": "Xero", "creditNotes": out, "count": len(out)}
+
+
+@frappe.whitelist(methods=["POST"])
+def sync_now(**kwargs):
+	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	entity = _as_str(kwargs.get("entity") or "all").lower()
+	if provider != "Xero":
+		frappe.throw("Only Xero sync_now is implemented right now.", frappe.ValidationError)
+	results: list[dict[str, Any]] = []
+	if entity in {"all", "item"}:
+		results.append({"entity": "item", "result": sync_item(provider="Xero")})
+	if entity in {"all", "customer"}:
+		results.append({"entity": "customer", "result": sync_customer(provider="Xero")})
+	if entity in {"all", "supplier"}:
+		results.append({"entity": "supplier", "result": sync_supplier(provider="Xero")})
+	if entity in {"all", "invoice"}:
+		results.append({"entity": "invoice", "result": sync_invoice(provider="Xero")})
+	if entity in {"all", "payment"}:
+		results.append({"entity": "payment", "result": sync_payment(provider="Xero")})
+	return {"ok": True, "provider": "Xero", "entity": entity, "results": results, "message": "Accounting sync completed."}
 
 
 def run_accounting_auto_sync():
@@ -2280,6 +3027,7 @@ def run_accounting_auto_sync():
 
 	sync_customers = _as_bool(row.get("syncCustomers"))
 	sync_invoices = _as_bool(row.get("syncInvoices"))
+	sync_payments = _as_bool(row.get("syncPayments"))
 	sync_suppliers = _as_bool(row.get("syncSuppliers"))
 
 	now = datetime.now(timezone.utc)
@@ -2295,6 +3043,8 @@ def run_accounting_auto_sync():
 
 	if sync_invoices:
 		_run("invoice", sync_invoice)
+	if sync_payments and minute % 30 == 0:
+		_run("payment", sync_payment)
 	if sync_customers and minute % 30 == 0:
 		_run("customer", sync_customer)
 	if sync_suppliers and minute == 0:
