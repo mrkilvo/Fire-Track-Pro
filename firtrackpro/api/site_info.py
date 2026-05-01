@@ -97,6 +97,73 @@ def _doctype_count(*doctypes: str) -> int:
 	return 0
 
 
+def _safe_set_single(doctype: str, fieldname: str, value: str) -> bool:
+	if not frappe.db.exists("DocType", doctype):
+		return False
+	if not frappe.db.has_column(doctype, fieldname):
+		return False
+	frappe.db.set_single_value(doctype, fieldname, value)
+	return True
+
+
+def _first_company_logo(company: str) -> str:
+	if not company or not frappe.db.exists("Company", company):
+		return ""
+	for fieldname in ("company_logo", "logo", "company_logo_url"):
+		if frappe.db.has_column("Company", fieldname):
+			logo = str(frappe.db.get_value("Company", company, fieldname) or "").strip()
+			if logo:
+				return logo
+	for fieldname in ("file_url",):
+		if frappe.db.has_column("File", fieldname):
+			row = frappe.get_all(
+				"File",
+				filters={"attached_to_doctype": "Company", "attached_to_name": company, "is_private": 0},
+				fields=["file_url", "creation"],
+				order_by="creation desc",
+				limit=1,
+			)
+			if row:
+				return str(row[0].get("file_url") or "").strip()
+	return ""
+
+
+@frappe.whitelist()
+def sync_public_branding_from_company(company: str | None = None):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+
+	company_name = str(company or "").strip()
+	if not company_name and frappe.db.exists("DocType", "Global Defaults"):
+		company_name = str(frappe.db.get_single_value("Global Defaults", "default_company") or "").strip()
+	if not company_name:
+		frappe.throw("Company is required.")
+	if not frappe.db.exists("Company", company_name):
+		frappe.throw(f"Company not found: {company_name}")
+
+	brand_name = company_name
+	logo_url = _first_company_logo(company_name)
+	updated = False
+
+	if brand_name:
+		updated = _safe_set_single("Website Settings", "app_name", brand_name) or updated
+		updated = _safe_set_single("Website Settings", "brand", brand_name) or updated
+
+	if logo_url:
+		updated = _safe_set_single("Website Settings", "app_logo", logo_url) or updated
+		updated = _safe_set_single("Navbar Settings", "app_logo", logo_url) or updated
+		updated = _safe_set_single("Website Settings", "splash_image", logo_url) or updated
+
+	if updated:
+		frappe.clear_cache()
+
+	return {
+		"brand_name": _resolve_public_brand_name(),
+		"logo_url": _resolve_public_logo_url(),
+		"updated": bool(updated),
+	}
+
+
 @frappe.whitelist(allow_guest=True)
 def get_site():
 	"""Return the current Frappe site (used to pick the Socket.IO namespace)."""
