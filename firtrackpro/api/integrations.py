@@ -5975,3 +5975,89 @@ def xero_webhook(**kwargs):
 
 	frappe.local.response["http_status_code"] = 200
 	return {"ok": True}
+
+
+ACCOUNTING_ONBOARDING_KEY = "firtrackpro:accounting_onboarding_settings"
+
+
+def _load_accounting_onboarding_settings() -> dict[str, Any]:
+	raw = _as_str(frappe.db.get_default(ACCOUNTING_ONBOARDING_KEY))
+	data = _safe_json_load(raw)
+	mode = _as_str(data.get("mode")).lower()
+	if mode not in {"erpnext_default", "import_xero", "import_myob", "hybrid"}:
+		mode = "erpnext_default"
+	status = _as_str(data.get("last_run_status")).lower()
+	if status not in {"idle", "ok", "error"}:
+		status = "idle"
+	return {
+		"mode": mode,
+		"last_run_at": _as_str(data.get("last_run_at")),
+		"last_run_status": status,
+		"last_run_message": _as_str(data.get("last_run_message")),
+	}
+
+
+def _save_accounting_onboarding_settings(settings: dict[str, Any]) -> dict[str, Any]:
+	normalized = {
+		"mode": _as_str(settings.get("mode")) or "erpnext_default",
+		"last_run_at": _as_str(settings.get("last_run_at")),
+		"last_run_status": _as_str(settings.get("last_run_status")) or "idle",
+		"last_run_message": _as_str(settings.get("last_run_message")),
+	}
+	frappe.db.set_default(ACCOUNTING_ONBOARDING_KEY, json.dumps(normalized))
+	return normalized
+
+
+@frappe.whitelist()
+def get_accounting_onboarding_settings():
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	return _load_accounting_onboarding_settings()
+
+
+@frappe.whitelist(methods=["POST"])
+def set_accounting_onboarding_settings(mode: str | None = None):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	next_mode = _as_str(mode).lower()
+	if next_mode not in {"erpnext_default", "import_xero", "import_myob", "hybrid"}:
+		next_mode = "erpnext_default"
+	settings = _load_accounting_onboarding_settings()
+	settings["mode"] = next_mode
+	return _save_accounting_onboarding_settings(settings)
+
+
+@frappe.whitelist(methods=["POST"])
+def run_accounting_onboarding_setup(mode: str | None = None):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+
+	settings = set_accounting_onboarding_settings(mode)
+	run_mode = _as_str(settings.get("mode")).lower() or "erpnext_default"
+	details: list[str] = []
+
+	try:
+		if run_mode in {"import_xero", "hybrid"}:
+			coa = import_chart_of_accounts(provider="Xero")
+			tax = import_tax_codes(provider="Xero")
+			tracking = import_tracking_categories(provider="Xero")
+			coa_count = len(coa.get("accounts", [])) if isinstance(coa, dict) else 0
+			tax_count = len(tax.get("taxCodes", [])) if isinstance(tax, dict) else 0
+			tracking_count = len(tracking.get("tracking", [])) if isinstance(tracking, dict) else 0
+			details.append(f"Xero COA imported: {coa_count}")
+			details.append(f"Xero tax codes imported: {tax_count}")
+			details.append(f"Xero tracking categories imported: {tracking_count}")
+		elif run_mode == "import_myob":
+			frappe.throw("MYOB onboarding setup is not implemented yet.", frappe.ValidationError)
+		else:
+			details.append("Using ERPNext default COA mode (no external import).")
+
+		settings["last_run_status"] = "ok"
+		settings["last_run_message"] = " | ".join(details) if details else "Accounting onboarding setup completed."
+	except Exception as exc:
+		settings["last_run_status"] = "error"
+		settings["last_run_message"] = _as_str(exc)
+	finally:
+		settings["last_run_at"] = _utc_iso_now()
+
+	return _save_accounting_onboarding_settings(settings)
