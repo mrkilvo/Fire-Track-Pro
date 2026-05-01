@@ -100,10 +100,14 @@ def _doctype_count(*doctypes: str) -> int:
 def _safe_set_single(doctype: str, fieldname: str, value: str) -> bool:
 	if not frappe.db.exists("DocType", doctype):
 		return False
-	if not frappe.db.has_column(doctype, fieldname):
+	try:
+		meta = frappe.get_meta(doctype)
+		if not meta or not meta.has_field(fieldname):
+			return False
+		frappe.db.set_single_value(doctype, fieldname, value)
+		return True
+	except Exception:
 		return False
-	frappe.db.set_single_value(doctype, fieldname, value)
-	return True
 
 
 def _first_company_logo(company: str) -> str:
