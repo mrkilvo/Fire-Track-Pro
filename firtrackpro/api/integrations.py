@@ -1061,13 +1061,15 @@ def _xero_invoice_lines_to_erp_items(invoice: dict[str, Any], fallback_total: fl
 	for line in rows:
 		if not isinstance(line, dict):
 			continue
-		amount = float(line.get("LineAmount") or 0)
-		if amount <= 0:
-			continue
 		qty = float(line.get("Quantity") or 1) or 1
 		rate = float(line.get("UnitAmount") or 0)
-		if rate <= 0:
+		amount = float(line.get("LineAmount") or 0)
+		if amount <= 0 and rate > 0:
+			amount = float(rate * qty)
+		if rate <= 0 and amount > 0:
 			rate = amount / qty if qty else amount
+		if amount <= 0:
+			continue
 		item_code = _ensure_xero_sync_item_for_line(line)
 		description = _as_str(line.get("Description"))
 		row = {
