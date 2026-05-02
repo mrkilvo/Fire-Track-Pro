@@ -5829,10 +5829,12 @@ def firelink_asset_sync(**kwargs):
 	if _is_firelink_local_site():
 		return _upsert_fl_asset_local(payload)
 	try:
-		return _firelink_remote_bridge_call(
+		result = _firelink_remote_bridge_call(
 			"/api/method/firtrackpro.api.integrations.firelink_asset_sync_bridge",
 			_remote_bridge_payload(payload),
 		)
+		_write_back_local_asset_firelink_uid(payload, result)
+		return result
 	except Exception:
 		remote = _upsert_remote_fl_doctype(
 			"FL Asset",
@@ -5851,7 +5853,9 @@ def firelink_asset_sync(**kwargs):
 				"additional_photos": _as_str(payload.get("additional_photos")),
 			},
 		)
-		return {"firelink_asset_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+		result = {"firelink_asset_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+		_write_back_local_asset_firelink_uid(payload, result)
+		return result
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
@@ -5859,6 +5863,51 @@ def firelink_asset_sync_bridge(**kwargs):
 	if not _is_valid_bridge_call():
 		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
 	return _upsert_fl_asset_local(kwargs)
+
+
+def _write_back_local_asset_firelink_uid(payload: dict[str, Any], result: dict[str, Any] | None) -> None:
+	"""Persist returned FireLink asset uid onto local FT Asset for stable source-of-truth mapping."""
+	try:
+		firelink_asset_id = _as_str((result or {}).get("firelink_asset_id") or (result or {}).get("name"))
+		if not firelink_asset_id:
+			return
+		local_asset_id = _as_str(payload.get("local_asset_id"))
+		if local_asset_id and frappe.db.exists("FT Asset", local_asset_id):
+			current_uid = _as_str(frappe.db.get_value("FT Asset", local_asset_id, "asset_firelink_uid"))
+			if current_uid != firelink_asset_id:
+				frappe.db.set_value("FT Asset", local_asset_id, "asset_firelink_uid", firelink_asset_id, update_modified=False)
+				frappe.db.commit()
+			return
+
+		asset_identifier = _as_str(payload.get("asset_identifier"))
+		asset_label = _as_str(payload.get("asset_label"))
+		asset_serial = _as_str(payload.get("asset_serial"))
+		firelink_property_id = _as_str(payload.get("firelink_property_id"))
+		local_property = ""
+		if firelink_property_id and frappe.db.has_column("FT Property", "firelink_uid"):
+			local_property = _as_str(frappe.db.get_value("FT Property", {"firelink_uid": firelink_property_id}, "name"))
+
+		candidates = []
+		if local_property and asset_identifier:
+			candidates = frappe.get_all(
+				"FT Asset",
+				filters={"asset_property": local_property, "asset_identifier": asset_identifier},
+				fields=["name", "asset_firelink_uid"],
+				limit_page_length=2,
+			)
+		if not candidates and local_property and asset_label:
+			filters = {"asset_property": local_property, "asset_label": asset_label}
+			if asset_serial:
+				filters["asset_serial"] = asset_serial
+			candidates = frappe.get_all("FT Asset", filters=filters, fields=["name", "asset_firelink_uid"], limit_page_length=2)
+		if len(candidates) == 1:
+			row = candidates[0]
+			current_uid = _as_str(row.get("asset_firelink_uid"))
+			if current_uid != firelink_asset_id:
+				frappe.db.set_value("FT Asset", row.get("name"), "asset_firelink_uid", firelink_asset_id, update_modified=False)
+				frappe.db.commit()
+	except Exception:
+		return
 
 
 def _resolve_defect_asset_firelink_id(raw_asset_id: str, local_defect_id: str) -> str:

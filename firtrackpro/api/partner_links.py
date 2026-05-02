@@ -185,6 +185,7 @@ def _build_handover_row(row):
         "status": str(row.get("status") or "sent"),
         "direction": str(row.get("direction") or "outbound"),
         "partner_job_ref": str(row.get("partner_job_ref") or ""),
+        "accepted_job_name": str(row.get("accepted_job_name") or ""),
         "notes": str(row.get("notes") or ""),
         "source_property_name": str(row.get("source_property_name") or ""),
         "source_property_address": str(row.get("source_property_address") or ""),
@@ -194,6 +195,7 @@ def _build_handover_row(row):
         "source_tasks": row.get("source_tasks") if isinstance(row.get("source_tasks"), list) else [],
         "source_assets": row.get("source_assets") if isinstance(row.get("source_assets"), list) else [],
         "source_items": row.get("source_items") if isinstance(row.get("source_items"), list) else [],
+        "source_defects": row.get("source_defects") if isinstance(row.get("source_defects"), list) else [],
         "source_customer": str(row.get("source_customer") or ""),
         "source_quote_ref": str(row.get("source_quote_ref") or ""),
         "created_at": str(row.get("created_at") or ""),
@@ -866,6 +868,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
     source_tasks = []
     source_assets = []
     source_items = []
+    source_defects = []
     source_property_address_name = ""
     if source_property:
         try:
@@ -895,7 +898,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                 as_dict=True,
             )
             if isinstance(prop, dict):
-                source_property_name = str(prop.get("name") or prop.get("property_name") or prop.get("property_title") or source_property).strip()
+                source_property_name = str(prop.get("property_name") or prop.get("property_title") or prop.get("name") or source_property).strip()
                 source_property_address_name = str(
                     prop.get("property_address")
                     or prop.get("address")
@@ -992,6 +995,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                     "title": title,
                     "status": status,
                     "item_code": item_code,
+                    "asset_ref": str(getattr(tr, "asset", None) or "").strip(),
                     "qty": float(qty) if qty not in (None, "") else None,
                 }
             )
@@ -1001,9 +1005,37 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         seen_assets = set()
         for tr in list(getattr(job_doc, "job_tasks", None) or []):
             asset_name = str(getattr(tr, "asset", None) or "").strip()
-            if not asset_name or asset_name in seen_assets or not frappe.db.exists("FT Asset", asset_name):
+            item_code_candidate = str(getattr(tr, "item_code", None) or "").strip()
+            search_token = asset_name or item_code_candidate
+            resolved_asset_name = ""
+            if asset_name and frappe.db.exists("FT Asset", asset_name):
+                resolved_asset_name = asset_name
+            elif item_code_candidate and frappe.db.exists("FT Asset", item_code_candidate):
+                resolved_asset_name = item_code_candidate
+            elif search_token:
+                filters = {"asset_property": source_property}
+                candidates = frappe.get_all(
+                    "FT Asset",
+                    filters=filters,
+                    fields=["name", "asset_label", "asset_identifier", "asset_serial"],
+                    limit_page_length=200,
+                )
+                token = search_token.strip().lower()
+                for c in candidates:
+                    pool = [
+                        str(c.get("name") or "").strip().lower(),
+                        str(c.get("asset_label") or "").strip().lower(),
+                        str(c.get("asset_identifier") or "").strip().lower(),
+                        str(c.get("asset_serial") or "").strip().lower(),
+                    ]
+                    if token and token in pool:
+                        resolved_asset_name = str(c.get("name") or "").strip()
+                        break
+            if not resolved_asset_name:
                 continue
-            seen_assets.add(asset_name)
+            if resolved_asset_name in seen_assets:
+                continue
+            seen_assets.add(resolved_asset_name)
             asset_fields = _existing_fields(
                 "FT Asset",
                 [
@@ -1023,23 +1055,20 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
             )
             a = frappe.db.get_value(
                 "FT Asset",
-                asset_name,
+                resolved_asset_name,
                 asset_fields,
                 as_dict=True,
             ) or {}
             source_assets.append(
                 {
-                    "asset_id": str(a.get("name") or asset_name).strip(),
-                    "asset_firelink_uid": _require_uid(
-                        "Asset {0}".format(str(a.get("name") or asset_name).strip()),
-                        _first_uid_value(
-                            a,
-                            [
-                                "asset_firelink_uid",
-                                "firelink_uid",
-                                "firelink_asset_uid",
-                            ],
-                        ),
+                    "asset_id": str(a.get("name") or resolved_asset_name).strip(),
+                    "asset_firelink_uid": _first_uid_value(
+                        a,
+                        [
+                            "asset_firelink_uid",
+                            "firelink_uid",
+                            "firelink_asset_uid",
+                        ],
                     ),
                     "asset_label": str(a.get("asset_label") or "").strip(),
                     "asset_identifier": str(a.get("asset_identifier") or "").strip(),
@@ -1053,28 +1082,93 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
             )
     except Exception:
         source_assets = []
+    if source_quote_ref:
+        try:
+            for pr in list(getattr(job_doc, "job_part_usage", None) or []):
+                item_code = str(getattr(pr, "part_usage_item", None) or "").strip()
+                description = str(getattr(pr, "part_usage_description", None) or "").strip()
+                qty = getattr(pr, "part_usage_qty", None)
+                rate = getattr(pr, "part_usage_rate", None)
+                serial_lot = str(getattr(pr, "part_usage_serial_lot", None) or "").strip()
+                warranty = getattr(pr, "part_usage_warranty_months", None)
+                if not item_code and not description:
+                    continue
+                source_items.append(
+                    {
+                        "item_code": item_code,
+                        "description": description,
+                        "qty": float(qty) if qty not in (None, "") else None,
+                        "rate": float(rate) if rate not in (None, "") else None,
+                        "serial_lot": serial_lot,
+                        "warranty_months": int(warranty) if warranty not in (None, "") else None,
+                    }
+                )
+        except Exception:
+            source_items = []
+        if frappe.db.exists("Quotation", source_quote_ref):
+            try:
+                qdoc = frappe.get_doc("Quotation", source_quote_ref)
+                for qi in list(getattr(qdoc, "items", None) or []):
+                    item_code = str(getattr(qi, "item_code", None) or "").strip()
+                    description = str(getattr(qi, "description", None) or getattr(qi, "item_name", None) or "").strip()
+                    qty = getattr(qi, "qty", None)
+                    rate = getattr(qi, "rate", None)
+                    if not item_code and not description:
+                        continue
+                    source_items.append(
+                        {
+                            "item_code": item_code,
+                            "description": description,
+                            "qty": float(qty) if qty not in (None, "") else None,
+                            "rate": float(rate) if rate not in (None, "") else None,
+                            "serial_lot": "",
+                            "warranty_months": None,
+                        }
+                    )
+            except Exception:
+                pass
     try:
-        for pr in list(getattr(job_doc, "job_part_usage", None) or []):
-            item_code = str(getattr(pr, "part_usage_item", None) or "").strip()
-            description = str(getattr(pr, "part_usage_description", None) or "").strip()
-            qty = getattr(pr, "part_usage_qty", None)
-            rate = getattr(pr, "part_usage_rate", None)
-            serial_lot = str(getattr(pr, "part_usage_serial_lot", None) or "").strip()
-            warranty = getattr(pr, "part_usage_warranty_months", None)
-            if not item_code and not description:
-                continue
-            source_items.append(
-                {
-                    "item_code": item_code,
-                    "description": description,
-                    "qty": float(qty) if qty not in (None, "") else None,
-                    "rate": float(rate) if rate not in (None, "") else None,
-                    "serial_lot": serial_lot,
-                    "warranty_months": int(warranty) if warranty not in (None, "") else None,
-                }
+        defect_fields = _existing_fields(
+            "FT Defect",
+            [
+                "name",
+                "defect_job",
+                "defect_property",
+                "defect_asset",
+                "defect_template",
+                "defect_severity",
+                "defect_description",
+                "defect_notes",
+                "defect_status",
+                "defect_photo",
+                "additional_photos",
+                "defect_firelink_uid",
+            ],
+        )
+        if defect_fields:
+            defects = frappe.get_all(
+                "FT Defect",
+                filters={"defect_job": job_id},
+                fields=defect_fields,
+                limit_page_length=500,
             )
+            for d in defects:
+                source_defects.append(
+                    {
+                        "defect_id": str(d.get("name") or "").strip(),
+                        "defect_firelink_uid": str(d.get("defect_firelink_uid") or "").strip(),
+                        "defect_asset": str(d.get("defect_asset") or "").strip(),
+                        "defect_template": str(d.get("defect_template") or "").strip(),
+                        "defect_severity": str(d.get("defect_severity") or "").strip(),
+                        "defect_description": str(d.get("defect_description") or "").strip(),
+                        "defect_notes": str(d.get("defect_notes") or "").strip(),
+                        "defect_status": str(d.get("defect_status") or "").strip(),
+                        "defect_photo": str(d.get("defect_photo") or "").strip(),
+                        "additional_photos": str(d.get("additional_photos") or "").strip(),
+                    }
+                )
     except Exception:
-        source_items = []
+        source_defects = []
 
     now = _now_iso()
     row = {
@@ -1096,6 +1190,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         "source_tasks": source_tasks,
         "source_assets": source_assets,
         "source_items": source_items,
+        "source_defects": source_defects,
         "source_customer": source_customer,
         "source_quote_ref": source_quote_ref,
         "created_at": now,
@@ -1127,6 +1222,7 @@ def _push_handover_to_partner(link, row):
     source_tasks = row.get("source_tasks") if isinstance(row.get("source_tasks"), list) else []
     source_assets = row.get("source_assets") if isinstance(row.get("source_assets"), list) else []
     source_items = row.get("source_items") if isinstance(row.get("source_items"), list) else []
+    source_defects = row.get("source_defects") if isinstance(row.get("source_defects"), list) else []
     source_property_firelink_uid = str(row.get("source_property_firelink_uid") or "").strip()
     source_property_address_firelink_uid = str(row.get("source_property_address_firelink_uid") or "").strip()
 
@@ -1144,6 +1240,7 @@ def _push_handover_to_partner(link, row):
         "source_tasks": source_tasks,
         "source_assets": source_assets,
         "source_items": source_items,
+        "source_defects": source_defects,
         "source_customer": row.get("source_customer") or "",
         "source_quote_ref": row.get("source_quote_ref") or "",
         "partner_link_id": row.get("partner_link_id") or "",
@@ -1194,6 +1291,355 @@ def _mark_handover_failed(handover_id, error_text):
     _save_handovers(rows)
 
 
+def _find_or_create_address_from_handover(row):
+    address_name = str(row.get("source_property_address_name") or "").strip()
+    if address_name and frappe.db.exists("Address", address_name):
+        return address_name
+    line1 = str(row.get("source_property_address") or "").strip()
+    if not line1:
+        return ""
+    city = ""
+    state = ""
+    pincode = ""
+    country = "Australia"
+    parts = [p.strip() for p in line1.split(",") if p and p.strip()]
+    if len(parts) >= 2:
+        city = parts[-3] if len(parts) >= 3 else parts[-2]
+        state_post = parts[-2] if len(parts) >= 2 else ""
+        if " " in state_post:
+            sp = state_post.split()
+            if sp:
+                state = sp[0]
+            if len(sp) > 1:
+                pincode = sp[1]
+        else:
+            state = state_post
+        country = parts[-1] if len(parts) >= 1 else "Australia"
+    city = city or "Unknown"
+    state = state or "VIC"
+    pincode = pincode or "0000"
+    existing = frappe.db.get_value("Address", {"address_line1": line1}, "name")
+    if existing:
+        return str(existing).strip()
+    ad = frappe.get_doc(
+        {
+            "doctype": "Address",
+            "address_title": (str(row.get("source_property_name") or "Handover Site") or "Handover Site")[:140],
+            "address_line1": line1,
+            "city": city,
+            "state": state,
+            "pincode": pincode,
+            "country": country,
+        }
+    )
+    ad.insert(ignore_permissions=True)
+    return ad.name
+
+
+def _find_or_create_property_from_handover(row):
+    firelink_uid = str(row.get("source_property_firelink_uid") or "").strip()
+    property_name = str(row.get("source_property_name") or "").strip()
+    address_name = _find_or_create_address_from_handover(row)
+    candidate = ""
+    if firelink_uid and frappe.db.exists("FT Property", {"firelink_uid": firelink_uid}):
+        candidate = str(frappe.db.get_value("FT Property", {"firelink_uid": firelink_uid}, "name") or "").strip()
+    if not candidate and property_name and frappe.db.exists("FT Property", {"property_name": property_name}):
+        candidate = str(frappe.db.get_value("FT Property", {"property_name": property_name}, "name") or "").strip()
+    if candidate:
+        changed = False
+        if firelink_uid and frappe.db.has_column("FT Property", "firelink_uid"):
+            current_uid = str(frappe.db.get_value("FT Property", candidate, "firelink_uid") or "").strip()
+            if current_uid != firelink_uid:
+                frappe.db.set_value("FT Property", candidate, "firelink_uid", firelink_uid, update_modified=False)
+                changed = True
+        if address_name and frappe.db.has_column("FT Property", "property_address"):
+            current_addr = str(frappe.db.get_value("FT Property", candidate, "property_address") or "").strip()
+            if not current_addr:
+                frappe.db.set_value("FT Property", candidate, "property_address", address_name, update_modified=False)
+                changed = True
+        if changed:
+            frappe.db.commit()
+        return candidate
+
+    payload = {
+        "doctype": "FT Property",
+        "property_name": property_name or (row.get("source_property_address") or "Handover Property"),
+    }
+    customer = str(row.get("source_customer") or "").strip()
+    if customer and frappe.db.exists("Customer", customer) and frappe.db.has_column("FT Property", "property_customer"):
+        payload["property_customer"] = customer
+    if address_name and frappe.db.has_column("FT Property", "property_address"):
+        payload["property_address"] = address_name
+    if firelink_uid and frappe.db.has_column("FT Property", "firelink_uid"):
+        payload["firelink_uid"] = firelink_uid
+    prop = frappe.get_doc(payload)
+    prop.insert(ignore_permissions=True)
+    return prop.name
+
+
+def _create_job_from_handover(row, property_id=None):
+    if not property_id:
+        property_id = _find_or_create_property_from_handover(row)
+    payload = {
+        "doctype": "FT Job",
+        "job_title": str(row.get("job_title") or "Inspection").strip() or "Inspection",
+        "job_status": "Planned",
+    }
+    if property_id and frappe.db.has_column("FT Job", "job_property"):
+        payload["job_property"] = property_id
+    customer = str(row.get("source_customer") or "").strip()
+    if customer and frappe.db.exists("Customer", customer) and frappe.db.has_column("FT Job", "job_customer"):
+        payload["job_customer"] = customer
+    job = frappe.get_doc(payload)
+    job.insert(ignore_permissions=True)
+    return job
+
+
+def _append_handover_tasks(job, row):
+    tasks = row.get("source_tasks") if isinstance(row.get("source_tasks"), list) else []
+    if not tasks:
+        return 0
+    asset_map = row.get("_resolved_asset_map") if isinstance(row.get("_resolved_asset_map"), dict) else {}
+    added = 0
+    for t in tasks:
+        if not isinstance(t, dict):
+            continue
+        item_code = str(t.get("item_code") or "").strip()
+        asset_ref = str(t.get("asset_ref") or "").strip()
+        title = str(t.get("title") or "").strip()
+        status = str(t.get("status") or "pending").strip() or "pending"
+        qty = t.get("qty")
+        task_row = {
+            "status": status,
+            "comments": "\n".join([x for x in [title, f"Item: {item_code}" if item_code else "", f"Qty: {qty}" if qty not in (None, "") else ""] if x]),
+        }
+        mapped_asset = ""
+        if asset_ref:
+            mapped_asset = str(asset_map.get(asset_ref) or "").strip()
+        if not mapped_asset and item_code:
+            mapped_asset = str(asset_map.get(item_code) or "").strip()
+        if mapped_asset and frappe.db.exists("FT Asset", mapped_asset):
+            task_row["asset"] = mapped_asset
+        elif item_code and frappe.db.exists("FT Asset", item_code):
+            task_row["asset"] = item_code
+        job.append("job_tasks", task_row)
+        added += 1
+    if added:
+        job.save(ignore_permissions=True)
+    return added
+
+
+def _sync_handover_assets(property_id, row):
+    assets = row.get("source_assets") if isinstance(row.get("source_assets"), list) else []
+    if not assets:
+        prop_uid = str(row.get("source_property_firelink_uid") or "").strip()
+        if prop_uid and frappe.db.exists("DocType", "FL Asset"):
+            try:
+                fl_assets = frappe.get_all(
+                    "FL Asset",
+                    filters={"asset_property": prop_uid},
+                    fields=[
+                        "name",
+                        "asset_label",
+                        "asset_identifier",
+                        "asset_serial",
+                        "asset_status",
+                        "asset_make",
+                        "asset_model",
+                        "asset_standard",
+                        "asset_type",
+                    ],
+                    limit_page_length=1000,
+                )
+                assets = [
+                    {
+                        "asset_id": str(a.get("name") or "").strip(),
+                        "asset_firelink_uid": str(a.get("name") or "").strip(),
+                        "asset_label": str(a.get("asset_label") or "").strip(),
+                        "asset_identifier": str(a.get("asset_identifier") or "").strip(),
+                        "asset_serial": str(a.get("asset_serial") or "").strip(),
+                        "asset_status": str(a.get("asset_status") or "").strip(),
+                        "asset_make": str(a.get("asset_make") or "").strip(),
+                        "asset_model": str(a.get("asset_model") or "").strip(),
+                        "asset_standard": str(a.get("asset_standard") or "").strip(),
+                        "asset_type": str(a.get("asset_type") or "").strip(),
+                    }
+                    for a in fl_assets
+                    if isinstance(a, dict)
+                ]
+            except Exception:
+                assets = []
+    if not assets:
+        row["_resolved_asset_map"] = {}
+        return 0
+    created_or_matched = 0
+    resolved_map = {}
+    for a in assets:
+        if not isinstance(a, dict):
+            continue
+        source_asset_id = str(a.get("asset_id") or "").strip()
+        source_asset_label = str(a.get("asset_label") or "").strip()
+        source_asset_identifier = str(a.get("asset_identifier") or "").strip()
+        source_asset_serial = str(a.get("asset_serial") or "").strip()
+        firelink_uid = str(a.get("asset_firelink_uid") or "").strip()
+        label = str(a.get("asset_label") or "").strip()
+        identifier = str(a.get("asset_identifier") or "").strip()
+        local_name = ""
+        if firelink_uid and frappe.db.has_column("FT Asset", "asset_firelink_uid"):
+            local_name = str(frappe.db.get_value("FT Asset", {"asset_firelink_uid": firelink_uid}, "name") or "").strip()
+        if not local_name and identifier and frappe.db.has_column("FT Asset", "asset_identifier"):
+            local_name = str(
+                frappe.db.get_value(
+                    "FT Asset",
+                    {"asset_property": property_id, "asset_identifier": identifier},
+                    "name",
+                )
+                or ""
+            ).strip()
+        if not local_name and label:
+            local_name = str(
+                frappe.db.get_value(
+                    "FT Asset",
+                    {"asset_property": property_id, "asset_label": label},
+                    "name",
+                )
+                or ""
+            ).strip()
+        if local_name and frappe.db.exists("FT Asset", local_name):
+            created_or_matched += 1
+            for key in [source_asset_id, source_asset_label, source_asset_identifier, source_asset_serial, local_name]:
+                if key:
+                    resolved_map[str(key)] = local_name
+            continue
+        payload = {
+            "doctype": "FT Asset",
+            "asset_property": property_id,
+            "asset_label": label or "Inbound Asset",
+            "asset_status": str(a.get("asset_status") or "Active").strip() or "Active",
+            "asset_identifier": identifier or None,
+            "asset_serial": str(a.get("asset_serial") or "").strip() or None,
+            "asset_make": str(a.get("asset_make") or "").strip() or None,
+            "asset_model": str(a.get("asset_model") or "").strip() or None,
+        }
+        incoming_type = str(a.get("asset_type") or "").strip()
+        incoming_standard = str(a.get("asset_standard") or "").strip()
+        if incoming_type and frappe.db.exists("FT Asset Type", incoming_type):
+            payload["asset_type"] = incoming_type
+        if incoming_standard and frappe.db.exists("FT Standard", incoming_standard):
+            payload["asset_standard"] = incoming_standard
+        if firelink_uid and frappe.db.has_column("FT Asset", "asset_firelink_uid"):
+            payload["asset_firelink_uid"] = firelink_uid
+        doc = frappe.get_doc(payload)
+        doc.insert(ignore_permissions=True)
+        created_or_matched += 1
+        for key in [source_asset_id, source_asset_label, source_asset_identifier, source_asset_serial, doc.name]:
+            if key:
+                resolved_map[str(key)] = doc.name
+    row["_resolved_asset_map"] = resolved_map
+    return created_or_matched
+
+
+def _append_handover_items(job, row):
+    items = row.get("source_items") if isinstance(row.get("source_items"), list) else []
+    if not items:
+        return 0
+    added = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        item_code = str(it.get("item_code") or "").strip()
+        desc = str(it.get("description") or "").strip()
+        usage_row = {
+            "part_usage_description": desc,
+            "part_usage_qty": float(it.get("qty")) if it.get("qty") not in (None, "") else 1.0,
+            "part_usage_rate": float(it.get("rate")) if it.get("rate") not in (None, "") else 0.0,
+            "part_usage_serial_lot": str(it.get("serial_lot") or "").strip() or None,
+            "part_usage_warranty_months": int(it.get("warranty_months")) if it.get("warranty_months") not in (None, "") else None,
+        }
+        if item_code and frappe.db.exists("Item", item_code):
+            usage_row["part_usage_item"] = item_code
+        job.append("job_part_usage", usage_row)
+        added += 1
+    if added:
+        job.save(ignore_permissions=True)
+    return added
+
+
+def _append_handover_defects(job, row, property_id=None):
+    defects = row.get("source_defects") if isinstance(row.get("source_defects"), list) else []
+    if not defects:
+        prop_uid = str(row.get("source_property_firelink_uid") or "").strip()
+        if prop_uid and frappe.db.exists("DocType", "FL Defect"):
+            try:
+                fl_defects = frappe.get_all(
+                    "FL Defect",
+                    filters={"defect_property": prop_uid},
+                    fields=[
+                        "name",
+                        "defect_asset",
+                        "defect_template_code",
+                        "defect_severity",
+                        "defect_status",
+                        "defect_summary",
+                        "defect_notes",
+                        "defect_photo",
+                        "additional_photos",
+                    ],
+                    limit_page_length=1000,
+                )
+                defects = [
+                    {
+                        "defect_id": str(d.get("name") or "").strip(),
+                        "defect_firelink_uid": str(d.get("name") or "").strip(),
+                        "defect_asset": str(d.get("defect_asset") or "").strip(),
+                        "defect_template": str(d.get("defect_template_code") or "").strip(),
+                        "defect_severity": str(d.get("defect_severity") or "").strip(),
+                        "defect_description": str(d.get("defect_summary") or "").strip(),
+                        "defect_notes": str(d.get("defect_notes") or "").strip(),
+                        "defect_status": str(d.get("defect_status") or "").strip(),
+                        "defect_photo": str(d.get("defect_photo") or "").strip(),
+                        "additional_photos": str(d.get("additional_photos") or "").strip(),
+                    }
+                    for d in fl_defects
+                    if isinstance(d, dict)
+                ]
+            except Exception:
+                defects = []
+    if not defects:
+        return 0
+    asset_map = row.get("_resolved_asset_map") if isinstance(row.get("_resolved_asset_map"), dict) else {}
+    created = 0
+    for d in defects:
+        if not isinstance(d, dict):
+            continue
+        defect_uid = str(d.get("defect_firelink_uid") or d.get("defect_id") or "").strip()
+        if defect_uid and frappe.db.exists("FT Defect", {"defect_firelink_uid": defect_uid}):
+            continue
+        source_asset = str(d.get("defect_asset") or "").strip()
+        mapped_asset = str(asset_map.get(source_asset) or "").strip()
+        if not mapped_asset and source_asset and frappe.db.exists("FT Asset", source_asset):
+            mapped_asset = source_asset
+        payload = {
+            "doctype": "FT Defect",
+            "defect_job": job.name if frappe.db.has_column("FT Defect", "defect_job") else None,
+            "defect_property": property_id if property_id and frappe.db.has_column("FT Defect", "defect_property") else None,
+            "defect_asset": mapped_asset if mapped_asset and frappe.db.has_column("FT Defect", "defect_asset") else None,
+            "defect_template": str(d.get("defect_template") or "").strip() or None,
+            "defect_severity": str(d.get("defect_severity") or "").strip() or None,
+            "defect_description": str(d.get("defect_description") or "").strip() or "Inbound defect",
+            "defect_notes": str(d.get("defect_notes") or "").strip() or None,
+            "defect_status": str(d.get("defect_status") or "").strip() or "open",
+            "defect_photo": str(d.get("defect_photo") or "").strip() or None,
+            "additional_photos": str(d.get("additional_photos") or "").strip() or None,
+            "defect_firelink_uid": defect_uid or None,
+        }
+        clean_payload = {k: v for k, v in payload.items() if v is not None or k == "doctype"}
+        doc = frappe.get_doc(clean_payload)
+        doc.insert(ignore_permissions=True)
+        created += 1
+    return created
+
+
 @frappe.whitelist(allow_guest=True)
 def receive_handover_job(
     handover_id=None,
@@ -1210,6 +1656,7 @@ def receive_handover_job(
     source_tasks=None,
     source_assets=None,
     source_items=None,
+    source_defects=None,
     source_customer=None,
     source_quote_ref=None,
 ):
@@ -1233,6 +1680,7 @@ def receive_handover_job(
     parsed_tasks = []
     parsed_assets = []
     parsed_items = []
+    parsed_defects = []
     if isinstance(source_tasks, list):
         parsed_tasks = source_tasks
     elif isinstance(source_tasks, str) and source_tasks.strip():
@@ -1260,6 +1708,15 @@ def receive_handover_job(
                 parsed_items = candidate
         except Exception:
             parsed_items = []
+    if isinstance(source_defects, list):
+        parsed_defects = source_defects
+    elif isinstance(source_defects, str) and source_defects.strip():
+        try:
+            candidate = json.loads(source_defects)
+            if isinstance(candidate, list):
+                parsed_defects = candidate
+        except Exception:
+            parsed_defects = []
 
     incoming = {
         "id": str(handover_id or uuid.uuid4()),
@@ -1280,6 +1737,7 @@ def receive_handover_job(
         "source_tasks": parsed_tasks,
         "source_assets": parsed_assets,
         "source_items": parsed_items,
+        "source_defects": parsed_defects,
         "source_customer": str(source_customer or "").strip(),
         "source_quote_ref": str(source_quote_ref or "").strip(),
         "created_at": now,
@@ -1340,6 +1798,18 @@ def update_handover_job_status(id=None, status=None, notes=None):
 
     if not target:
         frappe.throw("Handover was not found.")
+
+    if next_status == "accepted":
+        property_id = _find_or_create_property_from_handover(target)
+        _sync_handover_assets(property_id, target)
+        created_job = _create_job_from_handover(target, property_id=property_id)
+        _append_handover_tasks(created_job, target)
+        _append_handover_defects(created_job, target, property_id=property_id)
+        _append_handover_items(created_job, target)
+        accept_note = f"Accepted into FT Job {created_job.name}"
+        base = str(target.get("notes") or "").strip()
+        target["notes"] = accept_note if not base else f"{accept_note}\n{base}"
+        target["accepted_job_name"] = str(created_job.name)
 
     _save_handovers(rows)
     return _build_handover_row(target)
