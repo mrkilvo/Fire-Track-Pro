@@ -198,6 +198,7 @@ def _build_handover_row(row):
         "source_defects": row.get("source_defects") if isinstance(row.get("source_defects"), list) else [],
         "source_customer": str(row.get("source_customer") or ""),
         "source_quote_ref": str(row.get("source_quote_ref") or ""),
+        "linked_supplier_quote_ref": str(row.get("linked_supplier_quote_ref") or ""),
         "created_at": str(row.get("created_at") or ""),
         "updated_at": str(row.get("updated_at") or ""),
     }
@@ -1193,6 +1194,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         "source_defects": source_defects,
         "source_customer": source_customer,
         "source_quote_ref": source_quote_ref,
+        "linked_supplier_quote_ref": "",
         "created_at": now,
         "updated_at": now,
     }
@@ -1740,6 +1742,7 @@ def receive_handover_job(
         "source_defects": parsed_defects,
         "source_customer": str(source_customer or "").strip(),
         "source_quote_ref": str(source_quote_ref or "").strip(),
+        "linked_supplier_quote_ref": "",
         "created_at": now,
         "updated_at": now,
     }
@@ -1810,6 +1813,38 @@ def update_handover_job_status(id=None, status=None, notes=None):
         base = str(target.get("notes") or "").strip()
         target["notes"] = accept_note if not base else f"{accept_note}\n{base}"
         target["accepted_job_name"] = str(created_job.name)
+
+    _save_handovers(rows)
+    return _build_handover_row(target)
+
+
+@frappe.whitelist(allow_guest=False)
+def link_handover_supplier_quote(id=None, supplier_quote_ref=None, source_quote_ref=None):
+    row_id = str(id or "").strip()
+    supplier_ref = str(supplier_quote_ref or "").strip()
+    source_ref = str(source_quote_ref or "").strip()
+    if not row_id:
+        frappe.throw("Handover id is required.")
+    if not supplier_ref:
+        frappe.throw("supplier_quote_ref is required.")
+    if not frappe.db.exists("Supplier Quotation", supplier_ref):
+        frappe.throw(f"Supplier Quotation {supplier_ref} was not found.")
+
+    rows = _load_handovers()
+    target = None
+    now = _now_iso()
+    for row in rows:
+        if str(row.get("id") or "") != row_id:
+            continue
+        row["linked_supplier_quote_ref"] = supplier_ref
+        if source_ref:
+            row["source_quote_ref"] = source_ref
+        row["updated_at"] = now
+        target = row
+        break
+
+    if not target:
+        frappe.throw("Handover was not found.")
 
     _save_handovers(rows)
     return _build_handover_row(target)

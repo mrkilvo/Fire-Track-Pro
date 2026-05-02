@@ -5662,6 +5662,10 @@ def _upsert_fl_defect_local(payload: dict[str, Any]) -> dict[str, Any]:
 	if not property_id:
 		frappe.throw("firelink_property_id is required", frappe.ValidationError)
 	defect_id = _as_str(payload.get("firelink_defect_id")) or _as_str(payload.get("local_defect_id"))
+	if not _as_str(payload.get("firelink_defect_id")):
+		matched_id = _find_matching_fl_defect_local(payload)
+		if matched_id:
+			defect_id = matched_id
 	if not defect_id:
 		frappe.throw("local_defect_id is required", frappe.ValidationError)
 	values = {
@@ -5937,6 +5941,63 @@ def _resolve_defect_asset_firelink_id(raw_asset_id: str, local_defect_id: str) -
 	return asset_id
 
 
+def _resolve_defect_firelink_id(raw_defect_id: str, local_defect_id: str) -> str:
+	defect_id = _as_str(raw_defect_id)
+	local_id = _as_str(local_defect_id)
+	if defect_id:
+		return defect_id
+	if local_id and frappe.db.exists("FT Defect", local_id):
+		mapped = _as_str(frappe.db.get_value("FT Defect", local_id, "defect_firelink_uid"))
+		if mapped:
+			return mapped
+	return ""
+
+
+def _writeback_defect_firelink_uid(local_defect_id: str, firelink_defect_id: str) -> None:
+	local_id = _as_str(local_defect_id)
+	firelink_id = _as_str(firelink_defect_id)
+	if (
+		not local_id
+		or not firelink_id
+		or not frappe.db.exists("FT Defect", local_id)
+		or not frappe.db.has_column("FT Defect", "defect_firelink_uid")
+	):
+		return
+	try:
+		current = _as_str(frappe.db.get_value("FT Defect", local_id, "defect_firelink_uid"))
+		if current != firelink_id:
+			frappe.db.set_value("FT Defect", local_id, "defect_firelink_uid", firelink_id, update_modified=False)
+			frappe.db.commit()
+	except Exception:
+		return
+
+
+def _find_matching_fl_defect_local(payload: dict[str, Any]) -> str:
+	property_id = _as_str(payload.get("firelink_property_id"))
+	asset_id = _as_str(payload.get("firelink_asset_id"))
+	summary = _as_str(payload.get("defect_summary"))[:140]
+	notes = _as_str(payload.get("defect_notes"))
+	if not property_id:
+		return ""
+	filters = {"defect_property": property_id}
+	candidates = frappe.get_all(
+		"FL Defect",
+		filters=filters,
+		fields=["name", "defect_asset", "defect_summary", "defect_notes"],
+		limit_page_length=50,
+		order_by="modified desc",
+	)
+	for row in candidates:
+		row_summary = _as_str(row.get("defect_summary"))[:140]
+		row_notes = _as_str(row.get("defect_notes"))
+		row_asset = _as_str(row.get("defect_asset"))
+		asset_match = True if not asset_id else (row_asset == asset_id or not row_asset)
+		notes_match = True if not notes else (row_notes == notes)
+		if row_summary == summary and asset_match and notes_match:
+			return _as_str(row.get("name"))
+	return ""
+
+
 @frappe.whitelist(methods=["POST"])
 def firelink_defect_sync(**kwargs):
 	if frappe.session.user == "Guest":
@@ -5948,7 +6009,11 @@ def firelink_defect_sync(**kwargs):
 	)
 	payload = {
 		"firelink_property_id": _as_str(kwargs.get("firelink_property_id")),
-		"firelink_defect_id": _as_str(kwargs.get("firelink_defect_id")) or None,
+		"firelink_defect_id": _resolve_defect_firelink_id(
+			_as_str(kwargs.get("firelink_defect_id")),
+			local_defect_id,
+		)
+		or None,
 		"local_defect_id": local_defect_id,
 		"firelink_asset_id": resolved_firelink_asset_id or None,
 		"defect_template_code": _as_str(kwargs.get("defect_template_code")) or None,
@@ -5960,12 +6025,16 @@ def firelink_defect_sync(**kwargs):
 		"additional_photos": _as_str(kwargs.get("additional_photos")) or None,
 	}
 	if _is_firelink_local_site():
-		return _upsert_fl_defect_local(payload)
+		out = _upsert_fl_defect_local(payload)
+		_writeback_defect_firelink_uid(local_defect_id, _as_str(out.get("firelink_defect_id")))
+		return out
 	try:
-		return _firelink_remote_bridge_call(
+		out = _firelink_remote_bridge_call(
 			"/api/method/firtrackpro.api.integrations.firelink_defect_sync_bridge",
 			_remote_bridge_payload(payload),
 		)
+		_writeback_defect_firelink_uid(local_defect_id, _as_str(out.get("firelink_defect_id")))
+		return out
 	except Exception:
 		remote = _upsert_remote_fl_doctype(
 			"FL Defect",
@@ -5982,7 +6051,9 @@ def firelink_defect_sync(**kwargs):
 				"additional_photos": _as_str(payload.get("additional_photos")),
 			},
 		)
-		return {"firelink_defect_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+		out = {"firelink_defect_id": _as_str(remote.get("name")), "created": bool(remote.get("created"))}
+		_writeback_defect_firelink_uid(local_defect_id, _as_str(out.get("firelink_defect_id")))
+		return out
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
