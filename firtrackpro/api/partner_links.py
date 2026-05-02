@@ -863,6 +863,12 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                     "primary_address",
                     "property_customer",
                     "customer",
+                    "firelink_uid",
+                    "firelink_property_uid",
+                    "property_uid",
+                    "address_firelink_uid",
+                    "firelink_address_uid",
+                    "property_address_firelink_uid",
                 ],
                 as_dict=True,
             )
@@ -976,6 +982,9 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                 asset_name,
                 [
                     "name",
+                    "asset_firelink_uid",
+                    "firelink_uid",
+                    "firelink_asset_uid",
                     "asset_label",
                     "asset_identifier",
                     "asset_serial",
