@@ -1,7 +1,10 @@
 import frappe
 from frappe import _
+import json
 
 DOCTYPE = "FT Job"
+STORE_HANDOVERS_KEY = "firtrackpro:partner_handovers_json"
+ACTIVE_OUTBOUND_HANDOVER_STATUSES = {"sent", "in_progress", "accepted"}
 
 STATUS_ALIASES = {
 	"open": "Open",
@@ -18,6 +21,53 @@ _STATUS_CANON = {"Open", "In Progress", "Completed", "Cancelled"}
 
 _schema_cache: dict[str, str] | None = None
 _opts_cache: dict[str, list[str]] | None = None
+
+
+def _get_active_outbound_handover(job_name: str) -> dict | None:
+	if not job_name:
+		return None
+	raw = str(frappe.db.get_default(STORE_HANDOVERS_KEY) or "").strip()
+	if not raw:
+		return None
+	try:
+		rows = json.loads(raw)
+	except Exception:
+		return None
+	if not isinstance(rows, list):
+		return None
+	for row in rows:
+		if not isinstance(row, dict):
+			continue
+		if str(row.get("direction") or "").strip().lower() != "outbound":
+			continue
+		if str(row.get("job_name") or "").strip() != str(job_name).strip():
+			continue
+		status = str(row.get("status") or "").strip().lower()
+		if status not in ACTIVE_OUTBOUND_HANDOVER_STATUSES:
+			continue
+		return row
+	return None
+
+
+def _throw_if_outbound_handover_locks_schedule(job_name: str, payload: dict):
+	if not isinstance(payload, dict):
+		return
+	if "scheduled_start" not in payload and "scheduled_end" not in payload:
+		return
+	active = _get_active_outbound_handover(job_name)
+	if not active:
+		return
+	owner = (
+		str(active.get("partner_label") or "").strip()
+		or str(active.get("partner_host") or "").strip()
+		or "partner tenant"
+	)
+	frappe.throw(
+		_(
+			"Scheduling is locked while this job is handed over to {0}. "
+			"Ask them to complete/decline handover before scheduling."
+		).format(owner)
+	)
 
 
 def _exists(doctype: str, name: str) -> bool:
@@ -345,6 +395,7 @@ def update_job(**kwargs):
 		frappe.throw(_("Missing required field: name"))
 	if not _exists(DOCTYPE, name):
 		frappe.throw(_("Job not found"))
+	_throw_if_outbound_handover_locks_schedule(name, kwargs or {})
 
 	doc = frappe.get_doc(DOCTYPE, name)
 	_apply_fields(doc, kwargs or {})
