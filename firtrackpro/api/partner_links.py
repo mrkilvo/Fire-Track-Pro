@@ -97,6 +97,24 @@ def _require_uid(label, value):
     )
 
 
+def _existing_fields(doctype, candidates):
+    out = []
+    try:
+        meta = frappe.get_meta(doctype)
+    except Exception:
+        meta = None
+    for fieldname in candidates:
+        if fieldname == "name":
+            out.append(fieldname)
+            continue
+        try:
+            if meta and meta.has_field(fieldname):
+                out.append(fieldname)
+        except Exception:
+            continue
+    return out
+
+
 def _primary_company_name():
     try:
         row = frappe.db.get_value("Company", {}, ["name", "company_name"], as_dict=True)
@@ -851,9 +869,8 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
     source_property_address_name = ""
     if source_property:
         try:
-            prop = frappe.db.get_value(
+            prop_fields = _existing_fields(
                 "FT Property",
-                source_property,
                 [
                     "name",
                     "property_name",
@@ -870,6 +887,11 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                     "firelink_address_uid",
                     "property_address_firelink_uid",
                 ],
+            )
+            prop = frappe.db.get_value(
+                "FT Property",
+                source_property,
+                prop_fields,
                 as_dict=True,
             )
             if isinstance(prop, dict):
@@ -882,10 +904,10 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                 ).strip()
                 source_property_address = source_property_address_name
                 if source_property_address_name and frappe.db.exists("Address", source_property_address_name):
-                    addr = frappe.db.get_value(
+                    address_fields = _existing_fields(
                         "Address",
-                        source_property_address_name,
                         [
+                            "name",
                             "address_line1",
                             "address_line2",
                             "city",
@@ -896,6 +918,11 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                             "address_firelink_uid",
                             "firelink_address_uid",
                         ],
+                    )
+                    addr = frappe.db.get_value(
+                        "Address",
+                        source_property_address_name,
+                        address_fields,
                         as_dict=True,
                     )
                     if isinstance(addr, dict):
@@ -977,9 +1004,8 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
             if not asset_name or asset_name in seen_assets or not frappe.db.exists("FT Asset", asset_name):
                 continue
             seen_assets.add(asset_name)
-            a = frappe.db.get_value(
+            asset_fields = _existing_fields(
                 "FT Asset",
-                asset_name,
                 [
                     "name",
                     "asset_firelink_uid",
@@ -994,6 +1020,11 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                     "asset_standard",
                     "asset_type",
                 ],
+            )
+            a = frappe.db.get_value(
+                "FT Asset",
+                asset_name,
+                asset_fields,
                 as_dict=True,
             ) or {}
             source_assets.append(
