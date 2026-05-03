@@ -244,6 +244,35 @@ def _publish_job_event(action, job_name):
         pass
 
 
+def _ensure_customer(customer_name):
+    name = str(customer_name or "").strip()
+    if not name:
+        return ""
+    if frappe.db.exists("Customer", name):
+        return name
+    try:
+        customer = frappe.get_doc(
+            {
+                "doctype": "Customer",
+                "customer_name": name,
+                "customer_type": "Company",
+            }
+        )
+        customer.insert(ignore_permissions=True)
+        return str(customer.name or name).strip() or name
+    except Exception:
+        return ""
+
+
+def _handover_target_customer_name(row):
+    if not isinstance(row, dict):
+        return ""
+    # Receiver-side customer should be the sending linked company when available.
+    preferred = str(row.get("partner_label") or "").strip()
+    fallback = str(row.get("source_customer") or "").strip()
+    return preferred or fallback
+
+
 def _build_request_row(row):
     return {
         "id": str(row.get("id") or ""),
@@ -1500,8 +1529,8 @@ def _find_or_create_property_from_handover(row):
         "doctype": "FT Property",
         "property_name": property_name or (row.get("source_property_address") or "Handover Property"),
     }
-    customer = str(row.get("source_customer") or "").strip()
-    if customer and frappe.db.exists("Customer", customer) and frappe.db.has_column("FT Property", "property_customer"):
+    customer = _ensure_customer(_handover_target_customer_name(row))
+    if customer and frappe.db.has_column("FT Property", "property_customer"):
         payload["property_customer"] = customer
     if address_name and frappe.db.has_column("FT Property", "property_address"):
         payload["property_address"] = address_name
@@ -1522,9 +1551,12 @@ def _create_job_from_handover(row, property_id=None):
     }
     if property_id and frappe.db.has_column("FT Job", "job_property"):
         payload["job_property"] = property_id
-    customer = str(row.get("source_customer") or "").strip()
-    if customer and frappe.db.exists("Customer", customer) and frappe.db.has_column("FT Job", "job_customer"):
+    customer = _ensure_customer(_handover_target_customer_name(row))
+    if customer and frappe.db.has_column("FT Job", "job_customer"):
         payload["job_customer"] = customer
+    source_customer = str(row.get("source_customer") or "").strip()
+    if source_customer:
+        payload["notes"] = "Original source customer: {0}".format(source_customer)
     job = frappe.get_doc(payload)
     job.insert(ignore_permissions=True)
     return job
