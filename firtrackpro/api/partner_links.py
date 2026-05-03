@@ -1212,6 +1212,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         source_defects = []
 
     rows = _load_handovers()
+    outbound_for_job = []
     for existing in rows:
         if not isinstance(existing, dict):
             continue
@@ -1219,8 +1220,15 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
             continue
         if str(existing.get("job_name") or "").strip() != job_id:
             continue
-        existing_status = str(existing.get("status") or "").strip().lower() or "sent"
-        if existing_status != "cancelled":
+        outbound_for_job.append(existing)
+    if outbound_for_job:
+        latest = max(
+            outbound_for_job,
+            key=lambda r: str(r.get("updated_at") or r.get("created_at") or ""),
+        )
+        latest_status = str(latest.get("status") or "").strip().lower() or "sent"
+        active_statuses = {"sent", "accepted", "in_progress", "cancel_requested"}
+        if latest_status in active_statuses:
             frappe.throw(
                 "This job has already been sent to a partner. Cancel that transfer before sending again."
             )
