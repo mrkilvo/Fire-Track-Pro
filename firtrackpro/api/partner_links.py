@@ -1053,6 +1053,11 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
                 or getattr(tr, "title", None)
                 or getattr(tr, "description", None)
                 or getattr(tr, "task", None)
+                or getattr(tr, "job_task_title", None)
+                or getattr(tr, "job_task_name", None)
+                or getattr(tr, "test_suite_label", None)
+                or getattr(tr, "test_suite", None)
+                or getattr(tr, "comments", None)
                 or ""
             ).strip()
             status = str(getattr(tr, "status", None) or "").strip()
@@ -1389,7 +1394,10 @@ def _mark_handover_failed(handover_id, error_text):
 def _cancel_job_for_handover(handover_row, reason_text=None):
     if not isinstance(handover_row, dict):
         return
-    job_name = str(handover_row.get("accepted_job_name") or "").strip()
+    # Cancellation can happen on either side:
+    # - inbound accepted flow uses accepted_job_name
+    # - outbound sender flow should release the original job_name
+    job_name = str(handover_row.get("accepted_job_name") or "").strip() or str(handover_row.get("job_name") or "").strip()
     if not job_name:
         return
     if not frappe.db.exists("FT Job", job_name):
@@ -1581,6 +1589,11 @@ def _append_handover_tasks(job, row):
             "status": status,
             "comments": "\n".join([x for x in [title, f"Item: {item_code}" if item_code else "", f"Qty: {qty}" if qty not in (None, "") else ""] if x]),
         }
+        if title:
+            # Populate common task title fields so recipient UI doesn't fall back to "Task 1".
+            task_row["task"] = title
+            task_row["job_task_name"] = title
+            task_row["job_task_title"] = title
         mapped_asset = ""
         if asset_ref:
             mapped_asset = str(asset_map.get(asset_ref) or "").strip()
@@ -1724,13 +1737,111 @@ def _append_handover_items(job, row):
             "part_usage_serial_lot": str(it.get("serial_lot") or "").strip() or None,
             "part_usage_warranty_months": int(it.get("warranty_months")) if it.get("warranty_months") not in (None, "") else None,
         }
-        if item_code and frappe.db.exists("Item", item_code):
+        if item_code:
+            # Keep source item code when valid; if the recipient does not have the
+            # linked Item master we fall back to description-only part rows.
             usage_row["part_usage_item"] = item_code
-        job.append("job_part_usage", usage_row)
+        try:
+            job.append("job_part_usage", usage_row)
+        except Exception:
+            usage_row.pop("part_usage_item", None)
+            job.append("job_part_usage", usage_row)
+        # Compatibility path: mirror into standard items table when present so UIs
+        # that read FT Job.items still render transferred parts.
+        try:
+            item_row = {
+                "item_code": item_code or None,
+                "qty": usage_row.get("part_usage_qty") or 1.0,
+                "rate": usage_row.get("part_usage_rate") or 0.0,
+                "description": desc or "",
+            }
+            job.append("items", item_row)
+        except Exception:
+            pass
         added += 1
     if added:
         job.save(ignore_permissions=True)
     return added
+
+
+def _auto_create_supplier_quote_and_po(row, created_job_name):
+    link_id = str(row.get("partner_link_id") or "").strip()
+    link = next((r for r in _load_links() if str(r.get("id") or "").strip() == link_id), None)
+    if not link:
+        return {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": "partner link not found"}
+
+    supplier = str(link.get("supplier") or "").strip()
+    if not supplier or not frappe.db.exists("Supplier", supplier):
+        return {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": "partner supplier not configured"}
+
+    items = row.get("source_items") if isinstance(row.get("source_items"), list) else []
+    if not items:
+        return {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": "no source items to quote"}
+
+    supplier_items = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        desc = str(it.get("description") or "").strip()
+        item_code = str(it.get("item_code") or "").strip()
+        qty = float(it.get("qty")) if it.get("qty") not in (None, "") else 1.0
+        rate = float(it.get("rate")) if it.get("rate") not in (None, "") else 0.0
+
+        item_row = {"qty": qty, "rate": rate, "description": desc or item_code or "Inbound handover item"}
+        if item_code and frappe.db.exists("Item", item_code):
+            item_row["item_code"] = item_code
+        supplier_items.append(item_row)
+
+    if not supplier_items:
+        return {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": "no valid line items"}
+
+    supplier_quote = None
+    try:
+        supplier_quote = frappe.get_doc(
+            {
+                "doctype": "Supplier Quotation",
+                "supplier": supplier,
+                "items": supplier_items,
+            }
+        )
+        supplier_quote.insert(ignore_permissions=True)
+    except Exception:
+        supplier_quote = None
+
+    if not supplier_quote:
+        return {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": "supplier quote auto-create failed"}
+
+    sq_name = str(supplier_quote.name or "").strip()
+    if sq_name:
+        row["linked_supplier_quote_ref"] = sq_name
+
+    po_name = ""
+    try:
+        po = frappe.get_doc(
+            {
+                "doctype": "Purchase Order",
+                "supplier": supplier,
+                "schedule_date": frappe.utils.nowdate(),
+                "items": supplier_items,
+            }
+        )
+        po.insert(ignore_permissions=True)
+        po_name = str(po.name or "").strip()
+    except Exception:
+        po_name = ""
+
+    if po_name:
+        note = "Auto linked Supplier Quote {0} and draft PO {1}".format(sq_name, po_name)
+    else:
+        note = "Auto linked Supplier Quote {0}".format(sq_name)
+    if created_job_name:
+        note = "{0} for job {1}".format(note, created_job_name)
+
+    return {
+        "linked_supplier_quote_ref": sq_name,
+        "created_purchase_order_ref": po_name,
+        "note": note,
+    }
 
 
 def _append_handover_defects(job, row, property_id=None):
@@ -1969,6 +2080,7 @@ def update_handover_job_status(id=None, status=None, notes=None):
     if not target:
         frappe.throw("Handover was not found.")
 
+    auto_docs = {"linked_supplier_quote_ref": "", "created_purchase_order_ref": "", "note": ""}
     if next_status == "accepted":
         property_id = _find_or_create_property_from_handover(target)
         _sync_handover_assets(property_id, target)
@@ -1976,7 +2088,11 @@ def update_handover_job_status(id=None, status=None, notes=None):
         _append_handover_tasks(created_job, target)
         _append_handover_defects(created_job, target, property_id=property_id)
         _append_handover_items(created_job, target)
+        auto_docs = _auto_create_supplier_quote_and_po(target, created_job.name)
         accept_note = f"Accepted into FT Job {created_job.name}"
+        auto_note = str(auto_docs.get("note") or "").strip()
+        if auto_note:
+            accept_note = "{0}. {1}".format(accept_note, auto_note)
         base = str(target.get("notes") or "").strip()
         target["notes"] = accept_note if not base else f"{accept_note}\n{base}"
         target["accepted_job_name"] = str(created_job.name)
@@ -1999,7 +2115,10 @@ def update_handover_job_status(id=None, status=None, notes=None):
         )
         if link:
             _notify_partner_handover_cancel(link, target, str(notes or "").strip())
-    return _build_handover_row(target)
+    out = _build_handover_row(target)
+    if next_status == "accepted":
+        out["created_purchase_order_ref"] = str(auto_docs.get("created_purchase_order_ref") or "")
+    return out
 
 
 @frappe.whitelist(allow_guest=False)
