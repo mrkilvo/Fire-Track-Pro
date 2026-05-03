@@ -1370,20 +1370,25 @@ def _cancel_job_for_handover(handover_row, reason_text=None):
     except Exception:
         return
 
-    cancel_note = str(reason_text or "").strip() or "Cancelled by tenant handover cancellation."
+    cancel_note = str(reason_text or "").strip() or "Partner handover cancelled; allocation released."
     try:
-        if hasattr(job_doc, "job_status"):
-            job_doc.job_status = "Cancelled"
-        if hasattr(job_doc, "status"):
-            job_doc.status = "Cancelled"
-        if hasattr(job_doc, "workflow_state"):
-            job_doc.workflow_state = "Cancelled"
+        # Release partner-allocation linkage only; do not cancel the underlying job.
+        for fieldname in [
+            "partner_link_id",
+            "job_partner_link_id",
+            "contractor_partner_link_id",
+            "firetrack_partner_link_id",
+            "job_allocated_partner_link",
+            "allocated_partner_link",
+        ]:
+            if hasattr(job_doc, fieldname):
+                setattr(job_doc, fieldname, "")
         if hasattr(job_doc, "notes"):
             base = str(getattr(job_doc, "notes", "") or "").strip()
             if cancel_note not in base:
                 job_doc.notes = (base + "\n" if base else "") + cancel_note
         job_doc.save(ignore_permissions=True)
-        _publish_job_event("cancelled_from_handover", job_name)
+        _publish_job_event("allocation_released_from_handover", job_name)
     except Exception:
         pass
 
