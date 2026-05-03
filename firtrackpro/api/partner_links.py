@@ -1211,6 +1211,20 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
     except Exception:
         source_defects = []
 
+    rows = _load_handovers()
+    for existing in rows:
+        if not isinstance(existing, dict):
+            continue
+        if str(existing.get("direction") or "").strip().lower() != "outbound":
+            continue
+        if str(existing.get("job_name") or "").strip() != job_id:
+            continue
+        existing_status = str(existing.get("status") or "").strip().lower() or "sent"
+        if existing_status != "cancelled":
+            frappe.throw(
+                "This job has already been sent to a partner. Cancel that transfer before sending again."
+            )
+
     now = _now_iso()
     row = {
         "id": str(uuid.uuid4()),
@@ -1239,7 +1253,6 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
         "updated_at": now,
     }
 
-    rows = _load_handovers()
     rows.append(row)
     _save_handovers(rows)
     _publish_handover_event("created", row)
@@ -1334,6 +1347,70 @@ def _mark_handover_failed(handover_id, error_text):
             item["updated_at"] = _now_iso()
             _publish_handover_event("failed", item, {"error": str(error_text or "")})
     _save_handovers(rows)
+
+
+def _cancel_job_for_handover(handover_row, reason_text=None):
+    if not isinstance(handover_row, dict):
+        return
+    job_name = str(handover_row.get("accepted_job_name") or "").strip()
+    if not job_name:
+        return
+    if not frappe.db.exists("FT Job", job_name):
+        return
+    try:
+        job_doc = frappe.get_doc("FT Job", job_name)
+    except Exception:
+        return
+
+    cancel_note = str(reason_text or "").strip() or "Cancelled by tenant handover cancellation."
+    try:
+        if hasattr(job_doc, "job_status"):
+            job_doc.job_status = "Cancelled"
+        if hasattr(job_doc, "status"):
+            job_doc.status = "Cancelled"
+        if hasattr(job_doc, "workflow_state"):
+            job_doc.workflow_state = "Cancelled"
+        if hasattr(job_doc, "notes"):
+            base = str(getattr(job_doc, "notes", "") or "").strip()
+            if cancel_note not in base:
+                job_doc.notes = (base + "\n" if base else "") + cancel_note
+        job_doc.save(ignore_permissions=True)
+        _publish_job_event("cancelled_from_handover", job_name)
+    except Exception:
+        pass
+
+
+def _notify_partner_handover_cancel(link, row, reason_text=None):
+    if not isinstance(link, dict) or not isinstance(row, dict):
+        return
+    host = str(link.get("tenant_host") or "").strip().lower()
+    base = str(link.get("api_base_url") or "").strip() or "https://{0}".format(host)
+    outbound_api_key = str(link.get("outbound_api_key") or "").strip()
+    if not base:
+        return
+
+    import requests
+
+    headers = {"Content-Type": "application/json"}
+    if outbound_api_key:
+        headers["X-FireTrack-Partner-Key"] = outbound_api_key
+    payload = {
+        "handover_id": str(row.get("id") or "").strip(),
+        "partner_job_ref": str(row.get("partner_job_ref") or "").strip(),
+        "source_tenant_host": _site_host(),
+        "reason": str(reason_text or "").strip(),
+    }
+    try:
+        requests.post(
+            "{0}/api/method/firtrackpro.api.partner_links.receive_handover_cancellation".format(
+                base.rstrip("/")
+            ),
+            json=payload,
+            headers=headers,
+            timeout=15,
+        )
+    except Exception:
+        pass
 
 
 def _find_or_create_address_from_handover(row):
@@ -1827,7 +1904,7 @@ def update_handover_job_status(id=None, status=None, notes=None):
     next_status = str(status or "").strip().lower()
     if not row_id:
         frappe.throw("Handover id is required.")
-    if next_status not in {"accepted", "rejected", "in_progress", "completed"}:
+    if next_status not in {"accepted", "rejected", "in_progress", "completed", "cancelled"}:
         frappe.throw("Invalid handover status.")
 
     rows = _load_handovers()
@@ -1857,12 +1934,98 @@ def update_handover_job_status(id=None, status=None, notes=None):
         base = str(target.get("notes") or "").strip()
         target["notes"] = accept_note if not base else f"{accept_note}\n{base}"
         target["accepted_job_name"] = str(created_job.name)
+    elif next_status == "cancelled":
+        cancel_reason = str(notes or "").strip() or "Cancelled by handover participant."
+        _cancel_job_for_handover(target, cancel_reason)
 
     _save_handovers(rows)
     _publish_handover_event("status_changed", target, {"status": next_status})
     if next_status == "accepted":
         _publish_job_event("created_from_handover", target.get("accepted_job_name"))
+    elif next_status == "cancelled":
+        link = next(
+            (
+                r
+                for r in _load_links()
+                if str(r.get("id") or "").strip() == str(target.get("partner_link_id") or "").strip()
+            ),
+            None,
+        )
+        if link:
+            _notify_partner_handover_cancel(link, target, str(notes or "").strip())
     return _build_handover_row(target)
+
+
+@frappe.whitelist(allow_guest=False)
+def request_handover_cancellation(id=None, notes=None):
+    return update_handover_job_status(
+        id=id,
+        status="cancelled",
+        notes=str(notes or "").strip() or "Cancellation requested by handover participant.",
+    )
+
+
+@frappe.whitelist(allow_guest=True)
+def receive_handover_cancellation(
+    handover_id=None,
+    partner_job_ref=None,
+    source_tenant_host=None,
+    reason=None,
+):
+    provided_key = frappe.get_request_header("X-FireTrack-Partner-Key") or ""
+    link = None
+    all_links = _load_links()
+    if source_tenant_host:
+        host = _normalize_host(source_tenant_host)
+        link = next((r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == host), None)
+    if not link and partner_job_ref:
+        target_host = ""
+        for row in _load_handovers():
+            if str(row.get("partner_job_ref") or "").strip() == str(partner_job_ref or "").strip():
+                target_host = str(row.get("partner_host") or "").strip()
+                break
+        if target_host:
+            link = next(
+                (r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == target_host.lower()),
+                None,
+            )
+    if not link:
+        frappe.throw("Partner link not found.")
+
+    inbound_key = str(link.get("inbound_api_key") or "").strip()
+    if inbound_key and inbound_key != str(provided_key or "").strip():
+        frappe.throw("Unauthorized partner key.")
+
+    hid = str(handover_id or "").strip()
+    pref = str(partner_job_ref or "").strip()
+    if not hid and not pref:
+        frappe.throw("handover_id or partner_job_ref is required.")
+
+    rows = _load_handovers()
+    target = None
+    now = _now_iso()
+    for row in rows:
+        row_id = str(row.get("id") or "").strip()
+        row_ref = str(row.get("partner_job_ref") or "").strip()
+        if hid and row_id == hid:
+            target = row
+        elif pref and (row_ref == pref or row_id == pref):
+            target = row
+        if target:
+            row["status"] = "cancelled"
+            row["updated_at"] = now
+            cancel_reason = str(reason or "").strip() or "Cancelled by partner tenant."
+            base = str(row.get("notes") or "").strip()
+            row["notes"] = (base + "\n" if base else "") + cancel_reason
+            _cancel_job_for_handover(row, cancel_reason)
+            break
+
+    if not target:
+        return {"ok": True, "updated": False}
+
+    _save_handovers(rows)
+    _publish_handover_event("cancelled_by_partner", target, {"status": "cancelled"})
+    return {"ok": True, "updated": True}
 
 
 @frappe.whitelist(allow_guest=False)
