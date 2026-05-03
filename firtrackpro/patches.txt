@@ -6,3 +6,5 @@
 # Patches added in this section will be executed after doctypes are migrated
 firtrackpro.patches.v16_0.seed_as1851_monthly_wet_pipe_suite
 firtrackpro.patches.v16_0.seed_as1851_all_test_tables
+
+firtrackpro.patches.v16_0.seed_network_task_setup_and_items

@@ -65,6 +65,11 @@ FIRELINK_DOMAIN_PROVISION_COMMAND_CANDIDATES = (
 	"firtrackpro_firelink_domain_provision_command",
 )
 
+FIRELINK_HAPROXY_PROVISION_COMMAND_CANDIDATES = (
+	"firelink_haproxy_provision_command",
+	"firtrackpro_firelink_haproxy_provision_command",
+)
+
 FIRELINK_SITE_STATUS_COMMAND_CANDIDATES = (
 	"firelink_site_status_command",
 	"firtrackpro_firelink_site_status_command",
@@ -5059,6 +5064,10 @@ def _domain_provision_command_template() -> str:
 	return _site_conf_value(*FIRELINK_DOMAIN_PROVISION_COMMAND_CANDIDATES)
 
 
+def _haproxy_provision_command_template() -> str:
+	return _site_conf_value(*FIRELINK_HAPROXY_PROVISION_COMMAND_CANDIDATES)
+
+
 def _run_provision_command(**kwargs) -> dict[str, Any]:
 	template = _provision_command_template()
 	if not template:
@@ -5175,18 +5184,98 @@ def _run_domain_provision_command(**kwargs) -> dict[str, Any]:
 	}
 
 
-def _attach_domain_result(result: dict[str, Any], **kwargs) -> dict[str, Any]:
-	if not _as_bool(kwargs.get("configure_domain")):
-		result["domain_status"] = "skipped"
-		result["domain_message"] = "Domain setup not requested."
+def _run_haproxy_provision_command(**kwargs) -> dict[str, Any]:
+	template = _haproxy_provision_command_template()
+	if not template:
+		return {"ok": False, "configured": False, "message": "HAProxy command is not configured."}
+
+	payload = {
+		"site_host": shlex.quote(_normalize_site_host(kwargs.get("site_host"))),
+		"admin_password": shlex.quote(_as_str(kwargs.get("admin_password"))),
+		"namespace": shlex.quote(_as_str(kwargs.get("namespace"))),
+		"release_name": shlex.quote(_as_str(kwargs.get("release_name"))),
+		"values_path": shlex.quote(_as_str(kwargs.get("values_path"))),
+		"image_tag": shlex.quote(_as_str(kwargs.get("image_tag"))),
+	}
+
+	try:
+		command = template.format(**payload)
+	except Exception as exc:
+		return {"ok": False, "configured": True, "message": f"HAProxy command template is invalid: {exc}"}
+
+	try:
+		res = subprocess.run(
+			command,
+			shell=True,
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=1800,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "configured": True, "message": f"HAProxy command failed to start: {exc}"}
+
+	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+	if len(output) > 1200:
+		output = output[-1200:]
+	if res.returncode != 0:
+		return {
+			"ok": False,
+			"configured": True,
+			"message": f"HAProxy command failed with exit code {res.returncode}.",
+			"details": output,
+		}
+	return {"ok": True, "configured": True, "message": "HAProxy command completed.", "details": output}
+
+
+def _should_run_domain_setup(**kwargs) -> bool:
+	if _as_bool(kwargs.get("configure_domain")):
+		return True
+	domain_option = _as_str(kwargs.get("domain_option")).lower()
+	if domain_option == "custom":
+		return True
+	if _as_str(kwargs.get("custom_domain")):
+		return True
+	return False
+
+
+def _should_run_haproxy_setup(**kwargs) -> bool:
+	if kwargs.get("configure_haproxy") is None:
+		return True
+	return _as_bool(kwargs.get("configure_haproxy"))
+
+
+def _attach_haproxy_result(result: dict[str, Any], **kwargs) -> dict[str, Any]:
+	if not _should_run_haproxy_setup(**kwargs):
+		result["haproxy_status"] = "skipped"
+		result["haproxy_message"] = "HAProxy setup not requested."
 		return result
+	run = _run_haproxy_provision_command(**kwargs)
+	if not _as_bool(run.get("configured")):
+		result["haproxy_status"] = "skipped"
+		result["haproxy_message"] = "HAProxy command not configured; skipped."
+		return result
+	result["haproxy_status"] = "success" if _as_bool(run.get("ok")) else "failed"
+	result["haproxy_message"] = _as_str(run.get("message"))
+	details = _as_str(run.get("details"))
+	if details:
+		result["haproxy_details"] = details
+	return result
+
+
+def _attach_domain_result(result: dict[str, Any], **kwargs) -> dict[str, Any]:
+	if not _should_run_domain_setup(**kwargs):
+		result["domain_status"] = "skipped"
+		result["domain_message"] = "Wildcard/default domain mode: custom domain setup not requested."
+		return _attach_haproxy_result(result, **kwargs)
 	domain_run = _run_domain_provision_command(**kwargs)
 	result["domain_status"] = "success" if _as_bool(domain_run.get("ok")) else "failed"
 	result["domain_message"] = _as_str(domain_run.get("message"))
 	details = _as_str(domain_run.get("details"))
 	if details:
 		result["domain_details"] = details
-	return result
+	return _attach_haproxy_result(result, **kwargs)
 
 
 def _seed_xero_site_config(site_host: str) -> dict[str, Any]:
@@ -5459,6 +5548,9 @@ def firelink_admin_provision_site(**kwargs):
 				"values_path": kwargs.get("values_path"),
 				"image_tag": kwargs.get("image_tag"),
 				"configure_domain": kwargs.get("configure_domain"),
+				"configure_haproxy": kwargs.get("configure_haproxy"),
+				"domain_option": kwargs.get("domain_option"),
+				"custom_domain": kwargs.get("custom_domain"),
 			}
 		),
 	)
