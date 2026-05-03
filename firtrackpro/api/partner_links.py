@@ -1439,6 +1439,7 @@ def _notify_partner_handover_cancel(link, row, reason_text=None):
     payload = {
         "handover_id": str(row.get("id") or "").strip(),
         "partner_job_ref": str(row.get("partner_job_ref") or "").strip(),
+        "partner_link_id": str(row.get("partner_link_id") or "").strip(),
         "source_tenant_host": _site_host(),
         "reason": str(reason_text or "").strip(),
     }
@@ -2014,15 +2015,20 @@ def request_handover_cancellation(id=None, notes=None):
 def receive_handover_cancellation(
     handover_id=None,
     partner_job_ref=None,
+    partner_link_id=None,
     source_tenant_host=None,
     reason=None,
 ):
     provided_key = frappe.get_request_header("X-FireTrack-Partner-Key") or ""
     link = None
     all_links = _load_links()
+    link_id = str(partner_link_id or "").strip()
+    if link_id:
+        link = next((r for r in all_links if str(r.get("id") or "").strip() == link_id), None)
     if source_tenant_host:
         host = _normalize_host(source_tenant_host)
-        link = next((r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == host), None)
+        if not link:
+            link = next((r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == host), None)
     if not link and partner_job_ref:
         target_host = ""
         for row in _load_handovers():
@@ -2034,13 +2040,6 @@ def receive_handover_cancellation(
                 (r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == target_host.lower()),
                 None,
             )
-    if not link:
-        frappe.throw("Partner link not found.")
-
-    inbound_key = str(link.get("inbound_api_key") or "").strip()
-    if inbound_key and inbound_key != str(provided_key or "").strip():
-        frappe.throw("Unauthorized partner key.")
-
     hid = str(handover_id or "").strip()
     pref = str(partner_job_ref or "").strip()
     if not hid and not pref:
@@ -2059,7 +2058,13 @@ def receive_handover_cancellation(
         if target:
             row["status"] = "cancelled"
             row["updated_at"] = now
-            cancel_reason = str(reason or "").strip() or "Cancelled by partner tenant."
+            source_host = str(source_tenant_host or "").strip()
+            base_reason = str(reason or "").strip()
+            cancel_reason = (
+                "Cancelled by partner tenant"
+                + (f" ({source_host})" if source_host else "")
+                + (f": {base_reason}" if base_reason else ".")
+            )
             base = str(row.get("notes") or "").strip()
             row["notes"] = (base + "\n" if base else "") + cancel_reason
             _cancel_job_for_handover(row, cancel_reason)
@@ -2067,6 +2072,27 @@ def receive_handover_cancellation(
 
     if not target:
         return {"ok": True, "updated": False}
+
+    if not link:
+        target_host = str(target.get("partner_host") or "").strip().lower()
+        if target_host:
+            link = next(
+                (r for r in all_links if str(r.get("tenant_host") or "").strip().lower() == target_host),
+                None,
+            )
+    if not link:
+        link = next(
+            (
+                r
+                for r in all_links
+                if str(r.get("id") or "").strip() == str(target.get("partner_link_id") or "").strip()
+            ),
+            None,
+        )
+
+    inbound_key = str((link or {}).get("inbound_api_key") or "").strip()
+    if inbound_key and inbound_key != str(provided_key or "").strip():
+        frappe.throw("Unauthorized partner key.")
 
     _save_handovers(rows)
     _publish_handover_event("cancelled_by_partner", target, {"status": "cancelled"})
