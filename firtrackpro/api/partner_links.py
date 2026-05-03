@@ -204,6 +204,46 @@ def _build_handover_row(row):
     }
 
 
+def _publish_handover_event(action, row, extra=None):
+    payload = {
+        "action": str(action or "").strip() or "updated",
+        "handover": _build_handover_row(row if isinstance(row, dict) else {}),
+        "site_host": _site_host(),
+        "at": _now_iso(),
+    }
+    if isinstance(extra, dict) and extra:
+        payload["extra"] = extra
+    try:
+        frappe.publish_realtime(
+            event="ft_handover:update",
+            message=payload,
+            after_commit=True,
+        )
+    except Exception:
+        pass
+
+
+def _publish_job_event(action, job_name):
+    if not str(job_name or "").strip():
+        return
+    payload = {
+        "action": str(action or "").strip() or "updated",
+        "job_name": str(job_name or "").strip(),
+        "site_host": _site_host(),
+        "at": _now_iso(),
+    }
+    try:
+        frappe.publish_realtime(
+            event="ft_job:update",
+            message=payload,
+            doctype="FT Job",
+            docname=str(job_name or "").strip(),
+            after_commit=True,
+        )
+    except Exception:
+        pass
+
+
 def _build_request_row(row):
     return {
         "id": str(row.get("id") or ""),
@@ -1202,6 +1242,7 @@ def create_handover_job(job_name=None, partner_link_id=None, notes=None):
     rows = _load_handovers()
     rows.append(row)
     _save_handovers(rows)
+    _publish_handover_event("created", row)
 
     _push_handover_to_partner(link, row)
 
@@ -1267,6 +1308,7 @@ def _push_handover_to_partner(link, row):
                     if str(item.get("id") or "") == str(row.get("id") or ""):
                         item["partner_job_ref"] = partner_ref
                         item["updated_at"] = _now_iso()
+                        _publish_handover_event("partner_ack", item, {"partner_job_ref": partner_ref})
                 _save_handovers(rows)
         else:
             body = ""
@@ -1290,6 +1332,7 @@ def _mark_handover_failed(handover_id, error_text):
             base_notes = str(item.get("notes") or "").strip()
             item["notes"] = (base_notes + "\n" if base_notes else "") + str(error_text or "")
             item["updated_at"] = _now_iso()
+            _publish_handover_event("failed", item, {"error": str(error_text or "")})
     _save_handovers(rows)
 
 
@@ -1751,6 +1794,7 @@ def receive_handover_job(
     if not any(str(r.get("id") or "") == incoming["id"] for r in rows):
         rows.append(incoming)
         _save_handovers(rows)
+        _publish_handover_event("received", incoming)
 
     return {"ok": True, "partner_job_ref": incoming["id"]}
 
@@ -1815,6 +1859,9 @@ def update_handover_job_status(id=None, status=None, notes=None):
         target["accepted_job_name"] = str(created_job.name)
 
     _save_handovers(rows)
+    _publish_handover_event("status_changed", target, {"status": next_status})
+    if next_status == "accepted":
+        _publish_job_event("created_from_handover", target.get("accepted_job_name"))
     return _build_handover_row(target)
 
 
@@ -1847,4 +1894,12 @@ def link_handover_supplier_quote(id=None, supplier_quote_ref=None, source_quote_
         frappe.throw("Handover was not found.")
 
     _save_handovers(rows)
+    _publish_handover_event(
+        "supplier_quote_linked",
+        target,
+        {
+            "supplier_quote_ref": supplier_ref,
+            "source_quote_ref": source_ref,
+        },
+    )
     return _build_handover_row(target)
