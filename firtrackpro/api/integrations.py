@@ -2814,6 +2814,8 @@ def sync_entity(**kwargs):
 	is_manual_pull = reference_name.startswith("__manual_")
 	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
 	_ensure_accounting_sync_meta_fields()
+	if provider != "Xero" and not is_push:
+		frappe.throw(f"{provider} manual sync handlers are not implemented yet. OAuth/connect is available; provider sync endpoints are pending.", frappe.ValidationError)
 	if is_push:
 		row = _integration_record(provider)
 		row = _xero_apply_site_config_credentials(row)[0]
@@ -3365,6 +3367,8 @@ def import_credit_notes(**kwargs):
 def sync_now(**kwargs):
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	entity = _as_str(kwargs.get("entity") or "all").lower()
+	if provider != "Xero":
+		frappe.throw(f"{provider} manual sync handlers are not implemented yet. OAuth/connect is available; provider sync endpoints are pending.", frappe.ValidationError)
 	results: list[dict[str, Any]] = []
 	if entity in {"all", "item"}:
 		results.append({"entity": "item", "result": sync_item(provider=provider)})
@@ -3383,7 +3387,7 @@ def run_accounting_auto_sync():
 	"""Compulsory daily auto sync across all providers/entities.
 	This intentionally ignores per-provider toggle flags in tenant UI.
 	"""
-	providers = ["Xero", "MYOB", "QuickBooks", "Custom"]
+	providers = ["Xero", "MYOB", "QuickBooks"]
 	entities: list[tuple[str, Any]] = [
 		("customer", sync_customer),
 		("supplier", sync_supplier),
