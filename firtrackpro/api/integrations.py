@@ -2233,6 +2233,11 @@ def firelink_xero_oauth_start_bridge(**kwargs):
 	target_host = _normalize_site_host(kwargs.get("site_host"))
 	if not target_host:
 		frappe.throw("site_host is required", frappe.ValidationError)
+	if not _is_firelink_local_site():
+		return _firelink_remote_bridge_call(
+			"/api/method/firtrackpro.api.integrations.firelink_xero_oauth_start_bridge",
+			_remote_bridge_payload({"site_host": target_host}),
+		)
 	row = _integration_record("Xero")
 	client_id = _as_str(row.get("clientId"))
 	client_secret = _as_str(row.get("clientSecret"))
@@ -2251,7 +2256,6 @@ def firelink_xero_oauth_start_bridge(**kwargs):
 		"state": state,
 	}
 	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _xero_redirect_uri(row), "target_site": target_host}
-
 
 def xero_oauth_start(**kwargs):
 	if frappe.session.user == "Guest":
@@ -2537,6 +2541,11 @@ def firelink_quickbooks_oauth_start_bridge(**kwargs):
 	target_host = _normalize_site_host(kwargs.get("site_host"))
 	if not target_host:
 		frappe.throw("site_host is required", frappe.ValidationError)
+	if not _is_firelink_local_site():
+		return _firelink_remote_bridge_call(
+			"/api/method/firtrackpro.api.integrations.firelink_quickbooks_oauth_start_bridge",
+			_remote_bridge_payload({"site_host": target_host}),
+		)
 	row = _integration_record("QuickBooks")
 	client_id = _as_str(row.get("clientId"))
 	client_secret = _as_str(row.get("clientSecret"))
@@ -2556,8 +2565,6 @@ def firelink_quickbooks_oauth_start_bridge(**kwargs):
 	}
 	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _quickbooks_redirect_uri(row), "target_site": target_host}
 
-
-@frappe.whitelist(methods=["POST"])
 def quickbooks_oauth_start(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
