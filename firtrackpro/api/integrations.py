@@ -2474,9 +2474,12 @@ def quickbooks_receive_tokens_local(**kwargs):
 	row = _integration_record("QuickBooks")
 	row["clientId"] = _as_str(kwargs.get("client_id") or row.get("clientId"))
 	row["clientSecret"] = _as_str(kwargs.get("client_secret") or row.get("clientSecret"))
+	row["baseUrl"] = _as_str(kwargs.get("base_url") or row.get("baseUrl") or PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
 	row["authUrl"] = _as_str(kwargs.get("auth_url") or row.get("authUrl") or PROVIDER_DEFAULTS["QuickBooks"].get("authUrl"))
 	row["tokenUrl"] = _as_str(kwargs.get("token_url") or row.get("tokenUrl") or PROVIDER_DEFAULTS["QuickBooks"].get("tokenUrl"))
 	row["scopes"] = _as_str(kwargs.get("scopes") or row.get("scopes") or PROVIDER_DEFAULTS["QuickBooks"].get("scopes"))
+	if _as_str(kwargs.get("webhook_secret")):
+		row["webhookSecret"] = _as_str(kwargs.get("webhook_secret"))
 	row["quickbooksAccessToken"] = _as_str(kwargs.get("quickbooks_access_token"))
 	row["quickbooksRefreshToken"] = _as_str(kwargs.get("quickbooks_refresh_token"))
 	row["quickbooksTokenExpiresAt"] = _as_str(kwargs.get("quickbooks_token_expires_at"))
@@ -2498,9 +2501,11 @@ def _quickbooks_push_tokens_to_site(target_host: str, row: dict[str, Any], realm
 		"target_host": host,
 		"client_id": _as_str(row.get("clientId")),
 		"client_secret": _as_str(row.get("clientSecret")),
+		"base_url": _as_str(row.get("baseUrl")),
 		"auth_url": _as_str(row.get("authUrl")),
 		"token_url": _as_str(row.get("tokenUrl")),
 		"scopes": _as_str(row.get("scopes")),
+		"webhook_secret": _as_str(row.get("webhookSecret")),
 		"quickbooks_access_token": _as_str(row.get("quickbooksAccessToken")),
 		"quickbooks_refresh_token": _as_str(row.get("quickbooksRefreshToken")),
 		"quickbooks_token_expires_at": _as_str(row.get("quickbooksTokenExpiresAt")),
@@ -2862,21 +2867,45 @@ def _quickbooks_query_entity(row: dict[str, Any], entity: str, limit: int = 200)
 	realm_id = _as_str(row.get("quickbooksRealmId") or row.get("tenantId"))
 	if not token or not realm_id:
 		frappe.throw("QuickBooks is not connected. Run Connect QuickBooks first.", frappe.ValidationError)
-	base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
-	base = base.rstrip("/")
+
+	configured_base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
+	configured_base = configured_base.rstrip("/")
+	prod_base = "https://quickbooks.api.intuit.com"
+	sandbox_base = "https://sandbox-quickbooks.api.intuit.com"
+	base_candidates = [configured_base] if configured_base else [prod_base]
+	if configured_base == prod_base:
+		base_candidates.append(sandbox_base)
+	elif configured_base == sandbox_base:
+		base_candidates.append(prod_base)
+	elif sandbox_base not in base_candidates:
+		base_candidates.append(sandbox_base)
+
 	query = f"SELECT * FROM {entity} MAXRESULTS {max(1, min(int(limit), 1000))}"
-	url = f"{base}/v3/company/{realm_id}/query"
 	headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-	resp = requests.get(url, headers=headers, params={"query": query, "minorversion": "75"}, timeout=30)
-	if int(resp.status_code) >= 300:
-		detail = _as_str(getattr(resp, "text", ""))
-		frappe.throw(f"QuickBooks query failed ({resp.status_code}): {detail}", frappe.ValidationError)
-	data = resp.json() if hasattr(resp, "json") else {}
-	qr = data.get("QueryResponse") if isinstance(data, dict) else {}
-	rows = qr.get(entity) if isinstance(qr, dict) and isinstance(qr.get(entity), list) else []
-	return rows
+	last_status = 0
+	last_detail = ""
+	for base in base_candidates:
+		url = f"{base}/v3/company/{realm_id}/query"
+		resp = requests.get(url, headers=headers, params={"query": query, "minorversion": "75"}, timeout=30)
+		status = int(resp.status_code)
+		if status < 300:
+			if base != configured_base:
+				row["baseUrl"] = base
+				_persist_integration_record("QuickBooks", row)
+			data = resp.json() if hasattr(resp, "json") else {}
+			qr = data.get("QueryResponse") if isinstance(data, dict) else {}
+			rows = qr.get(entity) if isinstance(qr, dict) and isinstance(qr.get(entity), list) else []
+			return rows
+		last_status = status
+		last_detail = _as_str(getattr(resp, "text", ""))
+		lower_detail = last_detail.lower()
+		if not (status == 403 and ("applicationauthorizationfailed" in lower_detail or "errorcode=003100" in lower_detail or '"code":"3100"' in lower_detail)):
+			break
 
-
+	hint = ""
+	if last_status == 403 and ("applicationauthorizationfailed" in last_detail.lower() or "errorcode=003100" in last_detail.lower() or '"code":"3100"' in last_detail.lower()):
+		hint = " Ensure the connected company and app environment match (Production vs Sandbox), then reconnect QuickBooks."
+	frappe.throw(f"QuickBooks query failed ({last_status}): {last_detail}{hint}", frappe.ValidationError)
 def _myob_company_uri(row: dict[str, Any]) -> str:
 	# MYOB can store company-file URI directly in tenantId.
 	tenant = _as_str(row.get("tenantId"))
