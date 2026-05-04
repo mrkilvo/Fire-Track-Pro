@@ -2906,6 +2906,203 @@ def _quickbooks_query_entity(row: dict[str, Any], entity: str, limit: int = 200)
 	if last_status == 403 and ("applicationauthorizationfailed" in last_detail.lower() or "errorcode=003100" in last_detail.lower() or '"code":"3100"' in last_detail.lower()):
 		hint = " Ensure the connected company and app environment match (Production vs Sandbox), then reconnect QuickBooks."
 	frappe.throw(f"QuickBooks query failed ({last_status}): {last_detail}{hint}", frappe.ValidationError)
+
+def _quickbooks_email(value: dict[str, Any]) -> str:
+	if not isinstance(value, dict):
+		return ""
+	primary = value.get("PrimaryEmailAddr")
+	if isinstance(primary, dict):
+		return _as_str(primary.get("Address"))
+	return ""
+
+
+def _quickbooks_phone(value: dict[str, Any]) -> str:
+	if not isinstance(value, dict):
+		return ""
+	for key in ("PrimaryPhone", "Mobile", "AlternatePhone"):
+		part = value.get(key)
+		if isinstance(part, dict):
+			num = _as_str(part.get("FreeFormNumber"))
+			if num:
+				return num
+	return ""
+
+
+def _quickbooks_customer_to_xero_contact(row: dict[str, Any]) -> dict[str, Any]:
+	name = _as_str(row.get("DisplayName") or row.get("CompanyName") or row.get("FullyQualifiedName") or row.get("GivenName") or row.get("Id"))
+	if not name:
+		name = "QuickBooks Customer"
+	out = {
+		"ContactID": _as_str(row.get("Id")),
+		"Name": name,
+		"ContactNumber": _as_str(row.get("Id")),
+		"IsCustomer": True,
+	}
+	email = _quickbooks_email(row)
+	if email:
+		out["EmailAddress"] = email
+	phone = _quickbooks_phone(row)
+	if phone:
+		out["Phones"] = [{"PhoneType": "MOBILE", "PhoneNumber": phone}]
+	return out
+
+
+def _quickbooks_vendor_to_xero_contact(row: dict[str, Any]) -> dict[str, Any]:
+	name = _as_str(row.get("DisplayName") or row.get("CompanyName") or row.get("PrintOnCheckName") or row.get("GivenName") or row.get("Id"))
+	if not name:
+		name = "QuickBooks Supplier"
+	out = {
+		"ContactID": _as_str(row.get("Id")),
+		"Name": name,
+		"ContactNumber": _as_str(row.get("Id")),
+		"IsSupplier": True,
+	}
+	email = _quickbooks_email(row)
+	if email:
+		out["EmailAddress"] = email
+	phone = _quickbooks_phone(row)
+	if phone:
+		out["Phones"] = [{"PhoneType": "MOBILE", "PhoneNumber": phone}]
+	return out
+
+
+def _quickbooks_item_to_xero_item(row: dict[str, Any]) -> dict[str, Any]:
+	sales = row.get("SalesPrice")
+	if sales is None and isinstance(row.get("UnitPrice"), (int, float, str)):
+		sales = row.get("UnitPrice")
+	name = _as_str(row.get("Name") or row.get("FullyQualifiedName") or row.get("Id"))
+	code = _as_str(row.get("Sku") or row.get("Name") or row.get("Id"))
+	return {
+		"ItemID": _as_str(row.get("Id")),
+		"Code": code,
+		"Name": name,
+		"Description": _as_str(row.get("Description")),
+		"SalesDetails": {"UnitPrice": float(_as_float(sales, 0.0))},
+	}
+
+
+def _quickbooks_invoice_to_xero_invoice(row: dict[str, Any]) -> dict[str, Any]:
+	cust_ref = row.get("CustomerRef") if isinstance(row.get("CustomerRef"), dict) else {}
+	contact_id = _as_str(cust_ref.get("value"))
+	line_items = []
+	for ln in (row.get("Line") or []):
+		if not isinstance(ln, dict):
+			continue
+		detail_type = _as_str(ln.get("DetailType"))
+		if detail_type != "SalesItemLineDetail":
+			continue
+		d = ln.get("SalesItemLineDetail") if isinstance(ln.get("SalesItemLineDetail"), dict) else {}
+		qty = float(_as_float(d.get("Qty"), 1.0) or 1.0)
+		unit = float(_as_float(d.get("UnitPrice"), 0.0))
+		amount = float(_as_float(ln.get("Amount"), unit * qty))
+		item_ref = d.get("ItemRef") if isinstance(d.get("ItemRef"), dict) else {}
+		line_items.append({
+			"LineItemID": _as_str(ln.get("Id")),
+			"Description": _as_str(ln.get("Description") or item_ref.get("name") or "QuickBooks line"),
+			"Quantity": qty,
+			"UnitAmount": unit,
+			"LineAmount": amount,
+			"ItemID": _as_str(item_ref.get("value")),
+			"ItemCode": _as_str(item_ref.get("name")),
+		})
+	date_val = _as_str(row.get("TxnDate") or frappe.utils.nowdate())
+	due_val = _as_str(row.get("DueDate") or date_val)
+	return {
+		"InvoiceID": _as_str(row.get("Id")),
+		"InvoiceNumber": _as_str(row.get("DocNumber") or row.get("Id")),
+		"Date": date_val,
+		"DateString": date_val,
+		"DueDate": due_val,
+		"DueDateString": due_val,
+		"Total": float(_as_float(row.get("TotalAmt"), 0.0)),
+		"Contact": {"ContactID": contact_id},
+		"LineItems": line_items,
+	}
+
+
+def _quickbooks_upsert_customer_rows(rows: list[dict[str, Any]]) -> tuple[int, int, list[str]]:
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for raw in rows:
+		try:
+			contact = _quickbooks_customer_to_xero_contact(raw if isinstance(raw, dict) else {})
+			cid = _as_str(contact.get("ContactID"))
+			existed = bool(cid and frappe.db.exists("Customer", {"xero_contact_id": cid}))
+			name = _upsert_customer_from_xero_contact(contact)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+	return created, updated, errors[:20]
+
+
+def _quickbooks_upsert_supplier_rows(rows: list[dict[str, Any]]) -> tuple[int, int, list[str]]:
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for raw in rows:
+		try:
+			contact = _quickbooks_vendor_to_xero_contact(raw if isinstance(raw, dict) else {})
+			cid = _as_str(contact.get("ContactID"))
+			existed = bool(cid and frappe.db.exists("Supplier", {"xero_contact_id": cid}))
+			name = _upsert_supplier_from_xero_contact(contact)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+	return created, updated, errors[:20]
+
+
+def _quickbooks_upsert_item_rows(rows: list[dict[str, Any]]) -> tuple[int, int, list[str]]:
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for raw in rows:
+		try:
+			item = _quickbooks_item_to_xero_item(raw if isinstance(raw, dict) else {})
+			iid = _as_str(item.get("ItemID"))
+			existed = bool(iid and frappe.db.exists("Item", {"xero_item_id": iid}))
+			name = _upsert_item_from_xero_item(item)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+	return created, updated, errors[:20]
+
+
+def _quickbooks_upsert_invoice_rows(rows: list[dict[str, Any]]) -> tuple[int, int, list[str]]:
+	created = 0
+	updated = 0
+	errors: list[str] = []
+	for raw in rows:
+		try:
+			inv = _quickbooks_invoice_to_xero_invoice(raw if isinstance(raw, dict) else {})
+			iid = _as_str(inv.get("InvoiceID"))
+			existed = bool(iid and frappe.db.exists("Sales Invoice", {"xero_invoice_id": iid}))
+			name = _upsert_sales_invoice_from_xero_invoice(inv)
+			if not name:
+				continue
+			if existed:
+				updated += 1
+			else:
+				created += 1
+		except Exception as exc:
+			errors.append(_as_str(exc))
+	return created, updated, errors[:20]
+
 def _myob_company_uri(row: dict[str, Any]) -> str:
 	# MYOB can store company-file URI directly in tenantId.
 	tenant = _as_str(row.get("tenantId"))
@@ -3100,7 +3297,13 @@ def sync_customer(**kwargs):
 		frappe.throw("Login required", frappe.PermissionError)
 
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
-	if provider in {"QuickBooks", "MYOB"}:
+	if provider == "QuickBooks":
+		row = _integration_record(provider)
+		rows = _quickbooks_query_entity(row, "Customer")
+		created, updated, errors = _quickbooks_upsert_customer_rows(rows)
+		frappe.db.commit()
+		return {"ok": True, "provider": provider, "entity": "customer", "count": len(rows), "created": created, "updated": updated, "errors": errors, "message": f"{provider} customer sync complete. {created} created, {updated} updated, {len(errors)} failed."}
+	if provider == "MYOB":
 		row = _integration_record(provider)
 		return _provider_manual_sync_snapshot(provider, "customer", row)
 
@@ -3156,7 +3359,13 @@ def sync_supplier(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
-	if provider in {"QuickBooks", "MYOB"}:
+	if provider == "QuickBooks":
+		row = _integration_record(provider)
+		rows = _quickbooks_query_entity(row, "Vendor")
+		created, updated, errors = _quickbooks_upsert_supplier_rows(rows)
+		frappe.db.commit()
+		return {"ok": True, "provider": provider, "entity": "supplier", "count": len(rows), "created": created, "updated": updated, "errors": errors, "message": f"{provider} supplier sync complete. {created} created, {updated} updated, {len(errors)} failed."}
+	if provider == "MYOB":
 		row = _integration_record(provider)
 		return _provider_manual_sync_snapshot(provider, "supplier", row)
 
@@ -3211,7 +3420,13 @@ def sync_invoice(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
-	if provider in {"QuickBooks", "MYOB"}:
+	if provider == "QuickBooks":
+		row = _integration_record(provider)
+		rows = _quickbooks_query_entity(row, "Invoice")
+		created, updated, errors = _quickbooks_upsert_invoice_rows(rows)
+		frappe.db.commit()
+		return {"ok": True, "provider": provider, "entity": "invoice", "count": len(rows), "created": created, "updated": updated, "errors": errors, "message": f"{provider} invoice sync complete. {created} created, {updated} updated, {len(errors)} failed."}
+	if provider == "MYOB":
 		row = _integration_record(provider)
 		return _provider_manual_sync_snapshot(provider, "invoice", row)
 
@@ -3266,7 +3481,13 @@ def sync_item(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
-	if provider in {"QuickBooks", "MYOB"}:
+	if provider == "QuickBooks":
+		row = _integration_record(provider)
+		rows = _quickbooks_query_entity(row, "Item")
+		created, updated, errors = _quickbooks_upsert_item_rows(rows)
+		frappe.db.commit()
+		return {"ok": True, "provider": provider, "entity": "item", "count": len(rows), "created": created, "updated": updated, "errors": errors, "message": f"{provider} item sync complete. {created} created, {updated} updated, {len(errors)} failed."}
+	if provider == "MYOB":
 		row = _integration_record(provider)
 		return _provider_manual_sync_snapshot(provider, "item", row)
 
