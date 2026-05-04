@@ -2024,19 +2024,27 @@ def save_config(**kwargs):
 	records = _load_records()
 	current = records.get(provider, {"provider": provider})
 
+	# Preserve existing credential/endpoint values when caller omits them
+	# (tenant-safe save payloads intentionally exclude sensitive fields).
+	def _pick_str(*keys: str, fallback: str = "") -> str:
+		for k in keys:
+			if k in kwargs and kwargs.get(k) is not None:
+				return _as_str(kwargs.get(k))
+		return fallback
+
 	current.update(
 		{
 			"provider": provider,
 			"enabled": _as_bool(kwargs.get("enabled")),
 			"name": _as_str(kwargs.get("name")) or provider,
-			"baseUrl": _as_str(kwargs.get("base_url") or kwargs.get("baseUrl")),
-			"authUrl": _as_str(kwargs.get("auth_url") or kwargs.get("authUrl")),
-			"tokenUrl": _as_str(kwargs.get("token_url") or kwargs.get("tokenUrl")),
-			"clientId": _as_str(kwargs.get("client_id") or kwargs.get("clientId")),
-			"clientSecret": _as_str(kwargs.get("client_secret") or kwargs.get("clientSecret")),
-			"tenantId": _as_str(kwargs.get("tenant_id") or kwargs.get("tenantId")),
-			"scopes": _as_str(kwargs.get("scopes")),
-			"webhookSecret": _as_str(kwargs.get("webhook_secret") or kwargs.get("webhookSecret")),
+			"baseUrl": _pick_str("base_url", "baseUrl", fallback=_as_str(current.get("baseUrl"))),
+			"authUrl": _pick_str("auth_url", "authUrl", fallback=_as_str(current.get("authUrl"))),
+			"tokenUrl": _pick_str("token_url", "tokenUrl", fallback=_as_str(current.get("tokenUrl"))),
+			"clientId": _pick_str("client_id", "clientId", fallback=_as_str(current.get("clientId"))),
+			"clientSecret": _pick_str("client_secret", "clientSecret", fallback=_as_str(current.get("clientSecret"))),
+			"tenantId": _pick_str("tenant_id", "tenantId", fallback=_as_str(current.get("tenantId"))),
+			"scopes": _pick_str("scopes", fallback=_as_str(current.get("scopes"))),
+			"webhookSecret": _pick_str("webhook_secret", "webhookSecret", fallback=_as_str(current.get("webhookSecret"))),
 			"syncCustomers": _as_bool(kwargs.get("sync_customers") or kwargs.get("syncCustomers")),
 			"syncInvoices": _as_bool(kwargs.get("sync_invoices") or kwargs.get("syncInvoices")),
 			"syncPayments": _as_bool(kwargs.get("sync_payments") or kwargs.get("syncPayments")),
