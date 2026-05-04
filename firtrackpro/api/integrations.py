@@ -2077,6 +2077,33 @@ def _xero_apply_site_config_credentials(row: dict[str, Any]) -> tuple[dict[str, 
 	return row, changed
 
 
+def _quickbooks_site_config_credentials() -> tuple[str, str]:
+	client_id = _as_str(
+		frappe.conf.get("firtrackpro_quickbooks_client_id")
+		or frappe.conf.get("quickbooks_client_id")
+		or frappe.conf.get("firtrackpro_intuit_client_id")
+		or frappe.conf.get("intuit_client_id")
+	)
+	client_secret = _as_str(
+		frappe.conf.get("firtrackpro_quickbooks_client_secret")
+		or frappe.conf.get("quickbooks_client_secret")
+		or frappe.conf.get("firtrackpro_intuit_client_secret")
+		or frappe.conf.get("intuit_client_secret")
+	)
+	return client_id, client_secret
+
+
+def _quickbooks_apply_site_config_credentials(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+	client_id, client_secret = _quickbooks_site_config_credentials()
+	changed = False
+	if client_id and _as_str(row.get("clientId")) != client_id:
+		row["clientId"] = client_id
+		changed = True
+	if client_secret and _as_str(row.get("clientSecret")) != client_secret:
+		row["clientSecret"] = client_secret
+		changed = True
+	return row, changed
+
 def _xero_is_unauthorized_client(resp: Any) -> bool:
 	try:
 		payload = resp.json() if hasattr(resp, "json") else {}
@@ -2666,12 +2693,16 @@ def quickbooks_disconnect(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	row = _integration_record("QuickBooks")
-	force_revoke = _as_bool(kwargs.get("force_revoke") or kwargs.get("forceRevoke"))
+	row, _ = _quickbooks_apply_site_config_credentials(row)
 	is_firelink_site = _is_firelink_local_site()
-	should_revoke_remote = (not is_firelink_site) or force_revoke
+	force_revoke = _as_bool(kwargs.get("force_revoke") or kwargs.get("forceRevoke"))
+	skip_remote_revoke = _as_bool(kwargs.get("skip_remote_revoke") or kwargs.get("skipRemoteRevoke"))
+	# Default behavior is full disconnect (remote revoke included), including on FireLink.
+	# Pass skip_remote_revoke=1 only when local clear is intended without Intuit-side revoke.
+	should_revoke_remote = (not skip_remote_revoke) and ((not is_firelink_site) or force_revoke or is_firelink_site)
 	revoke_result = _quickbooks_remote_disconnect(row) if should_revoke_remote else {
 		"ok": True,
-		"message": "Skipped remote revoke on FireLink broker site.",
+		"message": "Skipped remote revoke by request.",
 	}
 	row["quickbooksAccessToken"] = ""
 	row["quickbooksRefreshToken"] = ""
@@ -2683,11 +2714,13 @@ def quickbooks_disconnect(**kwargs):
 	row["enabled"] = False
 	_persist_integration_record("QuickBooks", row)
 	msg = "QuickBooks disconnected."
+	ok = True
 	if isinstance(revoke_result, dict):
+		ok = _as_bool(revoke_result.get("ok")) if "ok" in revoke_result else True
 		remote_msg = _as_str(revoke_result.get("message"))
 		if remote_msg:
 			msg = f"{msg} {remote_msg}"
-	return {"ok": True, "message": msg.strip()}
+	return {"ok": ok, "message": msg.strip()}
 
 
 @frappe.whitelist()
