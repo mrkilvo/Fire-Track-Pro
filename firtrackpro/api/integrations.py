@@ -2351,12 +2351,13 @@ def xero_disconnect(**kwargs):
 	row = _xero_apply_site_config_credentials(row)[0]
 	is_firelink_site = _is_firelink_local_site()
 	force_revoke = _as_bool(kwargs.get("force_revoke") or kwargs.get("forceRevoke"))
-	# FireLink acts as the OAuth broker for tenant connections. Revoking remote connections
-	# from FireLink can invalidate other tenant links unexpectedly.
-	should_revoke_remote = (not is_firelink_site) or force_revoke
+	skip_remote_revoke = _as_bool(kwargs.get("skip_remote_revoke") or kwargs.get("skipRemoteRevoke"))
+	# Default behavior is now full disconnect (remote revoke included), including on FireLink.
+	# Pass skip_remote_revoke=1 only when you intentionally want local-token clear without Xero-side unlink.
+	should_revoke_remote = (not skip_remote_revoke) and ((not is_firelink_site) or force_revoke or is_firelink_site)
 	revoke_result = _xero_remote_disconnect(row) if should_revoke_remote else {
 		"ok": True,
-		"message": "Skipped remote revoke on FireLink broker site.",
+		"message": "Skipped remote revoke by request.",
 	}
 	row["xeroAccessToken"] = ""
 	row["xeroRefreshToken"] = ""
@@ -2368,11 +2369,13 @@ def xero_disconnect(**kwargs):
 	row["enabled"] = False
 	_persist_integration_record("Xero", row)
 	msg = "Xero disconnected."
+	ok = True
 	if isinstance(revoke_result, dict):
+		ok = _as_bool(revoke_result.get("ok")) if "ok" in revoke_result else True
 		remote_msg = _as_str(revoke_result.get("message"))
 		if remote_msg:
 			msg = f"{msg} {remote_msg}"
-	return {"ok": True, "message": msg.strip()}
+	return {"ok": ok, "message": msg.strip()}
 
 
 def _quickbooks_redirect_uri(row: dict[str, Any] | None = None) -> str:
