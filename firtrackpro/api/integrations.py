@@ -115,6 +115,22 @@ def _as_str(value: Any) -> str:
 	return str(value or "").strip()
 
 
+def _normalize_provider_name(value: Any, default: str = "Xero") -> str:
+	raw = _as_str(value)
+	if raw in PROVIDERS:
+		return raw
+	lower = raw.lower().replace(" ", "").replace("_", "")
+	if lower == "myob":
+		return "MYOB"
+	if lower == "xero":
+		return "Xero"
+	if lower == "quickbooks":
+		return "QuickBooks"
+	if lower == "custom":
+		return "Custom"
+	return default
+
+
 def _as_int(value: Any, default: int = 0) -> int:
 	try:
 		return int(float(value))
@@ -2424,18 +2440,19 @@ def sync_entity(**kwargs):
 	entity = _as_str(kwargs.get("entity")).lower()
 	operation = _as_str(kwargs.get("operation")).lower() or "update"
 	reference_name = _as_str(kwargs.get("reference_name") or kwargs.get("referenceName"))
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	document = kwargs.get("document") if isinstance(kwargs.get("document"), dict) else {}
-	is_manual_pull = reference_name.startswith("__manual_xero_")
+	is_manual_pull = reference_name.startswith("__manual_")
 	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
 	_ensure_accounting_sync_meta_fields()
 	if is_push:
-		row = _integration_record("Xero")
+		row = _integration_record(provider)
 		row = _xero_apply_site_config_credentials(row)[0]
 		row = _xero_refresh_and_reselect_tenant(_xero_refresh_if_needed(row))
-		_persist_integration_record("Xero", row)
+		_persist_integration_record(provider, row)
 		if entity == "customer":
 			if operation == "delete":
-				return {"ok": True, "message": "Customer delete push not enabled for Xero (safe mode)."}
+				return {"ok": True, "message": f"Customer delete push not enabled for {provider} (safe mode)."}
 			try:
 				out = _xero_push_contact(row, reference_name, "Customer", document)
 				contact_id = _as_str(out.get("ContactID"))
@@ -2446,18 +2463,18 @@ def sync_entity(**kwargs):
 						"xero_contact_number": contact_number,
 						"xero_last_synced_at": frappe.utils.now_datetime(),
 					}, update_modified=False)
-					_set_accounting_sync_meta("Customer", reference_name, "Xero", "Synced", contact_id, "")
+					_set_accounting_sync_meta("Customer", reference_name, provider, "Synced", contact_id, "")
 					frappe.db.commit()
 			except Exception as exc:
 				if reference_name and frappe.db.exists("Customer", reference_name):
-					_set_accounting_sync_meta("Customer", reference_name, "Xero", "Error", "", _as_str(exc))
+					_set_accounting_sync_meta("Customer", reference_name, provider, "Error", "", _as_str(exc))
 					frappe.db.commit()
 				raise
-			_persist_integration_record("Xero", row)
-			return {"ok": True, "message": f"Customer pushed to Xero ({contact_id or 'ok'})."}
+			_persist_integration_record(provider, row)
+			return {"ok": True, "message": f"Customer pushed to {provider} ({contact_id or 'ok'})."}
 		if entity == "supplier":
 			if operation == "delete":
-				return {"ok": True, "message": "Supplier delete push not enabled for Xero (safe mode)."}
+				return {"ok": True, "message": f"Supplier delete push not enabled for {provider} (safe mode)."}
 			try:
 				out = _xero_push_contact(row, reference_name, "Supplier", document)
 				contact_id = _as_str(out.get("ContactID"))
@@ -2468,18 +2485,18 @@ def sync_entity(**kwargs):
 						"xero_contact_number": contact_number,
 						"xero_last_synced_at": frappe.utils.now_datetime(),
 					}, update_modified=False)
-					_set_accounting_sync_meta("Supplier", reference_name, "Xero", "Synced", contact_id, "")
+					_set_accounting_sync_meta("Supplier", reference_name, provider, "Synced", contact_id, "")
 					frappe.db.commit()
 			except Exception as exc:
 				if reference_name and frappe.db.exists("Supplier", reference_name):
-					_set_accounting_sync_meta("Supplier", reference_name, "Xero", "Error", "", _as_str(exc))
+					_set_accounting_sync_meta("Supplier", reference_name, provider, "Error", "", _as_str(exc))
 					frappe.db.commit()
 				raise
-			_persist_integration_record("Xero", row)
-			return {"ok": True, "message": f"Supplier pushed to Xero ({contact_id or 'ok'})."}
+			_persist_integration_record(provider, row)
+			return {"ok": True, "message": f"Supplier pushed to {provider} ({contact_id or 'ok'})."}
 		if entity == "invoice":
 			if operation == "delete":
-				return {"ok": True, "message": "Invoice delete push not enabled for Xero (safe mode)."}
+				return {"ok": True, "message": f"Invoice delete push not enabled for {provider} (safe mode)."}
 			try:
 				out = _xero_push_invoice(row, reference_name, document)
 				invoice_id = _as_str(out.get("InvoiceID"))
@@ -2490,18 +2507,18 @@ def sync_entity(**kwargs):
 						"xero_invoice_number": invoice_number,
 						"xero_last_synced_at": frappe.utils.now_datetime(),
 					}, update_modified=False)
-					_set_accounting_sync_meta("Sales Invoice", reference_name, "Xero", "Synced", invoice_id, "")
+					_set_accounting_sync_meta("Sales Invoice", reference_name, provider, "Synced", invoice_id, "")
 					frappe.db.commit()
 			except Exception as exc:
 				if reference_name and frappe.db.exists("Sales Invoice", reference_name):
-					_set_accounting_sync_meta("Sales Invoice", reference_name, "Xero", "Error", "", _as_str(exc))
+					_set_accounting_sync_meta("Sales Invoice", reference_name, provider, "Error", "", _as_str(exc))
 					frappe.db.commit()
 				raise
-			_persist_integration_record("Xero", row)
-			return {"ok": True, "message": f"Invoice pushed to Xero ({invoice_number or invoice_id or 'ok'})."}
+			_persist_integration_record(provider, row)
+			return {"ok": True, "message": f"Invoice pushed to {provider} ({invoice_number or invoice_id or 'ok'})."}
 		if entity == "payment":
 			if operation == "delete":
-				return {"ok": True, "message": "Payment delete push not enabled for Xero (safe mode)."}
+				return {"ok": True, "message": f"Payment delete push not enabled for {provider} (safe mode)."}
 			try:
 				out = _xero_push_payment(row, reference_name, document)
 				payment_id = _as_str(out.get("PaymentID"))
@@ -2512,15 +2529,15 @@ def sync_entity(**kwargs):
 						"xero_payment_ref": payment_ref,
 						"xero_last_synced_at": frappe.utils.now_datetime(),
 					}, update_modified=False)
-					_set_accounting_sync_meta("Payment Entry", reference_name, "Xero", "Synced", payment_id, "")
+					_set_accounting_sync_meta("Payment Entry", reference_name, provider, "Synced", payment_id, "")
 					frappe.db.commit()
 			except Exception as exc:
 				if reference_name and frappe.db.exists("Payment Entry", reference_name):
-					_set_accounting_sync_meta("Payment Entry", reference_name, "Xero", "Error", "", _as_str(exc))
+					_set_accounting_sync_meta("Payment Entry", reference_name, provider, "Error", "", _as_str(exc))
 					frappe.db.commit()
 				raise
-			_persist_integration_record("Xero", row)
-			return {"ok": True, "message": f"Payment pushed to Xero ({payment_id or 'ok'})."}
+			_persist_integration_record(provider, row)
+			return {"ok": True, "message": f"Payment pushed to {provider} ({payment_id or 'ok'})."}
 
 	if entity == "customer":
 		return sync_customer(**kwargs)
@@ -2540,12 +2557,10 @@ def sync_customer(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero customer sync is implemented right now.", frappe.ValidationError)
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 
 	_ensure_customer_xero_fields()
-	row = _integration_record("Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
@@ -2577,17 +2592,17 @@ def sync_customer(**kwargs):
 		except Exception as exc:
 			errors.append(_as_str(exc))
 
-	_persist_integration_record("Xero", row)
+	_persist_integration_record(provider, row)
 	frappe.db.commit()
 	return {
 		"ok": True,
-		"provider": "Xero",
+		"provider": provider,
 		"entity": "customer",
 		"count": len(contacts),
 		"created": created,
 		"updated": updated,
 		"errors": errors[:20],
-		"message": f"Xero customer sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+		"message": f"{provider} customer sync complete. {created} created, {updated} updated, {len(errors)} failed.",
 	}
 
 
@@ -2595,12 +2610,10 @@ def sync_customer(**kwargs):
 def sync_supplier(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero supplier sync is implemented right now.", frappe.ValidationError)
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 
 	_ensure_supplier_xero_fields()
-	row = _integration_record("Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
@@ -2631,17 +2644,17 @@ def sync_supplier(**kwargs):
 		except Exception as exc:
 			errors.append(_as_str(exc))
 
-	_persist_integration_record("Xero", row)
+	_persist_integration_record(provider, row)
 	frappe.db.commit()
 	return {
 		"ok": True,
-		"provider": "Xero",
+		"provider": provider,
 		"entity": "supplier",
 		"count": len(contacts),
 		"created": created,
 		"updated": updated,
 		"errors": errors[:20],
-		"message": f"Xero supplier sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+		"message": f"{provider} supplier sync complete. {created} created, {updated} updated, {len(errors)} failed.",
 	}
 
 
@@ -2649,14 +2662,12 @@ def sync_supplier(**kwargs):
 def sync_invoice(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero invoice sync is implemented right now.", frappe.ValidationError)
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 
 	_ensure_sales_invoice_xero_fields()
 	_ensure_customer_xero_fields()
 	_ensure_accounting_sync_meta_fields()
-	row = _integration_record("Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
@@ -2685,17 +2696,17 @@ def sync_invoice(**kwargs):
 		except Exception as exc:
 			errors.append(_as_str(exc))
 
-	_persist_integration_record("Xero", row)
+	_persist_integration_record(provider, row)
 	frappe.db.commit()
 	return {
 		"ok": True,
-		"provider": "Xero",
+		"provider": provider,
 		"entity": "invoice",
 		"count": len(invoices),
 		"created": created,
 		"updated": updated,
 		"errors": errors[:20],
-		"message": f"Xero invoice sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+		"message": f"{provider} invoice sync complete. {created} created, {updated} updated, {len(errors)} failed.",
 	}
 
 
@@ -2703,13 +2714,11 @@ def sync_invoice(**kwargs):
 def sync_item(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero item sync is implemented right now.", frappe.ValidationError)
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 
 	_ensure_item_xero_fields()
 	_ensure_accounting_sync_meta_fields()
-	row = _integration_record("Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
@@ -2738,17 +2747,17 @@ def sync_item(**kwargs):
 		except Exception as exc:
 			errors.append(_as_str(exc))
 
-	_persist_integration_record("Xero", row)
+	_persist_integration_record(provider, row)
 	frappe.db.commit()
 	return {
 		"ok": True,
-		"provider": "Xero",
+		"provider": provider,
 		"entity": "item",
 		"count": len(items),
 		"created": created,
 		"updated": updated,
 		"errors": errors[:20],
-		"message": f"Xero item sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+		"message": f"{provider} item sync complete. {created} created, {updated} updated, {len(errors)} failed.",
 	}
 
 
@@ -2756,14 +2765,12 @@ def sync_item(**kwargs):
 def sync_payment(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero payment sync is implemented right now.", frappe.ValidationError)
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 
 	_ensure_payment_entry_xero_fields()
 	_ensure_sales_invoice_xero_fields()
 	_ensure_accounting_sync_meta_fields()
-	row = _integration_record("Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	connections = _xero_fetch_connections(row)
@@ -2792,17 +2799,17 @@ def sync_payment(**kwargs):
 		except Exception as exc:
 			errors.append(_as_str(exc))
 
-	_persist_integration_record("Xero", row)
+	_persist_integration_record(provider, row)
 	frappe.db.commit()
 	return {
 		"ok": True,
-		"provider": "Xero",
+		"provider": provider,
 		"entity": "payment",
 		"count": len(payments),
 		"created": created,
 		"updated": updated,
 		"errors": errors[:20],
-		"message": f"Xero payment sync complete. {created} created, {updated} updated, {len(errors)} failed.",
+		"message": f"{provider} payment sync complete. {created} created, {updated} updated, {len(errors)} failed.",
 	}
 
 
@@ -2821,10 +2828,8 @@ def _as_mapping_rows(raw: Any) -> list[dict[str, Any]]:
 
 @frappe.whitelist(methods=["POST"])
 def import_chart_of_accounts(**kwargs):
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero chart import is implemented right now.", frappe.ValidationError)
-	row = _integration_record("Xero")
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	accounts = _xero_fetch_accounts(row)
@@ -2842,8 +2847,8 @@ def import_chart_of_accounts(**kwargs):
 			}
 		)
 	row["xeroChartAccountsJson"] = json.dumps(out)
-	_persist_integration_record("Xero", row)
-	return {"ok": True, "provider": "Xero", "accounts": out, "count": len(out)}
+	_persist_integration_record(provider, row)
+	return {"ok": True, "provider": provider, "accounts": out, "count": len(out)}
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -2866,10 +2871,8 @@ def save_chart_mappings(**kwargs):
 
 @frappe.whitelist(methods=["POST"])
 def import_tax_codes(**kwargs):
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero tax import is implemented right now.", frappe.ValidationError)
-	row = _integration_record("Xero")
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	tax_rates = _xero_fetch_tax_rates(row)
@@ -2887,8 +2890,8 @@ def import_tax_codes(**kwargs):
 			}
 		)
 	row["xeroTaxCodesJson"] = json.dumps(out)
-	_persist_integration_record("Xero", row)
-	return {"ok": True, "provider": "Xero", "taxCodes": out, "count": len(out)}
+	_persist_integration_record(provider, row)
+	return {"ok": True, "provider": provider, "taxCodes": out, "count": len(out)}
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -2911,10 +2914,8 @@ def save_tax_mappings(**kwargs):
 
 @frappe.whitelist(methods=["POST"])
 def import_tracking_categories(**kwargs):
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero tracking category import is implemented right now.", frappe.ValidationError)
-	row = _integration_record("Xero")
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	categories = _xero_fetch_tracking_categories(row)
@@ -2940,8 +2941,8 @@ def import_tracking_categories(**kwargs):
 			}
 		)
 	row["xeroTrackingCategoriesJson"] = json.dumps(out)
-	_persist_integration_record("Xero", row)
-	return {"ok": True, "provider": "Xero", "categories": out, "count": len(out)}
+	_persist_integration_record(provider, row)
+	return {"ok": True, "provider": provider, "categories": out, "count": len(out)}
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -2964,10 +2965,8 @@ def save_tracking_mappings(**kwargs):
 
 @frappe.whitelist(methods=["POST"])
 def import_credit_notes(**kwargs):
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
-	if provider != "Xero":
-		frappe.throw("Only Xero credit note import is implemented right now.", frappe.ValidationError)
-	row = _integration_record("Xero")
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	row = _integration_record(provider)
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	credit_notes = _xero_fetch_credit_notes(row)
@@ -2989,28 +2988,26 @@ def import_credit_notes(**kwargs):
 			}
 		)
 	row["xeroCreditNotesJson"] = json.dumps(out)
-	_persist_integration_record("Xero", row)
-	return {"ok": True, "provider": "Xero", "creditNotes": out, "count": len(out)}
+	_persist_integration_record(provider, row)
+	return {"ok": True, "provider": provider, "creditNotes": out, "count": len(out)}
 
 
 @frappe.whitelist(methods=["POST"])
 def sync_now(**kwargs):
-	provider = _as_str(kwargs.get("provider") or kwargs.get("integration_provider") or "Xero")
+	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	entity = _as_str(kwargs.get("entity") or "all").lower()
-	if provider != "Xero":
-		frappe.throw("Only Xero sync_now is implemented right now.", frappe.ValidationError)
 	results: list[dict[str, Any]] = []
 	if entity in {"all", "item"}:
-		results.append({"entity": "item", "result": sync_item(provider="Xero")})
+		results.append({"entity": "item", "result": sync_item(provider=provider)})
 	if entity in {"all", "customer"}:
-		results.append({"entity": "customer", "result": sync_customer(provider="Xero")})
+		results.append({"entity": "customer", "result": sync_customer(provider=provider)})
 	if entity in {"all", "supplier"}:
-		results.append({"entity": "supplier", "result": sync_supplier(provider="Xero")})
+		results.append({"entity": "supplier", "result": sync_supplier(provider=provider)})
 	if entity in {"all", "invoice"}:
-		results.append({"entity": "invoice", "result": sync_invoice(provider="Xero")})
+		results.append({"entity": "invoice", "result": sync_invoice(provider=provider)})
 	if entity in {"all", "payment"}:
-		results.append({"entity": "payment", "result": sync_payment(provider="Xero")})
-	return {"ok": True, "provider": "Xero", "entity": entity, "results": results, "message": "Accounting sync completed."}
+		results.append({"entity": "payment", "result": sync_payment(provider=provider)})
+	return {"ok": True, "provider": provider, "entity": entity, "results": results, "message": "Accounting sync completed."}
 
 
 def run_accounting_auto_sync():
