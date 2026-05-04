@@ -2804,6 +2804,150 @@ def test_connection(**kwargs):
 		frappe.throw(f"{provider}: endpoint test failed - {exc}")
 
 
+def _provider_access_token(provider: str, row: dict[str, Any]) -> str:
+	if provider == "QuickBooks":
+		return _as_str(row.get("quickbooksAccessToken") or row.get("accessToken"))
+	if provider == "MYOB":
+		return _as_str(row.get("myobAccessToken") or row.get("accessToken") or row.get("xeroAccessToken"))
+	return _as_str(row.get("accessToken") or row.get("xeroAccessToken") or row.get("quickbooksAccessToken"))
+
+
+def _quickbooks_refresh_if_needed(row: dict[str, Any]) -> dict[str, Any]:
+	if requests is None:
+		return row
+	row, _ = _quickbooks_apply_site_config_credentials(row)
+	expires_raw = _as_str(row.get("quickbooksTokenExpiresAt"))
+	access_token = _as_str(row.get("quickbooksAccessToken"))
+	refresh_token = _as_str(row.get("quickbooksRefreshToken"))
+	if access_token and expires_raw:
+		try:
+			expires = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+			if expires.tzinfo is None:
+				expires = expires.replace(tzinfo=timezone.utc)
+			if expires > datetime.now(timezone.utc) + timedelta(minutes=2):
+				return row
+		except Exception:
+			pass
+	if not refresh_token:
+		return row
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	token_url = _as_str(row.get("tokenUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("tokenUrl"))
+	if not client_id or not client_secret or not token_url:
+		return row
+	basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+	headers = {"Authorization": f"Basic {basic}", "Accept": "application/json"}
+	resp = requests.post(token_url, headers=headers, data={"grant_type": "refresh_token", "refresh_token": refresh_token}, timeout=25)
+	if int(resp.status_code) >= 300:
+		return row
+	data = resp.json() if hasattr(resp, "json") else {}
+	new_access = _as_str(data.get("access_token"))
+	new_refresh = _as_str(data.get("refresh_token"))
+	expires_in = int(_as_int(data.get("expires_in"), 0) or 0)
+	if new_access:
+		row["quickbooksAccessToken"] = new_access
+	if new_refresh:
+		row["quickbooksRefreshToken"] = new_refresh
+	if expires_in > 0:
+		row["quickbooksTokenExpiresAt"] = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
+	_persist_integration_record("QuickBooks", row)
+	return row
+
+
+def _quickbooks_query_entity(row: dict[str, Any], entity: str, limit: int = 200) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("QuickBooks sync unavailable (requests library missing).", frappe.ValidationError)
+	row = _quickbooks_refresh_if_needed(row)
+	token = _as_str(row.get("quickbooksAccessToken"))
+	realm_id = _as_str(row.get("quickbooksRealmId") or row.get("tenantId"))
+	if not token or not realm_id:
+		frappe.throw("QuickBooks is not connected. Run Connect QuickBooks first.", frappe.ValidationError)
+	base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
+	base = base.rstrip("/")
+	query = f"SELECT * FROM {entity} MAXRESULTS {max(1, min(int(limit), 1000))}"
+	url = f"{base}/v3/company/{realm_id}/query"
+	headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+	resp = requests.get(url, headers=headers, params={"query": query, "minorversion": "75"}, timeout=30)
+	if int(resp.status_code) >= 300:
+		detail = _as_str(getattr(resp, "text", ""))
+		frappe.throw(f"QuickBooks query failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	qr = data.get("QueryResponse") if isinstance(data, dict) else {}
+	rows = qr.get(entity) if isinstance(qr, dict) and isinstance(qr.get(entity), list) else []
+	return rows
+
+
+def _myob_company_uri(row: dict[str, Any]) -> str:
+	# MYOB can store company-file URI directly in tenantId.
+	tenant = _as_str(row.get("tenantId"))
+	base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["MYOB"].get("baseUrl"))
+	if tenant.lower().startswith("http"):
+		return tenant.rstrip("/")
+	if tenant:
+		return f"{base.rstrip('/')}/{tenant.strip('/')}"
+	return base.rstrip("/")
+
+
+def _myob_list_entity(row: dict[str, Any], endpoint: str) -> list[dict[str, Any]]:
+	if requests is None:
+		frappe.throw("MYOB sync unavailable (requests library missing).", frappe.ValidationError)
+	access_token = _provider_access_token("MYOB", row)
+	client_id = _as_str(row.get("clientId"))
+	cf_uri = _myob_company_uri(row)
+	if not access_token or not client_id or not cf_uri or cf_uri.endswith("/accountright"):
+		frappe.throw("MYOB is not connected/configured. Ensure access token, client ID, and company file URI are set.", frappe.ValidationError)
+	url = f"{cf_uri.rstrip('/')}/{endpoint.lstrip('/')}"
+	headers = {
+		"Authorization": f"Bearer {access_token}",
+		"x-myobapi-key": client_id,
+		"x-myobapi-version": "v2",
+		"Accept": "application/json",
+	}
+	resp = requests.get(url, headers=headers, timeout=30)
+	if int(resp.status_code) >= 300:
+		detail = _as_str(getattr(resp, "text", ""))
+		frappe.throw(f"MYOB query failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	if isinstance(data, dict) and isinstance(data.get("Items"), list):
+		return data.get("Items")
+	if isinstance(data, list):
+		return data
+	return []
+
+
+def _provider_manual_sync_snapshot(provider: str, entity: str, row: dict[str, Any]) -> dict[str, Any]:
+	provider = _normalize_provider_name(provider, "Xero")
+	if provider == "QuickBooks":
+		entity_map = {
+			"customer": "Customer",
+			"supplier": "Vendor",
+			"invoice": "Invoice",
+			"payment": "Payment",
+			"item": "Item",
+		}
+		qb_entity = entity_map.get(entity)
+		if not qb_entity:
+			frappe.throw(f"QuickBooks sync entity not supported: {entity}", frappe.ValidationError)
+		rows = _quickbooks_query_entity(row, qb_entity)
+		return {"ok": True, "provider": provider, "entity": entity, "count": len(rows), "message": f"QuickBooks {entity} sync snapshot complete ({len(rows)} rows)."}
+	if provider == "MYOB":
+		endpoint_map = {
+			"customer": "Contact/Customer?$top=400",
+			"supplier": "Contact/Supplier?$top=400",
+			"invoice": "Sale/Invoice?$top=400",
+			"payment": "Sale/CustomerPayment?$top=400",
+			"item": "Inventory/Item?$top=400",
+		}
+		ep = endpoint_map.get(entity)
+		if not ep:
+			frappe.throw(f"MYOB sync entity not supported: {entity}", frappe.ValidationError)
+		rows = _myob_list_entity(row, ep)
+		return {"ok": True, "provider": provider, "entity": entity, "count": len(rows), "message": f"MYOB {entity} sync snapshot complete ({len(rows)} rows)."}
+	# Custom is hidden from tenant UI; keep explicit safety guard.
+	frappe.throw(f"{provider} manual sync is not enabled in this build.", frappe.ValidationError)
+
+
+
 @frappe.whitelist(methods=["POST"])
 def sync_entity(**kwargs):
 	entity = _as_str(kwargs.get("entity")).lower()
@@ -2814,8 +2958,6 @@ def sync_entity(**kwargs):
 	is_manual_pull = reference_name.startswith("__manual_")
 	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
 	_ensure_accounting_sync_meta_fields()
-	if provider != "Xero" and not is_push:
-		frappe.throw(f"{provider} manual sync handlers are not implemented yet. OAuth/connect is available; provider sync endpoints are pending.", frappe.ValidationError)
 	if is_push:
 		row = _integration_record(provider)
 		row = _xero_apply_site_config_credentials(row)[0]
@@ -2929,6 +3071,9 @@ def sync_customer(**kwargs):
 		frappe.throw("Login required", frappe.PermissionError)
 
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	if provider in {"QuickBooks", "MYOB"}:
+		row = _integration_record(provider)
+		return _provider_manual_sync_snapshot(provider, "customer", row)
 
 	_ensure_customer_xero_fields()
 	row = _integration_record(provider)
@@ -2982,6 +3127,9 @@ def sync_supplier(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	if provider in {"QuickBooks", "MYOB"}:
+		row = _integration_record(provider)
+		return _provider_manual_sync_snapshot(provider, "supplier", row)
 
 	_ensure_supplier_xero_fields()
 	row = _integration_record(provider)
@@ -3034,6 +3182,9 @@ def sync_invoice(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	if provider in {"QuickBooks", "MYOB"}:
+		row = _integration_record(provider)
+		return _provider_manual_sync_snapshot(provider, "invoice", row)
 
 	_ensure_sales_invoice_xero_fields()
 	_ensure_customer_xero_fields()
@@ -3086,6 +3237,9 @@ def sync_item(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	if provider in {"QuickBooks", "MYOB"}:
+		row = _integration_record(provider)
+		return _provider_manual_sync_snapshot(provider, "item", row)
 
 	_ensure_item_xero_fields()
 	_ensure_accounting_sync_meta_fields()
@@ -3137,6 +3291,9 @@ def sync_payment(**kwargs):
 	if frappe.session.user == "Guest":
 		frappe.throw("Login required", frappe.PermissionError)
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
+	if provider in {"QuickBooks", "MYOB"}:
+		row = _integration_record(provider)
+		return _provider_manual_sync_snapshot(provider, "payment", row)
 
 	_ensure_payment_entry_xero_fields()
 	_ensure_sales_invoice_xero_fields()
@@ -3367,8 +3524,6 @@ def import_credit_notes(**kwargs):
 def sync_now(**kwargs):
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	entity = _as_str(kwargs.get("entity") or "all").lower()
-	if provider != "Xero":
-		frappe.throw(f"{provider} manual sync handlers are not implemented yet. OAuth/connect is available; provider sync endpoints are pending.", frappe.ValidationError)
 	results: list[dict[str, Any]] = []
 	if entity in {"all", "item"}:
 		results.append({"entity": "item", "result": sync_item(provider=provider)})
