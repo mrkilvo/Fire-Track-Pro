@@ -3380,50 +3380,57 @@ def sync_now(**kwargs):
 
 
 def run_accounting_auto_sync():
-	"""Cron-driven auto sync profile:
-	- every 10m: invoices
-	- every 30m: customers
-	- every 60m: suppliers
+	"""Compulsory daily auto sync across all providers/entities.
+	This intentionally ignores per-provider toggle flags in tenant UI.
 	"""
-	try:
-		row = _integration_record("Xero")
-	except Exception:
-		return {"ok": False, "message": "Xero integration record unavailable."}
+	providers = ["Xero", "MYOB", "QuickBooks", "Custom"]
+	entities: list[tuple[str, Any]] = [
+		("customer", sync_customer),
+		("supplier", sync_supplier),
+		("invoice", sync_invoice),
+		("payment", sync_payment),
+		("item", sync_item),
+	]
+	results: dict[str, Any] = {"ok": True, "mode": "compulsory_daily_all", "ran": [], "skipped": [], "errors": []}
 
-	row = _xero_apply_site_config_credentials(row)[0]
-	enabled = _as_bool(row.get("enabled"))
-	tenant_id = _as_str(row.get("tenantId"))
-	if not enabled and not tenant_id:
-		return {"ok": True, "message": "Auto sync skipped: Xero not enabled/connected."}
-
-	sync_customers = _as_bool(row.get("syncCustomers"))
-	sync_invoices = _as_bool(row.get("syncInvoices"))
-	sync_payments = _as_bool(row.get("syncPayments"))
-	sync_suppliers = _as_bool(row.get("syncSuppliers"))
-
-	now = datetime.now(timezone.utc)
-	minute = int(now.minute)
-	results: dict[str, Any] = {"ok": True, "ran": [], "errors": []}
-
-	def _run(label: str, fn):
+	for provider in providers:
 		try:
-			out = fn(provider="Xero")
-			results["ran"].append({"entity": label, "result": out})
+			row = _integration_record(provider)
 		except Exception as exc:
-			results["errors"].append({"entity": label, "error": _as_str(exc)})
+			results["skipped"].append({"provider": provider, "reason": f"record_unavailable: {_as_str(exc)}"})
+			continue
 
-	if sync_invoices:
-		_run("invoice", sync_invoice)
-	if sync_payments and minute % 30 == 0:
-		_run("payment", sync_payment)
-	if sync_customers and minute % 30 == 0:
-		_run("customer", sync_customer)
-	if sync_suppliers and minute == 0:
-		_run("supplier", sync_supplier)
+		enabled = _as_bool(row.get("enabled"))
+		has_any_auth = bool(
+			_as_str(row.get("tenantId"))
+			or _as_str(row.get("xeroAccessToken"))
+			or _as_str(row.get("quickbooksAccessToken"))
+			or _as_str(row.get("clientId"))
+		)
+		if not enabled and not has_any_auth:
+			results["skipped"].append({"provider": provider, "reason": "not_enabled_or_not_configured"})
+			continue
+
+		for entity, fn in entities:
+			try:
+				out = fn(provider=provider)
+				results["ran"].append({"provider": provider, "entity": entity, "result": out})
+			except Exception as exc:
+				msg = _as_str(exc)
+				lower = msg.lower()
+				if (
+					"not implemented" in lower
+					or "is not implemented yet" in lower
+					or "no backend sync endpoint accepted" in lower
+				):
+					results["skipped"].append({"provider": provider, "entity": entity, "reason": msg or "not_implemented"})
+					continue
+				results["errors"].append({"provider": provider, "entity": entity, "error": msg})
 
 	if results["errors"]:
+		results["ok"] = False
 		try:
-			frappe.log_error(json.dumps(results, default=str), "Xero Auto Sync Errors")
+			frappe.log_error(json.dumps(results, default=str), "Accounting Auto Sync Errors")
 		except Exception:
 			pass
 	return results

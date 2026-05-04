@@ -58,7 +58,7 @@ doc_events = {
 
 scheduler_events = {
 	"cron": {
-		"*/10 * * * *": [
+		"0 1 * * *": [
 			"firtrackpro.api.integrations.run_accounting_auto_sync",
 		],
 	},
