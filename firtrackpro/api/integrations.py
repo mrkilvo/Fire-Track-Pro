@@ -178,6 +178,12 @@ def _load_records() -> dict[str, Any]:
 			"xeroConnectedAt": _as_str(row.get("xeroConnectedAt")),
 			"xeroState": _as_str(row.get("xeroState")),
 			"xeroConnectionsJson": _as_str(row.get("xeroConnectionsJson")),
+			"quickbooksAccessToken": _as_str(row.get("quickbooksAccessToken")),
+			"quickbooksRefreshToken": _as_str(row.get("quickbooksRefreshToken")),
+			"quickbooksTokenExpiresAt": _as_str(row.get("quickbooksTokenExpiresAt")),
+			"quickbooksConnectedAt": _as_str(row.get("quickbooksConnectedAt")),
+			"quickbooksState": _as_str(row.get("quickbooksState")),
+			"quickbooksRealmId": _as_str(row.get("quickbooksRealmId")),
 			"syncCustomers": _as_bool(row.get("syncCustomers")),
 			"syncInvoices": _as_bool(row.get("syncInvoices")),
 			"syncPayments": _as_bool(row.get("syncPayments")),
@@ -2354,6 +2360,318 @@ def xero_disconnect(**kwargs):
 	row["enabled"] = False
 	_persist_integration_record("Xero", row)
 	msg = "Xero disconnected."
+	if isinstance(revoke_result, dict):
+		remote_msg = _as_str(revoke_result.get("message"))
+		if remote_msg:
+			msg = f"{msg} {remote_msg}"
+	return {"ok": True, "message": msg.strip()}
+
+
+def _quickbooks_redirect_uri(row: dict[str, Any] | None = None) -> str:
+	row = row or {}
+	candidates = [
+		_as_str(row.get("quickbooksRedirectUri")),
+		_as_str(row.get("redirectUri")),
+		_as_str(frappe.conf.get("quickbooks_oauth_redirect_uri")),
+		_as_str(frappe.conf.get("firtrackpro_quickbooks_oauth_redirect_uri")),
+	]
+	for candidate in candidates:
+		if candidate:
+			return candidate.rstrip("/")
+	host_name = _as_str(frappe.conf.get("host_name")).rstrip("/")
+	if host_name:
+		return f"{host_name}/api/method/firtrackpro.api.integrations.quickbooks_oauth_callback"
+	base = _as_str(frappe.utils.get_url()).rstrip("/")
+	return f"{base}/api/method/firtrackpro.api.integrations.quickbooks_oauth_callback"
+
+
+def _quickbooks_state_secret() -> str:
+	return _as_str(_firelink_bridge_token()) or _as_str(frappe.local.site) or "firetrack-quickbooks"
+
+
+def _quickbooks_build_federated_state(site_host: str) -> str:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return frappe.generate_hash(length=28)
+	payload = {
+		"v": 1,
+		"h": host,
+		"n": frappe.generate_hash(length=10),
+		"t": int(datetime.now(timezone.utc).timestamp()),
+	}
+	raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+	raw_b64 = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8").rstrip("=")
+	sig = hmac.new(_quickbooks_state_secret().encode("utf-8"), raw_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+	return f"ftq1.{raw_b64}.{sig}"
+
+
+def _quickbooks_parse_federated_state(state: str) -> str:
+	value = _as_str(state)
+	if not value.startswith("ftq1."):
+		return ""
+	parts = value.split(".")
+	if len(parts) != 3:
+		return ""
+	_, raw_b64, sig = parts
+	expected = hmac.new(_quickbooks_state_secret().encode("utf-8"), raw_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:24]
+	if not hmac.compare_digest(expected, sig):
+		return ""
+	try:
+		padded = raw_b64 + "=" * ((4 - len(raw_b64) % 4) % 4)
+		decoded = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
+		payload = json.loads(decoded)
+	except Exception:
+		return ""
+	return _normalize_site_host((payload or {}).get("h"))
+
+
+def quickbooks_receive_tokens_local(**kwargs):
+	target_host = _normalize_site_host(kwargs.get("target_host") or getattr(frappe.local, "site", ""))
+	if not target_host:
+		return {"ok": False, "message": "target_host is required."}
+	row = _integration_record("QuickBooks")
+	row["clientId"] = _as_str(kwargs.get("client_id") or row.get("clientId"))
+	row["clientSecret"] = _as_str(kwargs.get("client_secret") or row.get("clientSecret"))
+	row["authUrl"] = _as_str(kwargs.get("auth_url") or row.get("authUrl") or PROVIDER_DEFAULTS["QuickBooks"].get("authUrl"))
+	row["tokenUrl"] = _as_str(kwargs.get("token_url") or row.get("tokenUrl") or PROVIDER_DEFAULTS["QuickBooks"].get("tokenUrl"))
+	row["scopes"] = _as_str(kwargs.get("scopes") or row.get("scopes") or PROVIDER_DEFAULTS["QuickBooks"].get("scopes"))
+	row["quickbooksAccessToken"] = _as_str(kwargs.get("quickbooks_access_token"))
+	row["quickbooksRefreshToken"] = _as_str(kwargs.get("quickbooks_refresh_token"))
+	row["quickbooksTokenExpiresAt"] = _as_str(kwargs.get("quickbooks_token_expires_at"))
+	row["quickbooksConnectedAt"] = _as_str(kwargs.get("quickbooks_connected_at")) or _utc_iso_now()
+	row["quickbooksState"] = ""
+	row["quickbooksRealmId"] = _as_str(kwargs.get("realm_id") or kwargs.get("quickbooks_realm_id"))
+	if _as_str(row.get("quickbooksRealmId")):
+		row["tenantId"] = _as_str(row.get("quickbooksRealmId"))
+	row["enabled"] = True
+	_persist_integration_record("QuickBooks", row)
+	return {"ok": True, "site_host": target_host}
+
+
+def _quickbooks_push_tokens_to_site(target_host: str, row: dict[str, Any], realm_id: str) -> dict[str, Any]:
+	host = _normalize_site_host(target_host)
+	if not host:
+		return {"ok": False, "message": "target_host is required"}
+	kwargs_payload = {
+		"target_host": host,
+		"client_id": _as_str(row.get("clientId")),
+		"client_secret": _as_str(row.get("clientSecret")),
+		"auth_url": _as_str(row.get("authUrl")),
+		"token_url": _as_str(row.get("tokenUrl")),
+		"scopes": _as_str(row.get("scopes")),
+		"quickbooks_access_token": _as_str(row.get("quickbooksAccessToken")),
+		"quickbooks_refresh_token": _as_str(row.get("quickbooksRefreshToken")),
+		"quickbooks_token_expires_at": _as_str(row.get("quickbooksTokenExpiresAt")),
+		"quickbooks_connected_at": _as_str(row.get("quickbooksConnectedAt")),
+		"quickbooks_realm_id": _as_str(realm_id),
+	}
+	try:
+		res = subprocess.run(
+			[
+				"bench",
+				"--site",
+				host,
+				"execute",
+				"firtrackpro.api.integrations.quickbooks_receive_tokens_local",
+				"--kwargs",
+				json.dumps(kwargs_payload),
+			],
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=180,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"token push failed to start: {exc}"}
+	if int(res.returncode or 0) != 0:
+		detail = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+		if len(detail) > 800:
+			detail = detail[-800:]
+		return {"ok": False, "message": f"token push failed for {host}", "details": detail}
+	return {"ok": True, "site_host": host}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_quickbooks_oauth_start_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	target_host = _normalize_site_host(kwargs.get("site_host"))
+	if not target_host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	row = _integration_record("QuickBooks")
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	auth_url = _as_str(row.get("authUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("authUrl"))
+	scopes = _as_str(row.get("scopes")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("scopes"))
+	if not client_id or not client_secret:
+		frappe.throw("QuickBooks Client ID and Client Secret are required on FireLink.", frappe.ValidationError)
+	state = _quickbooks_build_federated_state(target_host)
+	row["quickbooksState"] = state
+	_persist_integration_record("QuickBooks", row)
+	params = {
+		"response_type": "code",
+		"client_id": client_id,
+		"redirect_uri": _quickbooks_redirect_uri(row),
+		"scope": scopes,
+		"state": state,
+	}
+	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _quickbooks_redirect_uri(row), "target_site": target_host}
+
+
+@frappe.whitelist(methods=["POST"])
+def quickbooks_oauth_start(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	row = _integration_record("QuickBooks")
+	client_id = _as_str(kwargs.get("client_id") or kwargs.get("clientId") or row.get("clientId"))
+	client_secret = _as_str(kwargs.get("client_secret") or kwargs.get("clientSecret") or row.get("clientSecret"))
+	auth_url = _as_str(kwargs.get("auth_url") or kwargs.get("authUrl") or row.get("authUrl")) or _as_str(
+		PROVIDER_DEFAULTS["QuickBooks"].get("authUrl")
+	)
+	scopes = _as_str(kwargs.get("scopes") or row.get("scopes")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("scopes"))
+	if not client_id or not client_secret:
+		frappe.throw("QuickBooks Client ID and Client Secret are required.", frappe.ValidationError)
+	if not auth_url:
+		frappe.throw("QuickBooks Auth URL is required.", frappe.ValidationError)
+	state = frappe.generate_hash(length=28)
+	row["clientId"] = client_id
+	row["clientSecret"] = client_secret
+	row["authUrl"] = auth_url
+	row["scopes"] = scopes
+	row["quickbooksState"] = state
+	_persist_integration_record("QuickBooks", row)
+	params = {
+		"response_type": "code",
+		"client_id": client_id,
+		"redirect_uri": _quickbooks_redirect_uri(row),
+		"scope": scopes,
+		"state": state,
+	}
+	return {"ok": True, "authorize_url": f"{auth_url}?{urlencode(params)}", "state": state, "redirect_uri": _quickbooks_redirect_uri(row)}
+
+
+@frappe.whitelist(allow_guest=True)
+def quickbooks_oauth_callback(**kwargs):
+	code = _as_str(kwargs.get("code"))
+	state = _as_str(kwargs.get("state"))
+	realm_id = _as_str(kwargs.get("realmId") or kwargs.get("realm_id"))
+	error = _as_str(kwargs.get("error"))
+	error_description = _as_str(kwargs.get("error_description"))
+	target_host = _quickbooks_parse_federated_state(state)
+	if error:
+		frappe.local.response["type"] = "redirect"
+		if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
+			frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?quickbooks=error&message={quote(error_description or error)}"
+		else:
+			frappe.local.response["location"] = f"/portal/config/integrations?quickbooks=error&message={quote(error_description or error)}"
+		return
+	row = _integration_record("QuickBooks")
+	expected_state = _as_str(row.get("quickbooksState"))
+	if not code:
+		frappe.throw("Missing QuickBooks authorization code.", frappe.ValidationError)
+	if expected_state and not target_host and state != expected_state:
+		frappe.throw("Invalid QuickBooks OAuth state.", frappe.PermissionError)
+	client_id = _as_str(row.get("clientId"))
+	client_secret = _as_str(row.get("clientSecret"))
+	token_url = _as_str(row.get("tokenUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("tokenUrl"))
+	if not client_id or not client_secret or not token_url:
+		frappe.throw("QuickBooks Client ID/Secret and Token URL must be configured before OAuth callback.", frappe.ValidationError)
+	if requests is None:
+		frappe.throw("QuickBooks callback unavailable (requests library missing).")
+	headers = {
+		"Authorization": f"Basic {_xero_basic_auth(client_id, client_secret)}",
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Accept": "application/json",
+	}
+	form = {"grant_type": "authorization_code", "code": code, "redirect_uri": _quickbooks_redirect_uri(row)}
+	resp = requests.post(token_url, headers=headers, data=form, timeout=20)
+	if not resp.ok:
+		detail = _as_str(resp.text)
+		frappe.throw(f"QuickBooks token exchange failed ({resp.status_code}): {detail}", frappe.ValidationError)
+	data = resp.json() if hasattr(resp, "json") else {}
+	access_token = _as_str(data.get("access_token"))
+	refresh_token = _as_str(data.get("refresh_token"))
+	expires_in = _as_int(data.get("expires_in"), 3600)
+	if not access_token:
+		frappe.throw("QuickBooks token exchange did not return access_token.", frappe.ValidationError)
+	row["quickbooksAccessToken"] = access_token
+	row["quickbooksRefreshToken"] = refresh_token
+	row["quickbooksTokenExpiresAt"] = datetime.fromtimestamp(
+		datetime.now(timezone.utc).timestamp() + expires_in, tz=timezone.utc
+	).isoformat()
+	row["quickbooksConnectedAt"] = _utc_iso_now()
+	row["quickbooksState"] = ""
+	row["quickbooksRealmId"] = realm_id
+	if realm_id:
+		row["tenantId"] = realm_id
+	row["enabled"] = True
+	_persist_integration_record("QuickBooks", row)
+	if target_host and target_host != _as_str(getattr(frappe.local, "site", "")):
+		push = _quickbooks_push_tokens_to_site(target_host, row, realm_id)
+		if not _as_bool(push.get("ok")):
+			msg = _as_str(push.get("message")) or "Failed to save QuickBooks connection to target tenant."
+			details = _as_str(push.get("details"))
+			if details:
+				msg = f"{msg} {details}"
+			frappe.local.response["type"] = "redirect"
+			frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?quickbooks=error&message={quote(msg)}"
+			return
+		frappe.local.response["type"] = "redirect"
+		frappe.local.response["location"] = f"https://{target_host}/portal/config/integrations?quickbooks=connected"
+		return
+	frappe.local.response["type"] = "redirect"
+	frappe.local.response["location"] = "/portal/config/integrations?quickbooks=connected"
+
+
+def _quickbooks_remote_disconnect(config: dict[str, Any]) -> dict[str, Any]:
+	if requests is None:
+		return {"ok": False, "message": "Requests library missing; skipped remote revoke."}
+	token = _as_str(config.get("quickbooksRefreshToken")) or _as_str(config.get("quickbooksAccessToken"))
+	client_id = _as_str(config.get("clientId"))
+	client_secret = _as_str(config.get("clientSecret"))
+	if not token or not client_id or not client_secret:
+		return {"ok": True, "message": "No QuickBooks token to revoke."}
+	try:
+		resp = requests.post(
+			"https://developer.api.intuit.com/v2/oauth2/tokens/revoke",
+			headers={
+				"Authorization": f"Basic {_xero_basic_auth(client_id, client_secret)}",
+				"Content-Type": "application/x-www-form-urlencoded",
+				"Accept": "application/json",
+			},
+			data={"token": token},
+			timeout=20,
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"QuickBooks revoke failed: {exc}"}
+	if not resp.ok:
+		return {"ok": False, "message": f"QuickBooks revoke failed ({resp.status_code}): {_as_str(resp.text)}"}
+	return {"ok": True, "message": "QuickBooks token revoked."}
+
+
+@frappe.whitelist(methods=["POST", "GET"])
+def quickbooks_disconnect(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	row = _integration_record("QuickBooks")
+	force_revoke = _as_bool(kwargs.get("force_revoke") or kwargs.get("forceRevoke"))
+	is_firelink_site = _is_firelink_local_site()
+	should_revoke_remote = (not is_firelink_site) or force_revoke
+	revoke_result = _quickbooks_remote_disconnect(row) if should_revoke_remote else {
+		"ok": True,
+		"message": "Skipped remote revoke on FireLink broker site.",
+	}
+	row["quickbooksAccessToken"] = ""
+	row["quickbooksRefreshToken"] = ""
+	row["quickbooksTokenExpiresAt"] = ""
+	row["quickbooksConnectedAt"] = ""
+	row["quickbooksState"] = ""
+	row["quickbooksRealmId"] = ""
+	row["tenantId"] = ""
+	row["enabled"] = False
+	_persist_integration_record("QuickBooks", row)
+	msg = "QuickBooks disconnected."
 	if isinstance(revoke_result, dict):
 		remote_msg = _as_str(revoke_result.get("message"))
 		if remote_msg:
