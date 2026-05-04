@@ -3358,22 +3358,45 @@ def _as_mapping_rows(raw: Any) -> list[dict[str, Any]]:
 def import_chart_of_accounts(**kwargs):
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	row = _integration_record(provider)
-	row = _xero_apply_site_config_credentials(row)[0]
-	row = _xero_refresh_if_needed(row)
-	accounts = _xero_fetch_accounts(row)
 	out: list[dict[str, Any]] = []
-	for acc in accounts:
-		if not isinstance(acc, dict):
-			continue
-		out.append(
-			{
+	if provider == "QuickBooks":
+		rows = _quickbooks_query_entity(row, "Account", 500)
+		for acc in rows:
+			if not isinstance(acc, dict):
+				continue
+			out.append({
+				"id": _as_str(acc.get("Id")),
+				"code": _as_str(acc.get("AcctNum") or acc.get("FullyQualifiedName")),
+				"name": _as_str(acc.get("Name") or acc.get("FullyQualifiedName")),
+				"type": _as_str(acc.get("AccountType") or acc.get("Classification")),
+				"active": not _as_bool(acc.get("Active") is False),
+			})
+	elif provider == "MYOB":
+		rows = _myob_list_entity(row, "GeneralLedger/Account?$top=500")
+		for acc in rows:
+			if not isinstance(acc, dict):
+				continue
+			out.append({
+				"id": _as_str(acc.get("UID") or acc.get("Id")),
+				"code": _as_str(acc.get("DisplayID") or acc.get("Number")),
+				"name": _as_str(acc.get("Name")),
+				"type": _as_str(acc.get("Type") or acc.get("Classification")),
+				"active": not _as_bool(acc.get("IsInactive")),
+			})
+	else:
+		row = _xero_apply_site_config_credentials(row)[0]
+		row = _xero_refresh_if_needed(row)
+		accounts = _xero_fetch_accounts(row)
+		for acc in accounts:
+			if not isinstance(acc, dict):
+				continue
+			out.append({
 				"id": _as_str(acc.get("AccountID")),
 				"code": _as_str(acc.get("Code")),
 				"name": _as_str(acc.get("Name")),
 				"type": _as_str(acc.get("Type")),
 				"active": _as_str(acc.get("Status")).upper() != "ARCHIVED",
-			}
-		)
+			})
 	row["xeroChartAccountsJson"] = json.dumps(out)
 	_persist_integration_record(provider, row)
 	return {"ok": True, "provider": provider, "accounts": out, "count": len(out)}
@@ -3401,22 +3424,45 @@ def save_chart_mappings(**kwargs):
 def import_tax_codes(**kwargs):
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	row = _integration_record(provider)
-	row = _xero_apply_site_config_credentials(row)[0]
-	row = _xero_refresh_if_needed(row)
-	tax_rates = _xero_fetch_tax_rates(row)
 	out: list[dict[str, Any]] = []
-	for rate in tax_rates:
-		if not isinstance(rate, dict):
-			continue
-		out.append(
-			{
+	if provider == "QuickBooks":
+		rows = _quickbooks_query_entity(row, "TaxCode", 500)
+		for rate in rows:
+			if not isinstance(rate, dict):
+				continue
+			out.append({
+				"id": _as_str(rate.get("Id")),
+				"code": _as_str(rate.get("Name")),
+				"name": _as_str(rate.get("Name") or rate.get("Description")),
+				"rate": 0.0,
+				"active": _as_bool(rate.get("Active", True)),
+			})
+	elif provider == "MYOB":
+		rows = _myob_list_entity(row, "GeneralLedger/TaxCode?$top=500")
+		for rate in rows:
+			if not isinstance(rate, dict):
+				continue
+			out.append({
+				"id": _as_str(rate.get("UID") or rate.get("Id")),
+				"code": _as_str(rate.get("Code")),
+				"name": _as_str(rate.get("Description") or rate.get("Code")),
+				"rate": _as_float(rate.get("Rate"), 0.0),
+				"active": not _as_bool(rate.get("IsInactive")),
+			})
+	else:
+		row = _xero_apply_site_config_credentials(row)[0]
+		row = _xero_refresh_if_needed(row)
+		tax_rates = _xero_fetch_tax_rates(row)
+		for rate in tax_rates:
+			if not isinstance(rate, dict):
+				continue
+			out.append({
 				"id": _as_str(rate.get("TaxType") or rate.get("TaxRateID")),
 				"code": _as_str(rate.get("TaxType")),
 				"name": _as_str(rate.get("Name")),
 				"rate": _as_float(rate.get("EffectiveRate"), 0.0),
 				"active": _as_str(rate.get("Status")).upper() != "DELETED",
-			}
-		)
+			})
 	row["xeroTaxCodesJson"] = json.dumps(out)
 	_persist_integration_record(provider, row)
 	return {"ok": True, "provider": provider, "taxCodes": out, "count": len(out)}
@@ -3444,10 +3490,15 @@ def save_tax_mappings(**kwargs):
 def import_tracking_categories(**kwargs):
 	provider = _normalize_provider_name(kwargs.get("provider") or kwargs.get("integration_provider"), "Xero")
 	row = _integration_record(provider)
+	out: list[dict[str, Any]] = []
+	if provider in {"QuickBooks", "MYOB"}:
+		# No first-class tracking categories in this bridge for these providers yet.
+		row["xeroTrackingCategoriesJson"] = json.dumps(out)
+		_persist_integration_record(provider, row)
+		return {"ok": True, "provider": provider, "categories": out, "count": 0, "message": f"{provider} tracking categories are not used in this bridge."}
 	row = _xero_apply_site_config_credentials(row)[0]
 	row = _xero_refresh_if_needed(row)
 	categories = _xero_fetch_tracking_categories(row)
-	out: list[dict[str, Any]] = []
 	for cat in categories:
 		if not isinstance(cat, dict):
 			continue
