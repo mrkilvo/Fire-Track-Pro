@@ -568,6 +568,13 @@ def _safe_set_if_field(doc, fieldname, value):
 		pass
 
 
+def _clean_whitelisted_kwargs(kwargs):
+	data = dict(kwargs or {})
+	for key in ("cmd", "method", "data"):
+		data.pop(key, None)
+	return data
+
+
 @frappe.whitelist(allow_guest=False)
 def provision_client_portal_login(login_name=None, customer=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
 	has_login_doctype = bool(frappe.db.exists("DocType", "FT Client Portal Login"))
@@ -691,7 +698,7 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 
 @frappe.whitelist(allow_guest=False)
 def provision_client_login(**kwargs):
-	return provision_client_portal_login(**kwargs)
+	return provision_client_portal_login(**_clean_whitelisted_kwargs(kwargs))
 
 
 @frappe.whitelist(allow_guest=False)
@@ -804,4 +811,4 @@ def provision_contractor_portal_login(login_name=None, supplier=None, full_name=
 
 @frappe.whitelist(allow_guest=False)
 def provision_contractor_login(**kwargs):
-	return provision_contractor_portal_login(**kwargs)
+	return provision_contractor_portal_login(**_clean_whitelisted_kwargs(kwargs))
