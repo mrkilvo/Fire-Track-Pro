@@ -669,21 +669,26 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 		"After first login, go to Account and change your password.<br><br>"
 		"If you did not request this access, contact your FireTrack administrator."
 	)
+	email_sent = True
+	email_error = ""
 	try:
 		frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
 	except Exception as exc:
 		frappe.log_error(frappe.get_traceback(), "Client Portal Invite Email Failed")
-		frappe.throw(f"Client login was provisioned but invite email failed: {exc}")
+		email_sent = False
+		email_error = _as_str(exc)
 
 	return {
 		"ok": True,
 		"login_name": (login_doc.name if login_doc else user_name),
 		"user": user_name,
 		"email": user_name,
-		"temporary_password_sent": True,
+		"temporary_password_sent": email_sent,
+		"email_sent": email_sent,
+		"email_error": email_error or None,
 		"login_url": client_login_url,
 		"has_login_doctype": has_login_doctype,
-		"message": "Client portal login provisioned and invite email sent.",
+		"message": "Client portal login provisioned and invite email sent." if email_sent else "Client portal login provisioned, but invite email failed.",
 	}
 
 
@@ -780,16 +785,25 @@ def provision_contractor_portal_login(login_name=None, supplier=None, full_name=
 		f"Temporary Password: {temp_password}<br><br>"
 		"After first login, go to Account and change your password."
 	)
-	frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
+	email_sent = True
+	email_error = ""
+	try:
+		frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
+	except Exception as exc:
+		frappe.log_error(frappe.get_traceback(), "Contractor Portal Invite Email Failed")
+		email_sent = False
+		email_error = _as_str(exc)
 	return {
 		"ok": True,
 		"login_name": (login_doc.name if login_doc else user_name),
 		"user": user_name,
 		"email": user_name,
-		"temporary_password_sent": True,
+		"temporary_password_sent": email_sent,
+		"email_sent": email_sent,
+		"email_error": email_error or None,
 		"login_url": contractor_login_url,
 		"has_login_doctype": has_login_doctype,
-		"message": "Contractor portal login provisioned and invite email sent.",
+		"message": "Contractor portal login provisioned and invite email sent." if email_sent else "Contractor portal login provisioned, but invite email failed.",
 	}
 
 

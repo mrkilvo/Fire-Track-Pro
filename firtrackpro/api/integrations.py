@@ -2907,6 +2907,126 @@ def _quickbooks_query_entity(row: dict[str, Any], entity: str, limit: int = 200)
 		hint = " Ensure the connected company and app environment match (Production vs Sandbox), then reconnect QuickBooks."
 	frappe.throw(f"QuickBooks query failed ({last_status}): {last_detail}{hint}", frappe.ValidationError)
 
+
+def _quickbooks_find_customer_by_display_name(row: dict[str, Any], display_name: str) -> dict[str, Any] | None:
+	if requests is None:
+		frappe.throw("QuickBooks sync unavailable (requests library missing).", frappe.ValidationError)
+	name = _as_str(display_name)
+	if not name:
+		return None
+	row = _quickbooks_refresh_if_needed(row)
+	token = _as_str(row.get("quickbooksAccessToken"))
+	realm_id = _as_str(row.get("quickbooksRealmId") or row.get("tenantId"))
+	if not token or not realm_id:
+		frappe.throw("QuickBooks is not connected. Run Connect QuickBooks first.", frappe.ValidationError)
+
+	configured_base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
+	configured_base = configured_base.rstrip("/")
+	prod_base = "https://quickbooks.api.intuit.com"
+	sandbox_base = "https://sandbox-quickbooks.api.intuit.com"
+	base_candidates = [configured_base] if configured_base else [prod_base]
+	if configured_base == prod_base:
+		base_candidates.append(sandbox_base)
+	elif configured_base == sandbox_base:
+		base_candidates.append(prod_base)
+	elif sandbox_base not in base_candidates:
+		base_candidates.append(sandbox_base)
+
+	name_q = name.replace("\\", "\\\\").replace("'", "\\'")
+	query = f"SELECT * FROM Customer WHERE DisplayName = '{name_q}' MAXRESULTS 1"
+	headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+	for base in base_candidates:
+		url = f"{base}/v3/company/{realm_id}/query"
+		resp = requests.get(url, headers=headers, params={"query": query, "minorversion": "75"}, timeout=30)
+		if int(resp.status_code) < 300:
+			if base != configured_base:
+				row["baseUrl"] = base
+				_persist_integration_record("QuickBooks", row)
+			data = resp.json() if hasattr(resp, "json") else {}
+			qr = data.get("QueryResponse") if isinstance(data, dict) else {}
+			rows = qr.get("Customer") if isinstance(qr, dict) and isinstance(qr.get("Customer"), list) else []
+			return rows[0] if rows else None
+	return None
+
+
+def _quickbooks_push_customer(row: dict[str, Any], reference_name: str, document: dict[str, Any]) -> dict[str, Any]:
+	if requests is None:
+		frappe.throw("QuickBooks sync unavailable (requests library missing).", frappe.ValidationError)
+	row = _quickbooks_refresh_if_needed(row)
+	token = _as_str(row.get("quickbooksAccessToken"))
+	realm_id = _as_str(row.get("quickbooksRealmId") or row.get("tenantId"))
+	if not token or not realm_id:
+		frappe.throw("QuickBooks is not connected. Run Connect QuickBooks first.", frappe.ValidationError)
+
+	display_name = (
+		_as_str(document.get("customer_name"))
+		or _as_str(document.get("customer_name1"))
+		or _as_str(document.get("customer"))
+		or _as_str(reference_name)
+	)
+	if not display_name:
+		frappe.throw("Customer name is required for QuickBooks push.", frappe.ValidationError)
+
+	email = _as_str(document.get("email_id"))
+	phone = _as_str(document.get("mobile_no") or document.get("phone"))
+
+	configured_base = _as_str(row.get("baseUrl")) or _as_str(PROVIDER_DEFAULTS["QuickBooks"].get("baseUrl"))
+	configured_base = configured_base.rstrip("/")
+	prod_base = "https://quickbooks.api.intuit.com"
+	sandbox_base = "https://sandbox-quickbooks.api.intuit.com"
+	base_candidates = [configured_base] if configured_base else [prod_base]
+	if configured_base == prod_base:
+		base_candidates.append(sandbox_base)
+	elif configured_base == sandbox_base:
+		base_candidates.append(prod_base)
+	elif sandbox_base not in base_candidates:
+		base_candidates.append(sandbox_base)
+
+	existing = _quickbooks_find_customer_by_display_name(row, display_name)
+	base_payload: dict[str, Any] = {"DisplayName": display_name}
+	if email:
+		base_payload["PrimaryEmailAddr"] = {"Address": email}
+	if phone:
+		base_payload["PrimaryPhone"] = {"FreeFormNumber": phone}
+
+	headers = {
+		"Authorization": f"Bearer {token}",
+		"Accept": "application/json",
+		"Content-Type": "application/json",
+	}
+	last_status = 0
+	last_detail = ""
+	for base in base_candidates:
+		url = f"{base}/v3/company/{realm_id}/customer"
+		payload = dict(base_payload)
+		if isinstance(existing, dict):
+			payload["Id"] = _as_str(existing.get("Id"))
+			payload["SyncToken"] = _as_str(existing.get("SyncToken"))
+			payload["sparse"] = True
+			url = f"{url}?operation=update"
+		resp = requests.post(url, headers=headers, json=payload, params={"minorversion": "75"}, timeout=30)
+		status = int(resp.status_code)
+		if status < 300:
+			if base != configured_base:
+				row["baseUrl"] = base
+				_persist_integration_record("QuickBooks", row)
+			data = resp.json() if hasattr(resp, "json") else {}
+			customer = data.get("Customer") if isinstance(data, dict) and isinstance(data.get("Customer"), dict) else {}
+			return customer
+		last_status = status
+		last_detail = _as_str(getattr(resp, "text", ""))
+		if status == 400 and "Duplicate Name Exists Error" in last_detail and not existing:
+			existing = _quickbooks_find_customer_by_display_name(row, display_name)
+			continue
+		lower_detail = last_detail.lower()
+		if not (status == 403 and ("applicationauthorizationfailed" in lower_detail or "errorcode=003100" in lower_detail or '"code":"3100"' in lower_detail)):
+			break
+
+	hint = ""
+	if last_status == 403 and ("applicationauthorizationfailed" in last_detail.lower() or "errorcode=003100" in last_detail.lower() or '"code":"3100"' in last_detail.lower()):
+		hint = " Ensure the connected company and app environment match (Production vs Sandbox), then reconnect QuickBooks."
+	frappe.throw(f"QuickBooks customer push failed ({last_status}): {last_detail}{hint}", frappe.ValidationError)
+
 def _quickbooks_email(value: dict[str, Any]) -> str:
 	if not isinstance(value, dict):
 		return ""
@@ -3185,6 +3305,28 @@ def sync_entity(**kwargs):
 	is_push = operation in {"create", "update", "delete"} and bool(document) and not is_manual_pull
 	_ensure_accounting_sync_meta_fields()
 	if is_push:
+		if provider == "QuickBooks":
+			row = _integration_record(provider)
+			row = _quickbooks_refresh_if_needed(row)
+			_persist_integration_record(provider, row)
+			if entity == "customer":
+				if operation == "delete":
+					return {"ok": True, "message": f"Customer delete push not enabled for {provider} (safe mode)."}
+				try:
+					out = _quickbooks_push_customer(row, reference_name, document)
+					qb_customer_id = _as_str(out.get("Id"))
+					if reference_name and frappe.db.exists("Customer", reference_name):
+						_set_accounting_sync_meta("Customer", reference_name, provider, "Synced", qb_customer_id, "")
+						frappe.db.commit()
+				except Exception as exc:
+					if reference_name and frappe.db.exists("Customer", reference_name):
+						_set_accounting_sync_meta("Customer", reference_name, provider, "Error", "", _as_str(exc))
+						frappe.db.commit()
+					raise
+				_persist_integration_record(provider, row)
+				return {"ok": True, "message": f"Customer pushed to {provider} ({qb_customer_id or 'ok'})."}
+			frappe.throw(f"{provider} push is not enabled for {entity} in this build.", frappe.ValidationError)
+
 		row = _integration_record(provider)
 		row = _xero_apply_site_config_credentials(row)[0]
 		row = _xero_refresh_and_reselect_tenant(_xero_refresh_if_needed(row))
