@@ -6586,6 +6586,8 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 	}
 	lat = _as_float(payload.get("property_lat"), 0.0)
 	lng = _as_float(payload.get("property_lng"), 0.0)
+	incoming_sticker_id = _as_str(payload.get("firelink_sticker_id"))
+	incoming_front_image = _as_str(payload.get("property_front_image"))
 
 	if frappe.db.exists("FL Property", property_id):
 		doc = frappe.get_doc("FL Property", property_id)
@@ -6593,6 +6595,12 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 		doc.property_address_json = json.dumps(address_json, separators=(",", ":"))
 		doc.property_lat = lat
 		doc.property_lng = lng
+		if hasattr(doc, "firelink_sticker_id"):
+			current_sticker_id = _as_str(getattr(doc, "firelink_sticker_id", ""))
+			if incoming_sticker_id and (not current_sticker_id or incoming_sticker_id == current_sticker_id):
+				doc.firelink_sticker_id = incoming_sticker_id
+		if hasattr(doc, "property_front_image") and incoming_front_image:
+			doc.property_front_image = incoming_front_image
 		doc.save(ignore_permissions=True)
 		created = False
 	else:
@@ -6604,6 +6612,8 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 				"property_address_json": json.dumps(address_json, separators=(",", ":")),
 				"property_lat": lat,
 				"property_lng": lng,
+				"firelink_sticker_id": incoming_sticker_id or None,
+				"property_front_image": incoming_front_image or None,
 			}
 		)
 		doc.insert(ignore_permissions=True)
@@ -6622,12 +6632,16 @@ def _upsert_fl_property_local(payload: dict[str, Any]) -> dict[str, Any]:
 			"state": _as_str(payload.get("state")),
 			"pincode": _as_str(payload.get("pincode")),
 			"country": _as_str(payload.get("country")) or "Australia",
+			"firelink_sticker_id": _as_str(getattr(doc, "firelink_sticker_id", "")) or None,
+			"property_front_image": _as_str(getattr(doc, "property_front_image", "")) or None,
 		}
 	)
 	return {
 		"firelink_property_id": firelink_property_id,
 		"firelink_ft_property_id": ft_property_id or None,
 		"firelink_address_id": address_id,
+		"firelink_sticker_id": _as_str(getattr(doc, "firelink_sticker_id", "")) or None,
+		"property_front_image": _as_str(getattr(doc, "property_front_image", "")) or None,
 		"created": created,
 	}
 
@@ -6664,6 +6678,8 @@ def _upsert_ft_property_local(payload: dict[str, Any]) -> str:
 	set_if("ft_property_state", _as_str(payload.get("state")))
 	set_if("ft_property_postcode", _as_str(payload.get("pincode")))
 	set_if("ft_property_country", _as_str(payload.get("country")) or "Australia")
+	set_if("firelink_sticker_id", _as_str(payload.get("firelink_sticker_id")))
+	set_if("property_front_image", _as_str(payload.get("property_front_image")))
 
 	if existing_name:
 		doc.save(ignore_permissions=True)
@@ -6808,6 +6824,8 @@ def firelink_property_sync(**kwargs):
 		"state": _as_str(kwargs.get("state")) or None,
 		"pincode": _as_str(kwargs.get("pincode")) or None,
 		"country": _as_str(kwargs.get("country")) or "Australia",
+		"firelink_sticker_id": _as_str(kwargs.get("firelink_sticker_id")) or None,
+		"property_front_image": _as_str(kwargs.get("property_front_image")) or None,
 	}
 	if _is_firelink_local_site():
 		out = _upsert_fl_property_local(payload)
@@ -6846,6 +6864,24 @@ def firelink_property_sync(**kwargs):
 				"firelink_property_id": _as_str(remote.get("name")),
 				"created": bool(remote.get("created")),
 			}
+	if not _is_firelink_local_site() and _as_str((out or {}).get("firelink_property_id")):
+		_upsert_ft_property_local(
+			{
+				"firelink_property_id": _as_str((out or {}).get("firelink_property_id")),
+				"firelink_address_id": firelink_address_id,
+				"property_display_name": _as_str(payload.get("property_display_name")) or _as_str(payload.get("address_title")),
+				"property_lat": payload.get("property_lat"),
+				"property_lng": payload.get("property_lng"),
+				"address_line1": _as_str(payload.get("address_line1")),
+				"address_line2": _as_str(payload.get("address_line2")),
+				"city": _as_str(payload.get("city")),
+				"state": _as_str(payload.get("state")),
+				"pincode": _as_str(payload.get("pincode")),
+				"country": _as_str(payload.get("country")) or "Australia",
+				"firelink_sticker_id": _as_str((out or {}).get("firelink_sticker_id")),
+				"property_front_image": _as_str((out or {}).get("property_front_image")),
+			}
+		)
 	return {"firelink_address_id": firelink_address_id, **(out or {})}
 
 

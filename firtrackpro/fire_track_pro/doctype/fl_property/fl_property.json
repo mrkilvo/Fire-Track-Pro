@@ -8,7 +8,9 @@
   "property_display_name",
   "property_address_json",
   "property_lat",
-  "property_lng"
+  "property_lng",
+  "firelink_sticker_id",
+  "property_front_image"
  ],
  "fields": [
   {
@@ -30,6 +32,16 @@
    "fieldname": "property_lng",
    "fieldtype": "Float",
    "label": "Longitude"
+  },
+  {
+   "fieldname": "firelink_sticker_id",
+   "fieldtype": "Data",
+   "label": "FireLink Sticker ID"
+  },
+  {
+   "fieldname": "property_front_image",
+   "fieldtype": "Attach Image",
+   "label": "Property Front Image"
   }
  ],
  "grid_page_length": 50,
