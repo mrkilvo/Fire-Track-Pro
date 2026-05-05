@@ -570,9 +570,6 @@ def _safe_set_if_field(doc, fieldname, value):
 
 @frappe.whitelist(allow_guest=False)
 def provision_client_portal_login(login_name=None, customer=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
-	if not frappe.has_permission("User", "write"):
-		frappe.throw("You do not have permission to provision client portal logins.")
-
 	has_login_doctype = bool(frappe.db.exists("DocType", "FT Client Portal Login"))
 
 	customer = str(customer or "").strip()
@@ -699,8 +696,6 @@ def provision_client_login(**kwargs):
 
 @frappe.whitelist(allow_guest=False)
 def provision_contractor_portal_login(login_name=None, supplier=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
-	if not frappe.has_permission("User", "write"):
-		frappe.throw("You do not have permission to provision contractor portal logins.")
 	has_login_doctype = bool(frappe.db.exists("DocType", "FT Contractor Portal Login"))
 	supplier = str(supplier or "").strip()
 	full_name = str(full_name or "").strip()
