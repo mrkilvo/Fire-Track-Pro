@@ -4761,7 +4761,50 @@ def _resolve_plan_for_setup(plan_name: str) -> dict[str, Any]:
 	return _local_get_plan(plan_name)
 
 
+SIGNUP_COUNTRY_MAP = {
+	"au": "Australia",
+	"aus": "Australia",
+	"australia": "Australia",
+	"us": "United States",
+	"usa": "United States",
+	"united states": "United States",
+	"uk": "United Kingdom",
+	"gb": "United Kingdom",
+	"gbr": "United Kingdom",
+	"united kingdom": "United Kingdom",
+	"canada": "Canada",
+	"ca": "Canada",
+	"new zealand": "New Zealand",
+	"nz": "New Zealand",
+	"nzl": "New Zealand",
+}
+
+SIGNUP_ALLOWED_COUNTRIES = {
+	"Australia",
+	"United States",
+	"United Kingdom",
+	"Canada",
+	"New Zealand",
+}
+
+
+def _normalize_signup_country(value: Any) -> str:
+	raw = _as_str(value).strip()
+	if not raw:
+		return ""
+	mapped = SIGNUP_COUNTRY_MAP.get(raw.lower())
+	if mapped:
+		return mapped
+	return raw if raw in SIGNUP_ALLOWED_COUNTRIES else ""
+
+
 def _signup_request_summary(row: dict[str, Any]) -> dict[str, Any]:
+	country = (
+		_as_str(row.get("country"))
+		or _as_str(row.get("company_country"))
+		or _as_str(row.get("tenant_country"))
+		or _as_str(row.get("signup_country"))
+	)
 	return {
 		"name": _as_str(row.get("name")),
 		"request_status": _as_str(row.get("request_status")) or "New",
@@ -4772,6 +4815,7 @@ def _signup_request_summary(row: dict[str, Any]) -> dict[str, Any]:
 		"company_trading_name": _as_str(row.get("company_trading_name")),
 		"company_abn": _as_str(row.get("company_abn")),
 		"company_address": _as_str(row.get("company_address")),
+		"country": country,
 		"company_logo": _as_str(row.get("company_logo")),
 		"current_system": _as_str(row.get("current_system")),
 		"migration_scope": _as_str(row.get("migration_scope")),
@@ -5038,6 +5082,7 @@ def _local_create_signup_request(
 	company_legal_name = _as_str(kwargs.get("company_legal_name"))
 	contact_name = _as_str(kwargs.get("contact_name"))
 	contact_email = _as_str(kwargs.get("contact_email"))
+	signup_country = _normalize_signup_country(kwargs.get("country") or kwargs.get("company_country"))
 	domain_option = _as_str(kwargs.get("domain_option")) or "subdomain"
 	requested_subdomain = _sanitize_signup_subdomain(
 		kwargs.get("requested_subdomain") or kwargs.get("subdomain_name")
@@ -5049,6 +5094,11 @@ def _local_create_signup_request(
 		frappe.throw("contact_name is required", frappe.ValidationError)
 	if not contact_email:
 		frappe.throw("contact_email is required", frappe.ValidationError)
+	if not signup_country:
+		frappe.throw(
+			"country is required and must be one of: Australia, United States, United Kingdom, Canada, New Zealand",
+			frappe.ValidationError,
+		)
 	if not requested_subdomain:
 		frappe.throw("requested_subdomain is required", frappe.ValidationError)
 	if domain_option == "custom" and not custom_domain:
@@ -5090,8 +5140,7 @@ def _local_create_signup_request(
 	standard_site_host = _as_str(availability.get("standard_site_host"))
 	requested_site_host = _as_str(availability.get("requested_site_host"))
 
-	doc = frappe.get_doc(
-		{
+	doc_data: dict[str, Any] = {
 			"doctype": "FL Signup Request",
 			"request_status": "Reviewed",
 			"submitted_on": frappe.utils.now_datetime(),
@@ -5136,7 +5185,14 @@ def _local_create_signup_request(
 			or None,
 			"source_url": _as_str(kwargs.get("source_url")) or None,
 		}
+	field_names = {str(df.fieldname or "") for df in frappe.get_meta("FL Signup Request").fields}
+	country_field = _pick_existing_field(
+		field_names, ("country", "company_country", "tenant_country", "signup_country")
 	)
+	if country_field:
+		doc_data[country_field] = signup_country
+
+	doc = frappe.get_doc(doc_data)
 	doc.insert(ignore_permissions=True)
 	_attach_signup_logo(doc, logo_payload or {})
 	auto_link = _auto_link_signup_customer_and_subscription(doc)
@@ -6216,6 +6272,49 @@ def _seed_xero_site_from_firelink(site_host: str) -> dict[str, Any]:
 	)
 
 
+def _seed_site_defaults_for_host(site_host: str) -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return {"ok": False, "message": "site_host is required."}
+	try:
+		res = subprocess.run(
+			["bench", "--site", host, "execute", "firtrackpro.api.site_info.seed_site_defaults_once"],
+			check=False,
+			text=True,
+			capture_output=True,
+			timeout=600,
+			cwd=_sites_root_path(),
+		)
+	except Exception as exc:
+		return {"ok": False, "message": f"Seed failed to start for {host}: {exc}"}
+
+	output = ((res.stdout or "") + "\n" + (res.stderr or "")).strip()
+	if len(output) > 1200:
+		output = output[-1200:]
+	if int(res.returncode or 0) != 0:
+		return {
+			"ok": False,
+			"message": f"Seed command failed for {host} with exit code {res.returncode}.",
+			"details": output,
+		}
+	low = output.lower()
+	if "already seeded" in low:
+		return {"ok": True, "already_seeded": True, "message": f"Seed already applied for {host}.", "details": output}
+	return {"ok": True, "already_seeded": False, "message": f"Seed completed for {host}.", "details": output}
+
+
+def _seed_site_defaults_from_firelink(site_host: str) -> dict[str, Any]:
+	host = _normalize_site_host(site_host)
+	if not host:
+		return {"ok": False, "message": "site_host is required."}
+	if _is_firelink_local_site():
+		return _seed_site_defaults_for_host(host)
+	return _firelink_remote_bridge_call(
+		"/api/method/firtrackpro.api.integrations.firelink_admin_seed_site_bridge",
+		_remote_bridge_payload({"site_host": host}),
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def firelink_admin_seed_xero_for_site(**kwargs):
 	if frappe.session.user == "Guest":
@@ -6236,6 +6335,30 @@ def firelink_admin_seed_xero_for_site_bridge(**kwargs):
 	if not host:
 		frappe.throw("site_host is required", frappe.ValidationError)
 	result = _seed_xero_site_config(host)
+	result["site_host"] = host
+	return result
+
+
+@frappe.whitelist(methods=["POST"])
+def firelink_admin_seed_site(**kwargs):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host") or getattr(frappe.local, "site", ""))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	result = _seed_site_defaults_from_firelink(host)
+	result["site_host"] = host
+	return result
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_admin_seed_site_bridge(**kwargs):
+	if not _is_valid_bridge_call():
+		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
+	host = _normalize_site_host(kwargs.get("site_host"))
+	if not host:
+		frappe.throw("site_host is required", frappe.ValidationError)
+	result = _seed_site_defaults_for_host(host)
 	result["site_host"] = host
 	return result
 

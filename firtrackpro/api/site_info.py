@@ -1,7 +1,10 @@
 ﻿# apps/firtrackpro/firtrackpro/api/site_info.py
 import frappe
+from importlib import import_module
 
 ONBOARDING_DEFAULT_KEY = "firtrackpro:portal_onboarding_complete"
+INITIAL_TENANT_SETUP_KEY = "firtrackpro:initial_tenant_setup_complete"
+SITE_DEFAULTS_SEEDED_KEY = "firtrackpro:site_defaults_seeded_once"
 PORTAL_ONBOARDING_ROUTE = "/portal/onboarding"
 PORTAL_HOME_FALLBACK = "portal"
 
@@ -13,6 +16,53 @@ def _default_is_truthy(key: str) -> bool:
 
 def _set_default_bool(key: str, value: bool):
 	frappe.db.set_default(key, "1" if value else "0")
+
+
+def _has_system_settings_setup_complete() -> bool:
+	if not frappe.db.exists("DocType", "System Settings"):
+		return False
+	try:
+		meta = frappe.get_meta("System Settings")
+		return bool(meta and meta.has_field("setup_complete"))
+	except Exception:
+		return False
+
+
+def _set_system_setup_complete() -> bool:
+	if not _has_system_settings_setup_complete():
+		return False
+	try:
+		frappe.db.set_single_value("System Settings", "setup_complete", 1)
+		return True
+	except Exception:
+		return False
+
+
+def _is_truthy(value) -> bool:
+	return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _mark_installed_apps_setup_complete() -> bool:
+	if not frappe.db.exists("DocType", "Installed Application"):
+		return False
+	try:
+		meta = frappe.get_meta("Installed Application")
+		if not meta or not meta.has_field("is_setup_complete"):
+			return False
+		updated = False
+		for app_name in ("frappe", "erpnext", "firtrackpro"):
+			if frappe.db.exists("Installed Application", {"app_name": app_name}):
+				frappe.db.set_value(
+					"Installed Application",
+					{"app_name": app_name},
+					"is_setup_complete",
+					1,
+					update_modified=False,
+				)
+				updated = True
+		return updated
+	except Exception:
+		return False
 
 
 def _normalize_route(path: str) -> str:
@@ -108,6 +158,97 @@ def _safe_set_single(doctype: str, fieldname: str, value: str) -> bool:
 		return True
 	except Exception:
 		return False
+
+
+def _set_if_field(doc, meta, fieldname: str, value) -> bool:
+	if meta and meta.has_field(fieldname):
+		doc.set(fieldname, value)
+		return True
+	return False
+
+
+def _normalized_country_code(value: str) -> str:
+	raw = str(value or "").strip().lower()
+	if raw in {"au", "aus", "australia"}:
+		return "AU"
+	if raw in {"uk", "gb", "gbr", "united kingdom", "great britain", "england"}:
+		return "GB"
+	return raw.upper() if raw else "AU"
+
+
+def _resolve_tenant_country() -> tuple[str, str]:
+	company_name = ""
+	if frappe.db.exists("DocType", "Global Defaults"):
+		company_name = str(frappe.db.get_single_value("Global Defaults", "default_company") or "").strip()
+
+	country_name = ""
+	if company_name and frappe.db.exists("Company", company_name) and frappe.db.has_column("Company", "country"):
+		country_name = str(frappe.db.get_value("Company", company_name, "country") or "").strip()
+
+	if not country_name and frappe.db.exists("DocType", "Company") and frappe.db.has_column("Company", "country"):
+		country_name = str(frappe.db.get_value("Company", {}, "country") or "").strip()
+
+	if not country_name:
+		country_name = "Australia"
+
+	return _normalized_country_code(country_name), country_name
+
+
+def _ensure_default_address_template(country_name: str) -> bool:
+	if not frappe.db.exists("DocType", "Address Template"):
+		return False
+	try:
+		meta = frappe.get_meta("Address Template")
+		default_name = str(frappe.db.get_value("Address Template", {"is_default": 1}, "name") or "").strip()
+		if default_name:
+			return False
+
+		doc = frappe.new_doc("Address Template")
+		label = "FireTrack Default Address Template"
+		body = "{{ address_line1 }}\n{% if address_line2 %}{{ address_line2 }}\n{% endif %}{% if city %}{{ city }}{% endif %}{% if state %}, {{ state }}{% endif %}{% if pincode %} {{ pincode }}{% endif %}\n{% if country %}{{ country }}{% endif %}"
+		changed = False
+		changed = _set_if_field(doc, meta, "template_name", label) or changed
+		changed = _set_if_field(doc, meta, "country", country_name or "Australia") or changed
+		changed = _set_if_field(doc, meta, "is_default", 1) or changed
+		changed = _set_if_field(doc, meta, "template", body) or changed
+		if not changed:
+			return False
+		doc.insert(ignore_permissions=True)
+		return True
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "FireTrack default Address Template seed failed")
+		return False
+
+
+COUNTRY_TASK_SEED_MODULES: dict[str, list[str]] = {
+	# Australia: current default seed pack.
+	"AU": [
+		"firtrackpro.patches.v16_0.seed_network_task_setup_and_items",
+	],
+	# UK: wire-in path ready; add UK seed modules here as they are created.
+	"GB": [],
+}
+
+
+def _run_seed_module(module_path: str) -> bool:
+	module = import_module(module_path)
+	execute = getattr(module, "execute", None)
+	if not callable(execute):
+		return False
+	execute()
+	return True
+
+
+def _ensure_task_setup_seeds(country_code: str) -> bool:
+	modules = COUNTRY_TASK_SEED_MODULES.get(country_code) or COUNTRY_TASK_SEED_MODULES.get("AU") or []
+	ran_any = False
+	for module_path in modules:
+		try:
+			if _run_seed_module(module_path):
+				ran_any = True
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"FireTrack task setup seed failed: {module_path}")
+	return ran_any
 
 
 def _first_company_logo(company: str) -> str:
@@ -206,6 +347,21 @@ def get_portal_onboarding_status():
 	}
 
 
+@frappe.whitelist()
+def get_initial_tenant_setup_status():
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	setup_complete = _default_is_truthy(INITIAL_TENANT_SETUP_KEY)
+	system_setup_complete = bool(
+		_has_system_settings_setup_complete()
+		and _is_truthy(frappe.db.get_single_value("System Settings", "setup_complete"))
+	)
+	return {
+		"initial_tenant_setup_complete": setup_complete,
+		"system_setup_complete": system_setup_complete,
+	}
+
+
 @frappe.whitelist(methods=["POST"])
 def complete_portal_onboarding():
 	if frappe.session.user == "Guest":
@@ -219,6 +375,22 @@ def complete_portal_onboarding():
 	frappe.cache.delete_value("home_page")
 	frappe.clear_cache(user=frappe.session.user)
 	return get_portal_onboarding_status()
+
+
+@frappe.whitelist(methods=["POST"])
+def complete_initial_tenant_setup():
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	user_doc = frappe.get_cached_doc("User", frappe.session.user)
+	if not user_doc.has_desk_access():
+		frappe.throw("Only desk users can complete initial tenant setup.", frappe.PermissionError)
+
+	_set_default_bool(INITIAL_TENANT_SETUP_KEY, True)
+	_set_system_setup_complete()
+	_mark_installed_apps_setup_complete()
+	frappe.cache.delete_value("home_page")
+	frappe.clear_cache(user=frappe.session.user)
+	return get_initial_tenant_setup_status()
 
 
 def force_portal_home_on_session_creation(login_manager=None):
@@ -237,6 +409,7 @@ def force_portal_home_on_session_creation(login_manager=None):
 
 def apply_portal_site_defaults():
 	changed = False
+	country_code, country_name = _resolve_tenant_country()
 
 	if frappe.db.exists("DocType", "Website Settings"):
 		website_settings = frappe.get_single("Website Settings")
@@ -272,6 +445,39 @@ def apply_portal_site_defaults():
 		if frappe.db.affected_rows() > 0:
 			changed = True
 
+	# Keep base operational defaults available on fresh tenant setup.
+	if _ensure_default_address_template(country_name):
+		changed = True
+
+	# Re-apply idempotent task setup/item seeds based on tenant country.
+	if _ensure_task_setup_seeds(country_code):
+		changed = True
+
 	if changed:
 		frappe.cache.delete_value("home_page")
 		frappe.clear_cache()
+
+
+@frappe.whitelist()
+def seed_site_defaults_once(force: int | None = None):
+	if frappe.session.user == "Guest":
+		frappe.throw("Login required", frappe.PermissionError)
+	force_run = str(force or 0).strip() in {"1", "true", "yes", "on"}
+	already_seeded = _default_is_truthy(SITE_DEFAULTS_SEEDED_KEY)
+	if already_seeded and not force_run:
+		return {
+			"ok": True,
+			"seeded": False,
+			"already_seeded": True,
+			"message": "Site defaults were already seeded for this tenant.",
+		}
+
+	apply_portal_site_defaults()
+	_set_default_bool(SITE_DEFAULTS_SEEDED_KEY, True)
+	frappe.clear_cache()
+	return {
+		"ok": True,
+		"seeded": True,
+		"already_seeded": False,
+		"message": "Site defaults seeded successfully.",
+	}
