@@ -50,6 +50,12 @@ def _to_int_or_none(value):
 	return parsed
 
 
+def _as_str(value):
+	if value is None:
+		return ""
+	return str(value).strip()
+
+
 def _is_website_user(doc):
 	user_type = str(getattr(doc, "user_type", "") or "").strip().lower()
 	return user_type == "website user"
@@ -568,6 +574,58 @@ def _safe_set_if_field(doc, fieldname, value):
 		pass
 
 
+def _first_existing_field(doctype: str, candidates: list[str]) -> str:
+	try:
+		meta = frappe.get_meta(doctype)
+	except Exception:
+		return ""
+	for fieldname in candidates:
+		try:
+			if meta.has_field(fieldname):
+				return fieldname
+		except Exception:
+			continue
+	return ""
+
+
+def _ensure_contact_link_for_customer(customer: str, full_name: str, email: str, mobile_no: str = "") -> None:
+	customer = _as_str(customer)
+	email = _as_str(email).lower()
+	if not customer or not email:
+		return
+	try:
+		if not frappe.db.exists("Customer", customer):
+			return
+		existing_contacts = frappe.db.sql(
+			"""
+			select distinct dl.parent
+			from `tabDynamic Link` dl
+			join `tabContact Email` ce on ce.parent = dl.parent
+			where dl.parenttype = 'Contact'
+			  and dl.link_doctype = 'Customer'
+			  and dl.link_name = %s
+			  and lower(ce.email_id) = %s
+			limit 1
+			""",
+			(customer, email),
+			as_list=True,
+		)
+		if existing_contacts:
+			return
+
+		contact = frappe.new_doc("Contact")
+		contact.first_name = _first_name_from_full_name(full_name) or "Client"
+		contact.last_name = " ".join(_as_str(full_name).split()[1:]) or None
+		if _as_str(mobile_no):
+			contact.append("phone_nos", {"phone": _as_str(mobile_no), "is_primary_phone": 1})
+		contact.append("email_ids", {"email_id": email, "is_primary": 1})
+		contact.append("links", {"link_doctype": "Customer", "link_name": customer})
+		contact.insert(ignore_permissions=True)
+	except Exception:
+		# Best-effort linkage only; provisioning must still succeed.
+		pass
+
+
 def _clean_whitelisted_kwargs(kwargs):
 	data = dict(kwargs or {})
 	for key in ("cmd", "method", "data"):
@@ -640,10 +698,14 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 	user_doc.enabled = enabled_int
 	user_doc.user_type = "Website User"
 	user_doc.send_welcome_email = 0
+	# Keep a direct customer->user link when tenant has a custom field on User.
+	for customer_field in ("customer", "portal_customer", "client_customer", "ft_customer"):
+		_safe_set_if_field(user_doc, customer_field, customer)
 	if user_doc.is_new():
 		user_doc.insert(ignore_permissions=True)
 	else:
 		user_doc.save(ignore_permissions=True)
+	_ensure_contact_link_for_customer(customer, full_name, user_name, mobile_no)
 
 	# Keep this user out of paid staff-seat counts by enforcing Website User type.
 	temp_password = _generate_temp_password(12)
@@ -699,6 +761,106 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 @frappe.whitelist(allow_guest=False)
 def provision_client_login(**kwargs):
 	return provision_client_portal_login(**_clean_whitelisted_kwargs(kwargs))
+
+
+@frappe.whitelist(allow_guest=False)
+def list_client_portal_logins_by_customer(customer=None):
+	customer = _as_str(customer)
+	if not customer:
+		return {"rows": []}
+
+	# Primary source: explicit portal-login doctype (when installed on tenant).
+	if frappe.db.exists("DocType", "FT Client Portal Login"):
+		rows = frappe.get_all(
+			"FT Client Portal Login",
+			filters={"customer": customer},
+			fields=[
+				"name",
+				"customer",
+				"full_name",
+				"email",
+				"mobile_no",
+				"enabled",
+				"last_login_at",
+				"provisioned_at",
+				"provisioned_user",
+				"requires_password_reset",
+				"notes",
+				"modified",
+			],
+			order_by="modified desc",
+			limit_page_length=500,
+		)
+		return {"rows": rows or []}
+
+	# Fallback source 1: Website User records linked to this customer via custom field.
+	customer_field = _first_existing_field("User", ["customer", "portal_customer", "client_customer", "ft_customer"])
+	user_rows = []
+	if customer_field:
+		user_rows = frappe.get_all(
+			"User",
+			filters={customer_field: customer, "user_type": "Website User"},
+			fields=["name", "full_name", "email", "mobile_no", "enabled", "last_login", "modified"],
+			order_by="modified desc",
+			limit_page_length=500,
+		)
+
+	# Fallback source 2: Website users whose email is linked to contacts on this customer.
+	if not user_rows:
+		emails = set()
+		try:
+			customer_email = _as_str(frappe.db.get_value("Customer", customer, "email_id"))
+			if customer_email:
+				emails.add(customer_email.lower())
+		except Exception:
+			pass
+		try:
+			contact_emails = frappe.db.sql(
+				"""
+				select lower(ce.email_id)
+				from `tabDynamic Link` dl
+				join `tabContact Email` ce on ce.parent = dl.parent
+				where dl.parenttype = 'Contact'
+				  and dl.link_doctype = 'Customer'
+				  and dl.link_name = %s
+				  and ifnull(ce.email_id, '') != ''
+				""",
+				(customer,),
+				as_list=True,
+			)
+			for row in contact_emails or []:
+				value = _as_str((row or [None])[0]).lower()
+				if value:
+					emails.add(value)
+		except Exception:
+			pass
+
+		if emails:
+			user_rows = frappe.get_all(
+				"User",
+				filters={"user_type": "Website User", "email": ["in", sorted(emails)]},
+				fields=["name", "full_name", "email", "mobile_no", "enabled", "last_login", "modified"],
+				order_by="modified desc",
+				limit_page_length=500,
+			)
+	rows = [
+		{
+			"name": _as_str(r.get("name")),
+			"customer": customer,
+			"full_name": _as_str(r.get("full_name")),
+			"email": _as_str(r.get("email")),
+			"mobile_no": _as_str(r.get("mobile_no")),
+			"enabled": 1 if int(r.get("enabled") or 0) else 0,
+			"last_login_at": r.get("last_login"),
+			"provisioned_at": None,
+			"provisioned_user": _as_str(r.get("name")),
+			"requires_password_reset": 0,
+			"notes": "",
+			"modified": r.get("modified"),
+		}
+		for r in (user_rows or [])
+	]
+	return {"rows": rows}
 
 
 @frappe.whitelist(allow_guest=False)
