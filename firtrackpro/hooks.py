@@ -21,6 +21,10 @@ on_session_creation = [
 website_route_rules = [
 	{"from_route": "/", "to_route": "index"},
 	{"from_route": "/signup", "to_route": "index"},
+	{"from_route": "/firelinkid", "to_route": "portal"},
+	{"from_route": "/firelinkid/<path:app_path>", "to_route": "portal"},
+	{"from_route": "/firelink", "to_route": "portal"},
+	{"from_route": "/firelink/<path:app_path>", "to_route": "portal"},
 	{"from_route": "/portal", "to_route": "portal"},
 	{"from_route": "/portal/<path:app_path>", "to_route": "portal"},
 	{"from_route": "/client", "to_route": "client"},

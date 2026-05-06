@@ -1,0 +1,69 @@
+# apps/firtrackpro/firtrackpro/hooks.py
+
+app_name = "firtrackpro"
+app_title = "Fire Track Pro"
+app_publisher = "SJK"
+app_description = "Fire Support System"
+app_email = "freefallkilvo@yahoo.com.au"
+app_license = "mit"
+
+app_include_css = "assets/firtrackpro/css/brand.css"
+
+home_page = "index"
+get_website_user_home_page = "firtrackpro.portal_utils.get_website_user_home_page"
+after_install = "firtrackpro.api.site_info.apply_portal_site_defaults"
+after_migrate = "firtrackpro.api.site_info.apply_portal_site_defaults"
+
+on_session_creation = [
+	"firtrackpro.api.site_info.force_portal_home_on_session_creation",
+]
+
+website_route_rules = [
+	{ from_route: /, to_route: index},
+	{from_route: /signup, to_route: index},
+	{from_route: /firelinkid, to_route: portal},
+	{from_route: /firelinkid/<path:app_path>, to_route: portal},
+	{from_route: /firelink, to_route: portal},
+	{from_route: /firelink/<path:app_path>, to_route: portal},
+	{from_route: /portal, to_route: portal},
+	{from_route: /portal/<path:app_path>, to_route: portal},
+	{from_route: /client, to_route: client},
+	{from_route: /client/<path:app_path>, to_route: client},
+]
+
+
+doc_events = {
+	"User": {
+		"validate": "firtrackpro.api.users.enforce_user_seat_limit",
+	},
+	"FT Job": {
+		"after_insert": "firtrackpro.events.jobs.emit_job_inserted",
+		"on_update": "firtrackpro.events.jobs.emit_job_updated",
+		"on_trash": "firtrackpro.events.jobs.emit_job_deleted",
+		"after_delete": "firtrackpro.events.jobs.emit_job_deleted",  # optional safety
+	},
+	"FT Schedule": {
+		"after_insert": "firtrackpro.events.jobs.emit_schedule_inserted",
+		"on_update": "firtrackpro.events.jobs.emit_schedule_updated",
+	},
+	"FT Property": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_property_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_property_after_save",
+	},
+	"FT Asset": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_asset_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_asset_after_save",
+	},
+	"FT Defect": {
+		"after_insert": "firtrackpro.events.firelink_sync.sync_defect_after_save",
+		"on_update": "firtrackpro.events.firelink_sync.sync_defect_after_save",
+	},
+}
+
+scheduler_events = {
+	"cron": {
+		"0 1 * * *": [
+			"firtrackpro.api.integrations.run_accounting_auto_sync",
+		],
+	},
+}
