@@ -633,6 +633,27 @@ def _clean_whitelisted_kwargs(kwargs):
 	return data
 
 
+def _send_client_portal_access_email(full_name: str, user_name: str, temp_password: str) -> tuple[bool, str]:
+	site = (frappe.utils.get_url() or "").rstrip("/")
+	client_login_url = f"{site}/client/login"
+	subject = "Your FireTrack Client Portal Access"
+	message = (
+		f"Hi {full_name},<br><br>"
+		"Your client portal login is ready.<br><br>"
+		f"Login URL: <a href=\"{client_login_url}\">{client_login_url}</a><br>"
+		f"Username: {user_name}<br>"
+		f"Temporary Password: {temp_password}<br><br>"
+		"After first login, go to Account and change your password.<br><br>"
+		"If you did not request this access, contact your FireTrack administrator."
+	)
+	try:
+		frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
+		return True, ""
+	except Exception as exc:
+		frappe.log_error(frappe.get_traceback(), "Client Portal Invite Email Failed")
+		return False, _as_str(exc)
+
+
 @frappe.whitelist(allow_guest=False)
 def provision_client_portal_login(login_name=None, customer=None, full_name=None, email=None, mobile_no=None, notes=None, enabled=1):
 	has_login_doctype = bool(frappe.db.exists("DocType", "FT Client Portal Login"))
@@ -723,26 +744,8 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 		_safe_set_if_field(login_doc, "portal_user", user_name)
 		login_doc.save(ignore_permissions=True)
 
-	site = (frappe.utils.get_url() or "").rstrip("/")
-	client_login_url = f"{site}/client/login"
-	subject = "Your FireTrack Client Portal Access"
-	message = (
-		f"Hi {full_name},<br><br>"
-		"Your client portal login is ready.<br><br>"
-		f"Login URL: <a href=\"{client_login_url}\">{client_login_url}</a><br>"
-		f"Username: {user_name}<br>"
-		f"Temporary Password: {temp_password}<br><br>"
-		"After first login, go to Account and change your password.<br><br>"
-		"If you did not request this access, contact your FireTrack administrator."
-	)
-	email_sent = True
-	email_error = ""
-	try:
-		frappe.sendmail(recipients=[user_name], subject=subject, message=message, delayed=False)
-	except Exception as exc:
-		frappe.log_error(frappe.get_traceback(), "Client Portal Invite Email Failed")
-		email_sent = False
-		email_error = _as_str(exc)
+	email_sent, email_error = _send_client_portal_access_email(full_name, user_name, temp_password)
+	client_login_url = f"{(frappe.utils.get_url() or '').rstrip('/')}/client/login"
 
 	return {
 		"ok": True,
@@ -761,6 +764,50 @@ def provision_client_portal_login(login_name=None, customer=None, full_name=None
 @frappe.whitelist(allow_guest=False)
 def provision_client_login(**kwargs):
 	return provision_client_portal_login(**_clean_whitelisted_kwargs(kwargs))
+
+
+@frappe.whitelist(allow_guest=False)
+def resend_client_portal_temp_password(login_name=None, email=None):
+	target_email = _as_str(email).lower()
+	if not target_email and login_name:
+		login_name = _as_str(login_name)
+		if frappe.db.exists("DocType", "FT Client Portal Login") and frappe.db.exists("FT Client Portal Login", login_name):
+			target_email = _as_str(frappe.db.get_value("FT Client Portal Login", login_name, "email")).lower()
+	if not target_email:
+		frappe.throw("Email is required.")
+	if not frappe.db.exists("User", target_email):
+		frappe.throw("Portal user not found.")
+	user_doc = frappe.get_doc("User", target_email)
+	full_name = _as_str(getattr(user_doc, "full_name", "")) or _as_str(getattr(user_doc, "first_name", "")) or "Client"
+	temp_password = _generate_temp_password(12)
+	from frappe.utils.password import update_password
+	update_password(target_email, temp_password, logout_all_sessions=True)
+	email_sent, email_error = _send_client_portal_access_email(full_name, target_email, temp_password)
+	return {
+		"ok": True,
+		"user": target_email,
+		"email": target_email,
+		"temporary_password": temp_password,
+		"email_sent": email_sent,
+		"email_error": email_error or None,
+		"message": "Temporary password reset and invite email sent." if email_sent else "Temporary password reset, but invite email failed.",
+	}
+
+
+@frappe.whitelist(allow_guest=False)
+def remove_client_portal_login(login_name=None, email=None):
+	target_email = _as_str(email).lower()
+	key = _as_str(login_name)
+	if key and frappe.db.exists("DocType", "FT Client Portal Login") and frappe.db.exists("FT Client Portal Login", key):
+		doc = frappe.get_doc("FT Client Portal Login", key)
+		target_email = target_email or _as_str(getattr(doc, "email", "")).lower()
+		doc.delete(ignore_permissions=True)
+	if target_email and frappe.db.exists("User", target_email):
+		user_doc = frappe.get_doc("User", target_email)
+		user_doc.enabled = 0
+		user_doc.save(ignore_permissions=True)
+		frappe.db.commit()
+	return {"ok": True, "message": "Client portal login removed (user disabled)."}
 
 
 @frappe.whitelist(allow_guest=False)
