@@ -5810,6 +5810,86 @@ def firelink_public_signup_availability_bridge(**kwargs):
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+def firelink_public_property_snapshot(**kwargs):
+	"""Guest-safe lookup for FireLink public sticker pages."""
+	sticker = _as_str(kwargs.get("propertyid") or kwargs.get("property_id") or kwargs.get("sticker_id")).lower()
+	if not sticker:
+		frappe.throw("Missing property sticker ID", frappe.ValidationError)
+
+	sticker_fields = [
+		"property_sticker_id",
+		"firelink_sticker_id",
+		"property_firelink_sticker_id",
+		"public_firelink_id",
+		"sticker_id",
+	]
+	property_candidates = [
+		("FL Property", ["name", "property_display_name", "property_address_json", "property_sticker_id", "property_front_image"]),
+		(
+			"FT Property",
+			[
+				"name",
+				"property_name",
+				"property_title",
+				"property_address",
+				"address_display",
+				"firelink_sticker_id",
+				"property_firelink_sticker_id",
+				"public_firelink_id",
+				"sticker_id",
+				"property_front_image",
+			],
+		),
+	]
+
+	found = None
+	for doctype, wanted_fields in property_candidates:
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		available_fields = [f for f in wanted_fields if meta.has_field(f) or f == "name"]
+		for field in sticker_fields:
+			if not meta.has_field(field):
+				continue
+			rows = frappe.get_all(
+				doctype,
+				fields=available_fields,
+				filters=[[doctype, field, "=", sticker]],
+				limit_page_length=1,
+			)
+			if rows:
+				found = rows[0]
+				break
+		if found:
+			break
+
+	if not found:
+		return {"property": None, "jobs": [], "defects": []}
+
+	property_name = _as_str(found.get("name"))
+	jobs = []
+	defects = []
+	if property_name and frappe.db.exists("DocType", "FT Job"):
+		jobs = frappe.get_all(
+			"FT Job",
+			fields=["name", "job_title", "job_status", "job_required_date", "modified"],
+			filters=[["FT Job", "job_property", "=", property_name]],
+			order_by="modified desc",
+			limit_page_length=200,
+		)
+	if property_name and frappe.db.exists("DocType", "FT Defect"):
+		defects = frappe.get_all(
+			"FT Defect",
+			fields=["name", "defect_description", "defect_status", "defect_severity", "modified"],
+			filters=[["FT Defect", "defect_property", "=", property_name]],
+			order_by="modified desc",
+			limit_page_length=200,
+		)
+
+	return {"property": found, "jobs": jobs or [], "defects": defects or []}
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def firelink_admin_plans_bridge(**kwargs):
 	if not _is_valid_bridge_call():
 		frappe.throw("Bridge token or approved firetrackpro origin is required", frappe.PermissionError)
